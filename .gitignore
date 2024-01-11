@@ -1,0 +1,7 @@
+.direnv
+.envrc
+flake.nix
+flake.lock
+out.png
+zig-out
+zig-cache
