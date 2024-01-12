@@ -215,10 +215,21 @@ pub fn PNGExporter(comptime T: type) type {
         ) !void {
             // Our zlib buffer is 8K, but we may add the ability to tune this
             // in the future.
+            //
+            // NOTE: When allowing for modifications to this value, there
+            // likely will need to be a minimum buffer size of ~512 bytes or
+            // something else reasonable. This is due to the minimum size we
+            // need for headers. See writePNG_IDAT_writeBytes2.
             var zlib_buffer_underlying = [_]u8{0} ** 8192;
             var zlib_buffer = std.io.fixedBufferStream(&zlib_buffer_underlying);
             var zlib_stream = try std.compress.zlib.compressStream(alloc, zlib_buffer.writer(), .{});
             defer zlib_stream.deinit();
+
+            // Initialize our remaining buffer size. We keep track of this as
+            // we need to flush regularly to output IDAT chunks.
+            //
+            // TODO: We should probably move this to a dedicated writer struct.
+            var remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
 
             // Read from the buffer, pixel-by-pixel, and write out depending on our
             // endianness, and also the format that we use. Iteration and coercion is
@@ -229,102 +240,76 @@ pub fn PNGExporter(comptime T: type) type {
                 const line_start = y * surface.width;
                 const line_end = line_start + surface.width;
                 // Write scanline header (0x00 - no filtering). TODO: add filtering ;)
-                try writePNG_IDAT_writeBytesWithRetry(
+                remaining = try writePNG_IDAT_writeBytes(
                     file,
-                    zlib_stream.writer(),
+                    &zlib_stream,
                     &zlib_buffer,
                     &[_]u8{0},
+                    remaining,
                 );
                 for (surface.buf[line_start..line_end]) |pixel| {
                     // Write to stream. This will send IDAT packets once the buffer is full.
-                    try writePNG_IDAT_writeBytesWithRetry(
+                    remaining = try writePNG_IDAT_writeBytes(
                         file,
-                        zlib_stream.writer(),
+                        &zlib_stream,
                         &zlib_buffer,
                         pixel.asBytesBig(),
+                        remaining,
                     );
                 }
             }
 
-            // Close off and write the remaining bytes.
-            // NOTE: this is a manual implementation of what happens in
-            // CompressStream.finish() so that we can use our own writer
-            // to protect against partial writes.
-            const finalHash = u32ToBytes(zlib_stream.hasher.final()); // Need to set to big-endian
-            try zlib_stream.deflator.close();
-            try writePNG_IDAT_writeBytesWithRetry(
-                file,
-                zlib_buffer.writer(),
-                &zlib_buffer,
-                &finalHash,
-            );
+            // Close off and write the remaining bytes. This should always succeed.
+            try zlib_stream.finish();
             try writePNG_IDAT_single(file, zlib_buffer.getWritten());
         }
 
-        /// Performs a write with a single retry. This should be a
-        /// FixedBufferStream(u8) with the writer end ultimately being backed
-        /// by it, be it that stream directly or another stream writing to it,
-        /// such as a zlib compressor stream.
-        ///
-        /// When the backing buffer is full, this will write an IDAT chunk.
-        fn writePNG_IDAT_writeBytesWithRetry(
-            file: std.fs.File,
-            writer: anytype,
-            buffer: *std.io.FixedBufferStream([]u8),
-            bytes: []const u8,
-        ) !void {
-            if (!try writePNG_IDAT_writeBytes(
-                writer,
-                buffer.seekableStream(),
-                bytes,
-            )) {
-                // Stream is full, write buffer to IDAT chunk, rewind, and
-                // try again
-                try writePNG_IDAT_single(file, buffer.getWritten());
-                buffer.reset();
-                if (!try writePNG_IDAT_writeBytes(
-                    writer,
-                    buffer.seekableStream(),
-                    bytes,
-                )) {
-                    // This should never happen, but if it does we can't
-                    // continue (we just emptied the stream, there should
-                    // be no real reason why we can't write to it again).
-                    return error.WritePNGIDATStreamError;
-                }
-            }
-        }
-
-        /// See writePNG_IDAT_writeBytesWithRetry. This hands the actual write
-        /// and rewind if the buffer is full.
         fn writePNG_IDAT_writeBytes(
-            writer: anytype,
-            seeker: std.io.FixedBufferStream([]u8).SeekableStream,
+            file: std.fs.File,
+            zlib_stream: *std.compress.zlib.CompressStream(std.io.FixedBufferStream([]u8).Writer),
+            zlib_buffer: *std.io.FixedBufferStream([]u8),
             bytes: []const u8,
-        ) !bool {
-            // Zero pixels is fine and just returns, allowing operations to
-            // continue
-            if (bytes.len == 0) return true;
-
-            // We need to save the last position, in the event that we need to rewind
-            // (FixedBufferStream will do partial writes).
-            const last_full_idx = try seeker.getPos();
+            current_remaining: usize,
+        ) !usize {
+            // Set a minimum remaining buffer here that is reasonably sized.
+            // This may not be 100% scientific, but should account for the 248
+            // byte deflate buffer (see buffer sizes in
+            // deflate/huffman_bit_writer.zig). Coincidentally, 256 here then
+            // means that we have 8 bytes of space to write, which should be
+            // plenty for now - but of course, this will change when we start
+            // supporting filter algorithms, and have to start writing whole
+            // scanlines at once (multiple scanlines, in fact).
+            const min_remaining: usize = 256;
 
             const expected_written = bytes.len;
-            const actual_written: usize = writer.write(bytes) catch |err| written: {
-                if (err == error.NoSpaceleft) {
-                    break :written 0;
-                }
-
-                return err;
-            };
-
+            const actual_written = try zlib_stream.write(bytes);
             if (expected_written != actual_written) {
-                try seeker.seekTo(last_full_idx);
-                return false;
+                // If we didn't actually write everything, it's an error.
+                return error.WritePNGIDATBytesWrittenMismatch;
             }
 
-            return true;
+            // New remaining at this point is current_remaining - what was
+            // written
+            var new_remaining = current_remaining - actual_written;
+            if (new_remaining < min_remaining) {
+                // If we possibly could have less remaining than our minimum
+                // buffer size, we need to flush. This should always succeed.
+                try zlib_stream.deflator.flush();
+
+                // We can now check to see how much remaining is in our
+                // underlying buffer.
+                if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
+                    // We are now actually below the threshold, so write out an
+                    // IDAT chunk, and reset the buffer.
+                    try writePNG_IDAT_single(file, zlib_buffer.getWritten());
+                    zlib_buffer.reset();
+                }
+
+                // Actual new remaining is now the amount remaining in the buffer.
+                new_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
+            }
+
+            return new_remaining;
         }
 
         /// Writes a single IDAT chunk. The data should be part of the zlib
