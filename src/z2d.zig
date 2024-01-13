@@ -117,8 +117,6 @@ pub fn ImageSurface(comptime T: type) type {
                 return error.ImageSurfacePutPixelOutOfRange;
             }
 
-            // std.log.debug("surface ptr: {?}", .{self});
-            // std.log.debug("self.w: {}, y: {} x: {}", .{ self.width, y, x });
             self.buf[self.width * y + x] = pixel;
         }
 
@@ -213,13 +211,26 @@ pub fn PNGExporter(comptime T: type) type {
             file: std.fs.File,
             surface: ImageSurface(T),
         ) !void {
+            // Set a minimum remaining buffer size here that is reasonably
+            // sized. This may not be 100% scientific, but should account for
+            // the 248 byte deflate buffer (see buffer sizes in the stdlib at
+            // deflate/huffman_bit_writer.zig). Coincidentally, 256 here then
+            // means that we have 8 bytes of space to write, which should be
+            // enough for now (we currently stream up to 5 bytes at a time to
+            // the zlib stream).
+            //
+            // This may change when we start supporting filter algorithms, and
+            // have to start writing whole scanlines at once (multiple
+            // scanlines, in fact).
+            const min_remaining: usize = 256;
+
             // Our zlib buffer is 8K, but we may add the ability to tune this
             // in the future.
             //
             // NOTE: When allowing for modifications to this value, there
             // likely will need to be a minimum buffer size of ~512 bytes or
             // something else reasonable. This is due to the minimum size we
-            // need for headers. See writePNG_IDAT_writeBytes2.
+            // need for headers (see above).
             var zlib_buffer_underlying = [_]u8{0} ** 8192;
             var zlib_buffer = std.io.fixedBufferStream(&zlib_buffer_underlying);
             var zlib_stream = try std.compress.zlib.compressStream(alloc, zlib_buffer.writer(), .{});
@@ -229,87 +240,66 @@ pub fn PNGExporter(comptime T: type) type {
             // we need to flush regularly to output IDAT chunks.
             //
             // TODO: We should probably move this to a dedicated writer struct.
-            var remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
+            var zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
 
-            // Read from the buffer, pixel-by-pixel, and write out depending on our
-            // endianness, and also the format that we use. Iteration and coercion is
-            // handled by the iterator.
-            std.log.debug("surface.buf.len: {}", .{surface.buf.len});
+            // To encode, we read from our buffer, pixel-by-pixel, and convert
+            // to a writable format (big-endian, no padding). We also need to
+            // add scanline filtering headers were appropriate.
+            //
             // Iterate through each line to encode as scanlines.
             for (0..surface.height) |y| {
+                // Scanline indexes
                 const line_start = y * surface.width;
                 const line_end = line_start + surface.width;
-                // Write scanline header (0x00 - no filtering). TODO: add filtering ;)
-                remaining = try writePNG_IDAT_writeBytes(
-                    file,
-                    &zlib_stream,
-                    &zlib_buffer,
-                    &[_]u8{0},
-                    remaining,
-                );
+
+                // Initialize a buffer for pixels. TODO: This will need to
+                // increase/change when/if we add additional pixel filtering
+                // algorithms.
+                //
+                // Buffer is 5 bytes to accommodate both scanline header and
+                // current maximum bpp (which is a u32).
+                var pixel_buffer = [_]u8{0} ** 5;
+                var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
+
                 for (surface.buf[line_start..line_end]) |pixel| {
-                    // Write to stream. This will send IDAT packets once the buffer is full.
-                    remaining = try writePNG_IDAT_writeBytes(
-                        file,
-                        &zlib_stream,
-                        &zlib_buffer,
-                        pixel.asBytesBig(),
-                        remaining,
-                    );
+                    // Write to pixel buffer
+                    std.mem.copyForwards(u8, pixel_buffer[nbytes..pixel_buffer.len], pixel.asBytesBig());
+                    nbytes += pixel.asBytesBig().len;
+                    if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
+                        // If we didn't actually write everything, it's an error.
+                        return error.WritePNGIDATBytesWrittenMismatch;
+                    }
+
+                    // New remaining at this point is current_remaining - what was
+                    // written
+                    zlib_buffer_remaining -= nbytes;
+
+                    if (zlib_buffer_remaining < min_remaining) {
+                        // If we possibly could have less remaining than our minimum
+                        // buffer size, we need to flush. This should always succeed.
+                        try zlib_stream.deflator.flush();
+
+                        // We can now check to see how much remaining is in our
+                        // underlying buffer.
+                        if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
+                            // We are now actually below the threshold, so write out an
+                            // IDAT chunk, and reset the buffer.
+                            try writePNG_IDAT_single(file, zlib_buffer.getWritten());
+                            zlib_buffer.reset();
+                        }
+
+                        // Actual new remaining is now the amount remaining in the buffer.
+                        zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
+                    }
+
+                    // Reset nbytes for the next run.
+                    nbytes = 0;
                 }
             }
 
             // Close off and write the remaining bytes. This should always succeed.
             try zlib_stream.finish();
             try writePNG_IDAT_single(file, zlib_buffer.getWritten());
-        }
-
-        fn writePNG_IDAT_writeBytes(
-            file: std.fs.File,
-            zlib_stream: *std.compress.zlib.CompressStream(std.io.FixedBufferStream([]u8).Writer),
-            zlib_buffer: *std.io.FixedBufferStream([]u8),
-            bytes: []const u8,
-            current_remaining: usize,
-        ) !usize {
-            // Set a minimum remaining buffer here that is reasonably sized.
-            // This may not be 100% scientific, but should account for the 248
-            // byte deflate buffer (see buffer sizes in
-            // deflate/huffman_bit_writer.zig). Coincidentally, 256 here then
-            // means that we have 8 bytes of space to write, which should be
-            // plenty for now - but of course, this will change when we start
-            // supporting filter algorithms, and have to start writing whole
-            // scanlines at once (multiple scanlines, in fact).
-            const min_remaining: usize = 256;
-
-            const expected_written = bytes.len;
-            const actual_written = try zlib_stream.write(bytes);
-            if (expected_written != actual_written) {
-                // If we didn't actually write everything, it's an error.
-                return error.WritePNGIDATBytesWrittenMismatch;
-            }
-
-            // New remaining at this point is current_remaining - what was
-            // written
-            var new_remaining = current_remaining - actual_written;
-            if (new_remaining < min_remaining) {
-                // If we possibly could have less remaining than our minimum
-                // buffer size, we need to flush. This should always succeed.
-                try zlib_stream.deflator.flush();
-
-                // We can now check to see how much remaining is in our
-                // underlying buffer.
-                if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
-                    // We are now actually below the threshold, so write out an
-                    // IDAT chunk, and reset the buffer.
-                    try writePNG_IDAT_single(file, zlib_buffer.getWritten());
-                    zlib_buffer.reset();
-                }
-
-                // Actual new remaining is now the amount remaining in the buffer.
-                new_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
-            }
-
-            return new_remaining;
         }
 
         /// Writes a single IDAT chunk. The data should be part of the zlib
