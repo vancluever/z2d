@@ -72,9 +72,9 @@ pub fn main() !void {
                 .g = 255,
                 .b = 255,
             };
-        std.log.debug("x: {} y: {}", .{ x, y });
         try sfc.putPixel(x, y, pixel);
         x += 1;
     }
     try z2d.PNGExporter(z2d.RGB).writeToFile(alloc, sfc, "out.png");
+    std.log.info("Test image has been written successfully to out.png.", .{});
 }
