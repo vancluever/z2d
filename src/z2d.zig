@@ -208,19 +208,114 @@ pub fn DrawContext(comptime surface_T: type, pattern_T: type) type {
 // Drawing operations
 ////////////////////////////////////////
 
+/// Represents a point in 2D space.
+pub const Point = struct {
+    x: f64,
+    y: f64,
+};
+
+/// Represents a moveto path node. This starts a new subpath and moves the
+/// current point to (x, y).
+const PathMoveTo = struct {
+    point: Point,
+};
+
+/// Represents a lineto path node. This draws a line to (x, y) and sets it as
+/// its current point.
+const PathLineTo = struct {
+    point: Point,
+};
+
+/// Represents a curveto path node. This draws a cubic bezier with the three
+/// supplied control points from the current point. The new current point is
+/// set to p3.
+const PathCurveTo = struct {
+    p1: Point,
+    p2: Point,
+    p3: Point,
+};
+
+/// A tagged union of all path node types.
+const PathNodeTag = enum {
+    move_to,
+    line_to,
+    curve_to,
+};
+
+const PathNode = union(PathNodeTag) {
+    move_to: PathMoveTo,
+    line_to: PathLineTo,
+    curve_to: PathCurveTo,
+};
+
 /// A path drawing operation, resulting in a rendered complex set of one or
 /// more polygons.
 pub fn PathOperation(comptime draw_context_T: type) type {
     return struct {
+        /// A reference back to the draw context.
         context: draw_context_T,
+
+        /// The set of path nodes.
+        nodes: std.ArrayList(PathNode),
+
+        /// The start of the current subpath when working with drawing
+        /// operations.
+        start_point: ?Point = null,
+
+        /// The current point when working with drawing operations.
+        current_point: ?Point = null,
+
+        /// Initializes the path operation. Call deinit to release the node
+        /// list when complete.
+        pub fn init(alloc: std.mem.Allocator, context: draw_context_T) PathOperation(draw_context_T) {
+            return .{
+                .context = context,
+                .nodes = std.ArrayList(PathNode).init(alloc),
+            };
+        }
+
+        /// Releases the path node array list. It's invalid to use the
+        /// operation after this call.
+        pub fn deinit(self: *PathOperation(draw_context_T)) void {
+            self.nodes.deinit();
+        }
+
+        /// Starts a new path, and moves the current point to it.
+        pub fn moveTo(self: *PathOperation(draw_context_T), point: Point) !void {
+            try self.nodes.append(.{ .move_to = .{ .point = point } });
+            self.start_point = point;
+            self.current_point = point;
+        }
+
+        /// Draws a line from the current point to the specified point and sets
+        /// it as the current point.
+        ///
+        /// Acts as a moveTo instead if there is no current point.
+        pub fn lineTo(self: *PathOperation(draw_context_T), point: Point) !void {
+            if (self.current_point == null) return self.moveTo(point);
+            try self.nodes.append(.{ .line_to = .{ .point = point } });
+            self.current_point = point;
+        }
+
+        /// Draws a cubic bezier with the three supplied control points from
+        /// the current point. The new current point is set to p3.
+        ///
+        /// It is an error to call this without a current point.
+        pub fn curveTo(self: *PathOperation(draw_context_T), p1: Point, p2: Point, p3: Point) !void {
+            if (self.current_point == null) return error.PathOperationCurveToNoCurrentPoint;
+            try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
+            self.current_point = p3;
+        }
+
+        /// Closes the path by drawing a line from the current point by the
+        /// starting point. No effect if there is no current point.
+        pub fn closePath(self: *PathOperation(draw_context_T)) !void {
+            if (self.current_point == null) return;
+            try self.nodes.append(.{ .line_to = .{ .point = self.current_point.? } });
+            self.current_point = self.start_point;
+        }
     };
 }
-
-/// Represents a point in 2D space.
-const Point = struct {
-    x: f64,
-    y: f64,
-};
 
 ////////////////////////////////////////
 // Exporting
