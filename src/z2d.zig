@@ -23,7 +23,7 @@ pub const RGBA = packed struct(u32) {
     fn asBytesBig(self: RGBA) []const u8 {
         var start: usize = 0;
         _ = &start;
-        return u32ToBytes(@bitCast(self))[start..];
+        return u32ToBytes(@bitCast(self), .big)[start..];
     }
 };
 
@@ -42,7 +42,7 @@ pub const RGB = packed struct(u32) {
     fn asBytesBig(self: RGB) []const u8 {
         var start: usize = 1;
         _ = &start;
-        return u32ToBytes(@bitCast(self))[start..];
+        return u32ToBytes(@bitCast(self), .big)[start..];
     }
 };
 
@@ -100,6 +100,18 @@ pub fn ImageSurface(comptime T: type) type {
             self.alloc.free(self.buf);
         }
 
+        /// Creates a context for this surface, connecting it to a pattern.
+        pub fn createContext(
+            self: *ImageSurface(T),
+            comptime pattern_T: type,
+            pattern: pattern_T,
+        ) DrawContext(*ImageSurface(T), pattern_T) {
+            return .{
+                .surface = self,
+                .pattern = pattern,
+            };
+        }
+
         /// Gets the pixel data at the co-ordinates specified.
         pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !T {
             // Check that data is in the surface range. If not, return an error.
@@ -135,6 +147,80 @@ pub fn ImageSurface(comptime T: type) type {
         }
     };
 }
+
+////////////////////////////////////////
+// Patterns
+////////////////////////////////////////
+
+/// A simple opaque color pattern that writes the set color to every pixel.
+pub fn OpaquePattern(comptime T: type) type {
+    return struct {
+        pixel: T,
+
+        /// Returns the pixel for a particular co-ordinate. Transformed for the
+        /// destination pixel type.
+        ///
+        /// NOTE: x and y are unused for opaque surfaces, but must be provided
+        /// for implementation's sake.
+        fn pixelFor(self: *OpaquePattern(T), comptime dest_T: type, x: u32, y: u32) dest_T {
+            // x and y are unused for opaque surfaces
+            _ = x;
+            _ = y;
+
+            // Comptime check to make sure that our source and dest are
+            // compatible. Currently, our pixel formats (RGBA and RGB) are both
+            // u32, so we can shortcut and bitCast, but in the future this may
+            // not be the case, so I want to introduce this pattern now.
+            switch (@TypeOf(self.pixel)) {
+                RGBA => {},
+                RGB => {},
+                else => @compileError("invalid pixel type for pixelFor conversion"),
+            }
+
+            switch (dest_T) {
+                RGBA => {},
+                RGB => {},
+                else => @compileError("invalid destination pixel type for pixelFor conversion"),
+            }
+
+            // Bitcast directly from source to dest.
+            return @bitCast(self.pixel);
+        }
+    };
+}
+
+////////////////////////////////////////
+// Drawing context
+////////////////////////////////////////
+
+/// The drawing context. Holds information about a surface and a pattern.
+/// Further operations will use the described pattern to write to the underlying
+/// surface. Note that it is valid to have multiple contexts write to the same
+/// surface, each associated with a different pattern.
+pub fn DrawContext(comptime surface_T: type, pattern_T: type) type {
+    return struct {
+        surface: surface_T,
+        pattern: pattern_T,
+    };
+}
+
+////////////////////////////////////////
+// Drawing operations
+////////////////////////////////////////
+
+/// A path drawing operation, resulting in a rendered complex set of one or
+/// more polygons.
+pub fn PathOperation(comptime draw_context_T: type) type {
+    return struct {
+        context: draw_context_T,
+    };
+}
+
+/// Represents a point in 2D space.
+const Point = struct {
+    x: f64,
+    y: f64,
+};
 
 ////////////////////////////////////////
 // Exporting
@@ -341,6 +427,6 @@ pub fn PNGExporter(comptime T: type) type {
 
 /// Returns a cast of u32 to u8 (big-endian). Used to cast pixels for image
 /// export.
-fn u32ToBytes(value: u32) [4]u8 {
-    return @bitCast(if (native_endian == .big) value else @byteSwap(value));
+fn u32ToBytes(value: u32, endian: std.builtin.Endian) [4]u8 {
+    return @bitCast(if (native_endian == endian) value else @byteSwap(value));
 }
