@@ -158,20 +158,20 @@ pub fn PNGExporter(comptime T: type) type {
             defer file.close();
 
             // Write out magic header, and various chunks.
-            try writePNG_magic(file);
-            try writePNG_IHDR(file, surface);
-            try writePNG_IDAT_stream(alloc, file, surface);
-            try writePNG_IEND(file);
+            try writePNGMagic(file);
+            try writePNGIHDR(file, surface);
+            try writePNGIDATStream(alloc, file, surface);
+            try writePNGIEND(file);
         }
 
         /// Writes the magic header for the PNG file.
-        fn writePNG_magic(file: std.fs.File) !void {
+        fn writePNGMagic(file: std.fs.File) !void {
             const header = "\x89PNG\x0D\x0A\x1A\x0A";
             _ = try file.write(header);
         }
 
         /// Writes the IHDR chunk for the PNG file.
-        fn writePNG_IHDR(file: std.fs.File, surface: ImageSurface(T)) !void {
+        fn writePNGIHDR(file: std.fs.File, surface: ImageSurface(T)) !void {
             var width = [_]u8{0} ** 4;
             var height = [_]u8{0} ** 4;
 
@@ -189,7 +189,7 @@ pub fn PNGExporter(comptime T: type) type {
             const filter: u8 = 0;
             const interlace: u8 = 0;
 
-            try writePNG_writeChunk(
+            try writePNGWriteChunk(
                 file,
                 "IHDR".*,
                 &(width ++
@@ -206,7 +206,7 @@ pub fn PNGExporter(comptime T: type) type {
         ///
         /// This is currently a very rudimentary algorithm - default zlib
         /// compression and no pixel filtering.
-        fn writePNG_IDAT_stream(
+        fn writePNGIDATStream(
             alloc: std.mem.Allocator,
             file: std.fs.File,
             surface: ImageSurface(T),
@@ -284,7 +284,7 @@ pub fn PNGExporter(comptime T: type) type {
                         if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
                             // We are now actually below the threshold, so write out an
                             // IDAT chunk, and reset the buffer.
-                            try writePNG_IDAT_single(file, zlib_buffer.getWritten());
+                            try writePNGIDATSingle(file, zlib_buffer.getWritten());
                             zlib_buffer.reset();
                         }
 
@@ -299,25 +299,25 @@ pub fn PNGExporter(comptime T: type) type {
 
             // Close off and write the remaining bytes. This should always succeed.
             try zlib_stream.finish();
-            try writePNG_IDAT_single(file, zlib_buffer.getWritten());
+            try writePNGIDATSingle(file, zlib_buffer.getWritten());
         }
 
         /// Writes a single IDAT chunk. The data should be part of the zlib
         /// stream. See writePNG_IDAT_stream et al.
-        fn writePNG_IDAT_single(file: std.fs.File, data: []const u8) !void {
-            try writePNG_writeChunk(file, "IDAT".*, data);
+        fn writePNGIDATSingle(file: std.fs.File, data: []const u8) !void {
+            try writePNGWriteChunk(file, "IDAT".*, data);
         }
 
         /// Write the IEND chunk.
-        fn writePNG_IEND(file: std.fs.File) !void {
-            try writePNG_writeChunk(file, "IEND".*, "");
+        fn writePNGIEND(file: std.fs.File) !void {
+            try writePNGWriteChunk(file, "IEND".*, "");
         }
 
         /// Generic chunk writer, used by higher-level chunk writers to process
         /// and write the payload.
-        fn writePNG_writeChunk(file: std.fs.File, chunk_type: [4]u8, data: []const u8) !void {
+        fn writePNGWriteChunk(file: std.fs.File, chunk_type: [4]u8, data: []const u8) !void {
             const len: u32 = @intCast(data.len);
-            const checksum = writePNG_chunkCRC(chunk_type, data);
+            const checksum = writePNGChunkCRC(chunk_type, data);
 
             _ = try file.writer().writeInt(u32, len, .big);
             _ = try file.write(&chunk_type);
@@ -326,7 +326,7 @@ pub fn PNGExporter(comptime T: type) type {
         }
 
         /// Calculates the CRC32 checksum for the chunk.
-        fn writePNG_chunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
+        fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
             var hasher = std.hash.Crc32.init();
             hasher.update(chunk_type[0..chunk_type.len]);
             hasher.update(data);
