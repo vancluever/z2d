@@ -1,52 +1,45 @@
 const std = @import("std");
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
 pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{
-        .name = "z2d",
+    // Main module
+    const z2d = b.addModule("z2d", .{ .root_source_file = .{ .path = "src/z2d.zig" } });
+
+    // Tests
+    const main_test = b.addTest(.{
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
+    const test_run = b.addRunArtifact(main_test);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&test_run.step);
 
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
+    // Spec tests are complex E2E tests that render to files for comparison.
+    // Use "zig build genspec" to generate the files used by this test. The
+    // test code itself is found in "spec".
+    const spec_test = b.addTest(.{
+        .name = "spec",
+        .root_source_file = .{ .path = "spec/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    spec_test.root_module.addImport("z2d", z2d);
+    const spec_test_run = b.addRunArtifact(spec_test);
+    const spec_test_step = b.step("spec", "Run spec (E2E) tests");
+    spec_test_step.dependOn(&spec_test_run.step);
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
-
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    // Generation of spec tests
+    const genspec = b.addExecutable(.{
+        .name = "genspec",
+        .root_source_file = .{ .path = "spec/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    genspec.root_module.addImport("z2d", z2d);
+    const genspec_run = b.addRunArtifact(genspec);
+    const genspec_step = b.step("genspec", "Generate spec tests");
+    genspec_step.dependOn(&genspec_run.step);
 }
