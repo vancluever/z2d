@@ -75,7 +75,7 @@ pub const Surface = union(SurfaceType) {
 };
 
 // Initializes a surface of the specific type.
-pub fn create_surface(
+pub fn createSurface(
     surface_type: SurfaceType,
     alloc: std.mem.Allocator,
     height: u32,
@@ -98,7 +98,7 @@ pub fn create_surface(
 test "Surface interface" {
     {
         // RGBA
-        const sfc_if = try create_surface(.image_surface_rgba, std.testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgba, std.testing.allocator, 10, 20);
         defer sfc_if.deinit();
 
         // getters
@@ -120,7 +120,7 @@ test "Surface interface" {
 
     {
         // RGB
-        const sfc_if = try create_surface(.image_surface_rgb, std.testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgb, std.testing.allocator, 10, 20);
         defer sfc_if.deinit();
 
         // getters
