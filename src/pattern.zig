@@ -25,15 +25,10 @@ pub const Pattern = union(PatternType) {
 pub const OpaquePattern = struct {
     /// The underlying pixel for this pattern.
     pixel: pixelpkg.Pixel,
-
-    /// Returns a Pattern interface for this surface.
-    pub fn asPatternInterface(self: OpaquePattern) Pattern {
-        return .{ .opaque_pattern = self };
-    }
 };
 
 test "OpaquePattern, as interface" {
-    const px: pixelpkg.Pixel = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .c = 0xCC } };
+    const px: pixelpkg.Pixel = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } };
     const pt: Pattern = .{ .opaque_pattern = .{ .pixel = px } };
     try testing.expectEqual(px, pt.getPixel(1, 1));
 }
