@@ -1,4 +1,4 @@
-const std = @import("std");
+const testing = @import("std").testing;
 
 /// Describes a 24-bit RGB format.
 pub const RGB = packed struct(u32) {
@@ -67,17 +67,17 @@ test "pixel interface, fromPixel" {
     const rgb: RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
     const rgba: RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
 
-    try std.testing.expectEqual(RGB.fromPixel(.{ .rgb = rgb }), rgb);
-    try std.testing.expectError(error.InvalidPixelFormat, RGB.fromPixel(.{ .rgba = rgba }));
+    try testing.expectEqual(RGB.fromPixel(.{ .rgb = rgb }), rgb);
+    try testing.expectError(error.InvalidPixelFormat, RGB.fromPixel(.{ .rgba = rgba }));
 
-    try std.testing.expectEqual(RGBA.fromPixel(.{ .rgba = rgba }), rgba);
-    try std.testing.expectError(error.InvalidPixelFormat, RGBA.fromPixel(.{ .rgb = rgb }));
+    try testing.expectEqual(RGBA.fromPixel(.{ .rgba = rgba }), rgba);
+    try testing.expectError(error.InvalidPixelFormat, RGBA.fromPixel(.{ .rgb = rgb }));
 }
 
 test "pixel interface, asPixel" {
     const rgb: RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
     const rgba: RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
 
-    try std.testing.expectEqual(Pixel{ .rgb = rgb }, rgb.asPixel());
-    try std.testing.expectEqual(Pixel{ .rgba = rgba }, rgba.asPixel());
+    try testing.expectEqual(Pixel{ .rgb = rgb }, rgb.asPixel());
+    try testing.expectEqual(Pixel{ .rgba = rgba }, rgba.asPixel());
 }

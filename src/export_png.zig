@@ -1,6 +1,12 @@
 const builtin = @import("builtin");
-const std = @import("std");
+const crc32 = @import("std").hash.Crc32;
+const fs = @import("std").fs;
+const io = @import("std").io;
+const mem = @import("std").mem;
+const zlib = @import("std").compress.zlib;
+
 const surfacepkg = @import("surface.zig");
+
 const native_endian = builtin.cpu.arch.endian();
 
 /// Exports the surface to a PNG file supplied by filename.
@@ -8,12 +14,12 @@ const native_endian = builtin.cpu.arch.endian();
 /// This is currently a very rudimentary export with default zlib
 /// compression and no pixel filtering.
 pub fn writeToPNGFile(
-    alloc: std.mem.Allocator,
+    alloc: mem.Allocator,
     surface: surfacepkg.Surface,
     filename: []const u8,
 ) !void {
     // Open and create the file.
-    const file = try std.fs.cwd().createFile(filename, .{});
+    const file = try fs.cwd().createFile(filename, .{});
     defer file.close();
 
     // Write out magic header, and various chunks.
@@ -24,18 +30,18 @@ pub fn writeToPNGFile(
 }
 
 /// Writes the magic header for the PNG file.
-fn writePNGMagic(file: std.fs.File) !void {
+fn writePNGMagic(file: fs.File) !void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
     _ = try file.write(header);
 }
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: std.fs.File, surface: surfacepkg.Surface) !void {
+fn writePNGIHDR(file: fs.File, surface: surfacepkg.Surface) !void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
-    std.mem.writeInt(u32, &width, surface.width(), .big);
-    std.mem.writeInt(u32, &height, surface.height(), .big);
+    mem.writeInt(u32, &width, surface.width(), .big);
+    mem.writeInt(u32, &height, surface.height(), .big);
     const depth: u8 = switch (surface.format()) {
         .rgba => 8,
         .rgb => 8,
@@ -66,8 +72,8 @@ fn writePNGIHDR(file: std.fs.File, surface: surfacepkg.Surface) !void {
 /// This is currently a very rudimentary algorithm - default zlib
 /// compression and no pixel filtering.
 fn writePNGIDATStream(
-    alloc: std.mem.Allocator,
-    file: std.fs.File,
+    alloc: mem.Allocator,
+    file: fs.File,
     surface: surfacepkg.Surface,
 ) !void {
     // Set a minimum remaining buffer size here that is reasonably
@@ -91,8 +97,8 @@ fn writePNGIDATStream(
     // something else reasonable. This is due to the minimum size we
     // need for headers (see above).
     var zlib_buffer_underlying = [_]u8{0} ** 8192;
-    var zlib_buffer = std.io.fixedBufferStream(&zlib_buffer_underlying);
-    var zlib_stream = try std.compress.zlib.compressStream(alloc, zlib_buffer.writer(), .{});
+    var zlib_buffer = io.fixedBufferStream(&zlib_buffer_underlying);
+    var zlib_stream = try zlib.compressStream(alloc, zlib_buffer.writer(), .{});
     defer zlib_stream.deinit();
 
     // Initialize our remaining buffer size. We keep track of this as
@@ -126,7 +132,7 @@ fn writePNGIDATStream(
                     // depth larger than 8 bits, so this means we currently take
                     // all formats little-endian completely.
                     .rgb => |px| {
-                        std.mem.copyForwards(
+                        mem.copyForwards(
                             u8,
                             pixel_buffer[nbytes..pixel_buffer.len],
                             u32PixelToBytesLittle(@bitCast(px))[0..3],
@@ -134,7 +140,7 @@ fn writePNGIDATStream(
                         break :written 3; // 3 bytes
                     },
                     .rgba => |px| {
-                        std.mem.copyForwards(
+                        mem.copyForwards(
                             u8,
                             pixel_buffer[nbytes..pixel_buffer.len],
                             &u32PixelToBytesLittle(@bitCast(px)),
@@ -187,18 +193,18 @@ fn u32PixelToBytesLittle(value: u32) [4]u8 {
 
 /// Writes a single IDAT chunk. The data should be part of the zlib
 /// stream. See writePNG_IDAT_stream et al.
-fn writePNGIDATSingle(file: std.fs.File, data: []const u8) !void {
+fn writePNGIDATSingle(file: fs.File, data: []const u8) !void {
     try writePNGWriteChunk(file, "IDAT".*, data);
 }
 
 /// Write the IEND chunk.
-fn writePNGIEND(file: std.fs.File) !void {
+fn writePNGIEND(file: fs.File) !void {
     try writePNGWriteChunk(file, "IEND".*, "");
 }
 
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
-fn writePNGWriteChunk(file: std.fs.File, chunk_type: [4]u8, data: []const u8) !void {
+fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) !void {
     const len: u32 = @intCast(data.len);
     const checksum = writePNGChunkCRC(chunk_type, data);
 
@@ -210,7 +216,7 @@ fn writePNGWriteChunk(file: std.fs.File, chunk_type: [4]u8, data: []const u8) !v
 
 /// Calculates the CRC32 checksum for the chunk.
 fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
-    var hasher = std.hash.Crc32.init();
+    var hasher = crc32.init();
     hasher.update(chunk_type[0..chunk_type.len]);
     hasher.update(data);
     return hasher.final();

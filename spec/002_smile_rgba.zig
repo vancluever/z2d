@@ -2,12 +2,14 @@
 //! surface, and exporting them to a PNG file.
 //!
 //! This test uses the RGBA pixel format.
-const std = @import("std");
+const debug = @import("std").debug;
+const mem = @import("std").mem;
+
 const z2d = @import("z2d");
 
 pub const filename = "002_smile_rgba.png";
 
-pub fn render(alloc: std.mem.Allocator) !z2d.Surface {
+pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const h = image.height * 2 + 10;
     const w = image.width * 2 + 10;
     var sfc = try z2d.createSurface(
@@ -30,7 +32,7 @@ pub fn render(alloc: std.mem.Allocator) !z2d.Surface {
 
         const px: z2d.Pixel = if (c == '0') foregrounds[0] else backgrounds[0];
         sfc.putPixel(x, y, px) catch |err| {
-            std.debug.print(
+            debug.print(
                 "error at image 1, pixel (x, y): ({}, {}), ({}, {})\n",
                 .{ x, y, h, w },
             );
@@ -52,7 +54,7 @@ pub fn render(alloc: std.mem.Allocator) !z2d.Surface {
 
         const px: z2d.Pixel = if (c == '0') foregrounds[1] else backgrounds[1];
         sfc.putPixel(x, y, px) catch |err| {
-            std.debug.print(
+            debug.print(
                 "error at image 2, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
                 .{ x, y, h, w },
             );
@@ -74,7 +76,7 @@ pub fn render(alloc: std.mem.Allocator) !z2d.Surface {
 
         const px: z2d.Pixel = if (c == '0') foregrounds[2] else backgrounds[2];
         sfc.putPixel(x, y, px) catch |err| {
-            std.debug.print(
+            debug.print(
                 "error at image 3, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
                 .{ x, y, h, w },
             );

@@ -1,5 +1,8 @@
-const std = @import("std");
-const pixel = @import("pixel.zig");
+const mem = @import("std").mem;
+const meta = @import("std").meta;
+const testing = @import("std").testing;
+
+const pixelpkg = @import("pixel.zig");
 
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
@@ -9,8 +12,8 @@ pub const SurfaceType = enum {
 
 /// Represents an interface as a union of the pixel formats.
 pub const Surface = union(SurfaceType) {
-    image_surface_rgb: *ImageSurface(pixel.RGB),
-    image_surface_rgba: *ImageSurface(pixel.RGBA),
+    image_surface_rgb: *ImageSurface(pixelpkg.RGB),
+    image_surface_rgba: *ImageSurface(pixelpkg.RGBA),
 
     // Releases the underlying surface memory. The surface is invalid to use
     // after calling this.
@@ -50,7 +53,7 @@ pub const Surface = union(SurfaceType) {
     }
 
     // Gets the pixel format of the surface.
-    pub fn format(self: Surface) pixel.Format {
+    pub fn format(self: Surface) pixelpkg.Format {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| @TypeOf(s.*).format,
             SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
@@ -58,7 +61,7 @@ pub const Surface = union(SurfaceType) {
     }
 
     /// Gets the pixel data at the co-ordinates specified.
-    pub fn getPixel(self: Surface, x: u32, y: u32) !pixel.Pixel {
+    pub fn getPixel(self: Surface, x: u32, y: u32) !pixelpkg.Pixel {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.getPixel(x, y),
             SurfaceType.image_surface_rgba => |s| s.getPixel(x, y),
@@ -66,7 +69,7 @@ pub const Surface = union(SurfaceType) {
     }
 
     /// Puts a single pixel at the x and y co-ordinates.
-    pub fn putPixel(self: Surface, x: u32, y: u32, px: pixel.Pixel) !void {
+    pub fn putPixel(self: Surface, x: u32, y: u32, px: pixelpkg.Pixel) !void {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.putPixel(x, y, px),
             SurfaceType.image_surface_rgba => |s| s.putPixel(x, y, px),
@@ -80,19 +83,19 @@ pub const Surface = union(SurfaceType) {
 /// release the surface.
 pub fn createSurface(
     surface_type: SurfaceType,
-    alloc: std.mem.Allocator,
+    alloc: mem.Allocator,
     height: u32,
     width: u32,
 ) !Surface {
     switch (surface_type) {
         .image_surface_rgb => {
-            const sfc = try alloc.create(ImageSurface(pixel.RGB));
-            sfc.* = try ImageSurface(pixel.RGB).init(alloc, height, width);
+            const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+            sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, height, width);
             return sfc.asSurfaceInterface();
         },
         .image_surface_rgba => {
-            const sfc = try alloc.create(ImageSurface(pixel.RGBA));
-            sfc.* = try ImageSurface(pixel.RGBA).init(alloc, height, width);
+            const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
+            sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, height, width);
             return sfc.asSurfaceInterface();
         },
     }
@@ -101,16 +104,16 @@ pub fn createSurface(
 test "Surface interface" {
     {
         // RGB
-        const sfc_if = try createSurface(.image_surface_rgb, std.testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgb, testing.allocator, 10, 20);
         defer sfc_if.deinit();
 
         // getters
-        try std.testing.expectEqual(20, sfc_if.width());
-        try std.testing.expectEqual(10, sfc_if.height());
-        try std.testing.expectEqual(.rgb, sfc_if.format());
+        try testing.expectEqual(20, sfc_if.width());
+        try testing.expectEqual(10, sfc_if.height());
+        try testing.expectEqual(.rgb, sfc_if.format());
 
         // putPixel
-        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
+        const rgb: pixelpkg.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
         const x: u32 = 7;
         const y: u32 = 5;
@@ -118,21 +121,21 @@ test "Surface interface" {
         try sfc_if.putPixel(x, y, pix_rgb);
 
         // getPixel
-        try std.testing.expectEqual(pix_rgb, sfc_if.getPixel(x, y));
+        try testing.expectEqual(pix_rgb, sfc_if.getPixel(x, y));
     }
 
     {
         // RGBA
-        const sfc_if = try createSurface(.image_surface_rgba, std.testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgba, testing.allocator, 10, 20);
         defer sfc_if.deinit();
 
         // getters
-        try std.testing.expectEqual(20, sfc_if.width());
-        try std.testing.expectEqual(10, sfc_if.height());
-        try std.testing.expectEqual(.rgba, sfc_if.format());
+        try testing.expectEqual(20, sfc_if.width());
+        try testing.expectEqual(10, sfc_if.height());
+        try testing.expectEqual(.rgba, sfc_if.format());
 
         // putPixel
-        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         const pix_rgba = rgba.asPixel();
         const x: u32 = 7;
         const y: u32 = 5;
@@ -140,7 +143,7 @@ test "Surface interface" {
         try sfc_if.putPixel(x, y, pix_rgba);
 
         // getPixel
-        try std.testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
+        try testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
     }
 }
 
@@ -150,7 +153,7 @@ fn ImageSurface(comptime T: type) type {
     return struct {
         /// The underlying allocator, only needed for deinit. Should not be
         /// used.
-        alloc: std.mem.Allocator,
+        alloc: mem.Allocator,
 
         /// The height of the surface.
         height: u32,
@@ -167,14 +170,14 @@ fn ImageSurface(comptime T: type) type {
         buf: []T,
 
         /// The format for the surface.
-        pub const format: pixel.Format = T.format;
+        pub const format: pixelpkg.Format = T.format;
 
         /// Initializes the surface. deinit should be called when finished with
         /// the surface, which invalidates it, after which it should not be
         /// used.
-        pub fn init(alloc: std.mem.Allocator, height: u32, width: u32) !ImageSurface(T) {
+        pub fn init(alloc: mem.Allocator, height: u32, width: u32) !ImageSurface(T) {
             const buf = try alloc.alloc(T, height * width);
-            @memset(buf, std.mem.zeroes(T));
+            @memset(buf, mem.zeroes(T));
             return .{
                 .alloc = alloc,
                 .height = height,
@@ -198,7 +201,7 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Gets the pixel data at the co-ordinates specified.
-        pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixel.Pixel {
+        pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixelpkg.Pixel {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
                 return error.ImageSurfaceGetPixelOutOfRange;
@@ -208,7 +211,7 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Puts a single pixel at the x and y co-ordinates.
-        pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixel.Pixel) !void {
+        pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixelpkg.Pixel) !void {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
                 return error.ImageSurfacePutPixelOutOfRange;
@@ -219,49 +222,49 @@ fn ImageSurface(comptime T: type) type {
 }
 
 test "ImageSurface, init, deinit" {
-    const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(std.testing.allocator, 10, 20);
+    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    var sfc = try sfc_T.init(testing.allocator, 10, 20);
     defer sfc.deinit();
 
-    try std.testing.expectEqual(10, sfc.height);
-    try std.testing.expectEqual(20, sfc.width);
-    try std.testing.expectEqual(200, sfc.buf.len);
-    try std.testing.expectEqual(std.meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
-    try std.testing.expectEqualSlices(
-        pixel.RGBA,
+    try testing.expectEqual(10, sfc.height);
+    try testing.expectEqual(20, sfc.width);
+    try testing.expectEqual(200, sfc.buf.len);
+    try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixelpkg.RGBA);
+    try testing.expectEqualSlices(
+        pixelpkg.RGBA,
         sfc.buf,
-        &[_]pixel.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
+        &[_]pixelpkg.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
     );
 }
 
 test "ImageSurface, getPixel" {
-    const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(std.testing.allocator, 10, 20);
+    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    var sfc = try sfc_T.init(testing.allocator, 10, 20);
     defer sfc.deinit();
 
     {
         // OK
         const x: u32 = 7;
         const y: u32 = 5;
-        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         sfc.buf[y * 20 + x] = rgba;
-        const expected_px: pixel.Pixel = .{ .rgba = rgba };
-        try std.testing.expectEqual(expected_px, sfc.getPixel(x, y));
+        const expected_px: pixelpkg.Pixel = .{ .rgba = rgba };
+        try testing.expectEqual(expected_px, sfc.getPixel(x, y));
     }
 
     {
         // Error, out of bounds
-        try std.testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(20, 9));
-        try std.testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(19, 10));
+        try testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(20, 9));
+        try testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(19, 10));
     }
 }
 
 test "ImageSurface, putPixel" {
-    const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(std.testing.allocator, 10, 20);
+    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    var sfc = try sfc_T.init(testing.allocator, 10, 20);
     defer sfc.deinit();
 
-    const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+    const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
     const pix_rgba = rgba.asPixel();
 
     {
@@ -270,19 +273,19 @@ test "ImageSurface, putPixel" {
         const y: u32 = 5;
         try sfc.putPixel(x, y, pix_rgba);
         sfc.buf[y * 20 + x] = rgba;
-        try std.testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
+        try testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
     }
 
     {
         // Error, out of bounds
-        try std.testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(20, 9, pix_rgba));
-        try std.testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(19, 10, pix_rgba));
+        try testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(20, 9, pix_rgba));
+        try testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(19, 10, pix_rgba));
     }
 
     {
         // Error, incorrect pixel type
-        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
+        const rgb: pixelpkg.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
-        try std.testing.expectError(error.InvalidPixelFormat, sfc.putPixel(1, 1, pix_rgb));
+        try testing.expectError(error.InvalidPixelFormat, sfc.putPixel(1, 1, pix_rgb));
     }
 }

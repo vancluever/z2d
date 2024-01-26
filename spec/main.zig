@@ -1,9 +1,8 @@
+const debug = @import("std").debug;
 const fs = @import("std").fs;
 const heap = @import("std").heap;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
-
-const debug = @import("std").debug;
 const testing = @import("std").testing;
 
 const z2d = @import("z2d");
