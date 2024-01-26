@@ -3,14 +3,14 @@ const pixel = @import("pixel.zig");
 
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
-    image_surface_rgba,
     image_surface_rgb,
+    image_surface_rgba,
 };
 
 /// Represents an interface as a union of the pixel formats.
 pub const Surface = union(SurfaceType) {
-    image_surface_rgba: *ImageSurface(pixel.RGBA),
     image_surface_rgb: *ImageSurface(pixel.RGB),
+    image_surface_rgba: *ImageSurface(pixel.RGBA),
 
     // Releases the underlying surface memory. The surface is invalid to use
     // after calling this.
@@ -22,11 +22,11 @@ pub const Surface = union(SurfaceType) {
         // this internally, but I think it's important to make the
         // distinction).
         switch (self) {
-            SurfaceType.image_surface_rgba => |s| {
+            SurfaceType.image_surface_rgb => |s| {
                 s.deinit();
                 s.alloc.destroy(s);
             },
-            SurfaceType.image_surface_rgb => |s| {
+            SurfaceType.image_surface_rgba => |s| {
                 s.deinit();
                 s.alloc.destroy(s);
             },
@@ -36,40 +36,40 @@ pub const Surface = union(SurfaceType) {
     // Gets the width of the surface.
     pub fn width(self: Surface) u32 {
         return switch (self) {
-            SurfaceType.image_surface_rgba => |s| s.width,
             SurfaceType.image_surface_rgb => |s| s.width,
+            SurfaceType.image_surface_rgba => |s| s.width,
         };
     }
 
     // Gets the height of the surface.
     pub fn height(self: Surface) u32 {
         return switch (self) {
-            SurfaceType.image_surface_rgba => |s| s.height,
             SurfaceType.image_surface_rgb => |s| s.height,
+            SurfaceType.image_surface_rgba => |s| s.height,
         };
     }
 
     // Gets the pixel format of the surface.
     pub fn format(self: Surface) pixel.Format {
         return switch (self) {
-            SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
             SurfaceType.image_surface_rgb => |s| @TypeOf(s.*).format,
+            SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
         };
     }
 
     /// Gets the pixel data at the co-ordinates specified.
     pub fn getPixel(self: Surface, x: u32, y: u32) !pixel.Pixel {
         return switch (self) {
-            SurfaceType.image_surface_rgba => |s| s.getPixel(x, y),
             SurfaceType.image_surface_rgb => |s| s.getPixel(x, y),
+            SurfaceType.image_surface_rgba => |s| s.getPixel(x, y),
         };
     }
 
     /// Puts a single pixel at the x and y co-ordinates.
     pub fn putPixel(self: Surface, x: u32, y: u32, px: pixel.Pixel) !void {
         return switch (self) {
-            SurfaceType.image_surface_rgba => |s| s.putPixel(x, y, px),
             SurfaceType.image_surface_rgb => |s| s.putPixel(x, y, px),
+            SurfaceType.image_surface_rgba => |s| s.putPixel(x, y, px),
         };
     }
 };
@@ -82,42 +82,20 @@ pub fn createSurface(
     width: u32,
 ) !Surface {
     switch (surface_type) {
-        .image_surface_rgba => {
-            const sfc = try alloc.create(ImageSurface(pixel.RGBA));
-            sfc.* = try ImageSurface(pixel.RGBA).init(alloc, height, width);
-            return sfc.asSurfaceInterface();
-        },
         .image_surface_rgb => {
             const sfc = try alloc.create(ImageSurface(pixel.RGB));
             sfc.* = try ImageSurface(pixel.RGB).init(alloc, height, width);
+            return sfc.asSurfaceInterface();
+        },
+        .image_surface_rgba => {
+            const sfc = try alloc.create(ImageSurface(pixel.RGBA));
+            sfc.* = try ImageSurface(pixel.RGBA).init(alloc, height, width);
             return sfc.asSurfaceInterface();
         },
     }
 }
 
 test "Surface interface" {
-    {
-        // RGBA
-        const sfc_if = try createSurface(.image_surface_rgba, std.testing.allocator, 10, 20);
-        defer sfc_if.deinit();
-
-        // getters
-        try std.testing.expectEqual(20, sfc_if.width());
-        try std.testing.expectEqual(10, sfc_if.height());
-        try std.testing.expectEqual(.rgba, sfc_if.format());
-
-        // putPixel
-        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
-        const pix_rgba = rgba.asPixel();
-        const x: u32 = 7;
-        const y: u32 = 5;
-
-        try sfc_if.putPixel(x, y, pix_rgba);
-
-        // getPixel
-        try std.testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
-    }
-
     {
         // RGB
         const sfc_if = try createSurface(.image_surface_rgb, std.testing.allocator, 10, 20);
@@ -138,6 +116,28 @@ test "Surface interface" {
 
         // getPixel
         try std.testing.expectEqual(pix_rgb, sfc_if.getPixel(x, y));
+    }
+
+    {
+        // RGBA
+        const sfc_if = try createSurface(.image_surface_rgba, std.testing.allocator, 10, 20);
+        defer sfc_if.deinit();
+
+        // getters
+        try std.testing.expectEqual(20, sfc_if.width());
+        try std.testing.expectEqual(10, sfc_if.height());
+        try std.testing.expectEqual(.rgba, sfc_if.format());
+
+        // putPixel
+        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const pix_rgba = rgba.asPixel();
+        const x: u32 = 7;
+        const y: u32 = 5;
+
+        try sfc_if.putPixel(x, y, pix_rgba);
+
+        // getPixel
+        try std.testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
     }
 }
 

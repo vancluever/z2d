@@ -125,14 +125,6 @@ fn writePNGIDATStream(
                     // Note that we currently don't support any pixel with a bit
                     // depth larger than 8 bits, so this means we currently take
                     // all formats little-endian completely.
-                    .rgba => |px| {
-                        std.mem.copyForwards(
-                            u8,
-                            pixel_buffer[nbytes..pixel_buffer.len],
-                            &u32PixelToBytesLittle(@bitCast(px)),
-                        );
-                        break :written 4; // 4 bytes
-                    },
                     .rgb => |px| {
                         std.mem.copyForwards(
                             u8,
@@ -140,6 +132,14 @@ fn writePNGIDATStream(
                             u32PixelToBytesLittle(@bitCast(px))[0..3],
                         );
                         break :written 3; // 3 bytes
+                    },
+                    .rgba => |px| {
+                        std.mem.copyForwards(
+                            u8,
+                            pixel_buffer[nbytes..pixel_buffer.len],
+                            &u32PixelToBytesLittle(@bitCast(px)),
+                        );
+                        break :written 4; // 4 bytes
                     },
                 }
             };
