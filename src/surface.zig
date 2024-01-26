@@ -74,7 +74,10 @@ pub const Surface = union(SurfaceType) {
     }
 };
 
-// Initializes a surface of the specific type.
+/// Initializes a surface of the specific type.
+///
+/// The caller owns the memory, so make sure to call deinit on the surface to
+/// release the surface.
 pub fn createSurface(
     surface_type: SurfaceType,
     alloc: std.mem.Allocator,
@@ -145,15 +148,15 @@ test "Surface interface" {
 /// RGBA). Call init to return an initialized surface.
 fn ImageSurface(comptime T: type) type {
     return struct {
+        /// The underlying allocator, only needed for deinit. Should not be
+        /// used.
+        alloc: std.mem.Allocator,
+
         /// The height of the surface.
         height: u32,
 
         /// The width of the surface.
         width: u32,
-
-        /// The underlying allocator, only needed for deinit. Should not be
-        /// used.
-        alloc: std.mem.Allocator,
 
         /// The underlying buffer. It's not advised to access this directly,
         /// rather use pixel operations such as getPixel and putPixel.
