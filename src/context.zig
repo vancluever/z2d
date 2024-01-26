@@ -15,9 +15,11 @@ pub const DrawContext = struct {
     /// undefined behavior. Do not set directly, use init to do so.
     surface: surfacepkg.Surface,
 
+    /// Creates a new context with the underlying surface.
+    ///
+    /// The initial pattern is set to opaque black, appropriate to the pixel
+    /// format of the surface.
     pub fn init(surface: surfacepkg.Surface) DrawContext {
-        // Set set the initial pattern as opaque black, depending on the pixel
-        // type.
         const px: pixelpkg.Pixel = switch (surface) {
             .image_surface_rgb => .{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
             .image_surface_rgba => .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
