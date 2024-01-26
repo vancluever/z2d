@@ -7,7 +7,12 @@ const pixelpkg = @import("pixel.zig");
 /// The draw context, which connects patterns to surfaces, holds other state
 /// data, and is used to dispatch drawing operations.
 pub const DrawContext = struct {
+    /// The underlying pattern. Do not set directly, use setPattern, which will
+    /// do compatibility checks.
     pattern: patternpkg.Pattern,
+
+    /// The underlying surface. Setting this value after initialization is
+    /// undefined behavior. Do not set directly, use init to do so.
     surface: surfacepkg.Surface,
 
     pub fn init(surface: surfacepkg.Surface) DrawContext {
