@@ -84,18 +84,18 @@ pub const Surface = union(SurfaceType) {
 pub fn createSurface(
     surface_type: SurfaceType,
     alloc: mem.Allocator,
-    height: u32,
     width: u32,
+    height: u32,
 ) !Surface {
     switch (surface_type) {
         .image_surface_rgb => {
             const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
-            sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, height, width);
+            sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height);
             return sfc.asSurfaceInterface();
         },
         .image_surface_rgba => {
             const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
-            sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, height, width);
+            sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height);
             return sfc.asSurfaceInterface();
         },
     }
@@ -104,7 +104,7 @@ pub fn createSurface(
 test "Surface interface" {
     {
         // RGB
-        const sfc_if = try createSurface(.image_surface_rgb, testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgb, testing.allocator, 20, 10);
         defer sfc_if.deinit();
 
         // getters
@@ -126,7 +126,7 @@ test "Surface interface" {
 
     {
         // RGBA
-        const sfc_if = try createSurface(.image_surface_rgba, testing.allocator, 10, 20);
+        const sfc_if = try createSurface(.image_surface_rgba, testing.allocator, 20, 10);
         defer sfc_if.deinit();
 
         // getters
@@ -155,11 +155,11 @@ fn ImageSurface(comptime T: type) type {
         /// used.
         alloc: mem.Allocator,
 
-        /// The height of the surface.
-        height: u32,
-
         /// The width of the surface.
         width: u32,
+
+        /// The height of the surface.
+        height: u32,
 
         /// The underlying buffer. It's not advised to access this directly,
         /// rather use pixel operations such as getPixel and putPixel.
@@ -175,13 +175,13 @@ fn ImageSurface(comptime T: type) type {
         /// Initializes the surface. deinit should be called when finished with
         /// the surface, which invalidates it, after which it should not be
         /// used.
-        pub fn init(alloc: mem.Allocator, height: u32, width: u32) !ImageSurface(T) {
+        pub fn init(alloc: mem.Allocator, width: u32, height: u32) !ImageSurface(T) {
             const buf = try alloc.alloc(T, height * width);
             @memset(buf, mem.zeroes(T));
             return .{
                 .alloc = alloc,
-                .height = height,
                 .width = width,
+                .height = height,
                 .buf = buf,
             };
         }
@@ -226,8 +226,8 @@ test "ImageSurface, init, deinit" {
     var sfc = try sfc_T.init(testing.allocator, 10, 20);
     defer sfc.deinit();
 
-    try testing.expectEqual(10, sfc.height);
-    try testing.expectEqual(20, sfc.width);
+    try testing.expectEqual(20, sfc.height);
+    try testing.expectEqual(10, sfc.width);
     try testing.expectEqual(200, sfc.buf.len);
     try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixelpkg.RGBA);
     try testing.expectEqualSlices(
@@ -239,7 +239,7 @@ test "ImageSurface, init, deinit" {
 
 test "ImageSurface, getPixel" {
     const sfc_T = ImageSurface(pixelpkg.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 10, 20);
+    var sfc = try sfc_T.init(testing.allocator, 20, 10);
     defer sfc.deinit();
 
     {
@@ -261,7 +261,7 @@ test "ImageSurface, getPixel" {
 
 test "ImageSurface, putPixel" {
     const sfc_T = ImageSurface(pixelpkg.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 10, 20);
+    var sfc = try sfc_T.init(testing.allocator, 20, 10);
     defer sfc.deinit();
 
     const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };

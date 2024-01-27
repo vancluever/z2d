@@ -10,13 +10,13 @@ const z2d = @import("z2d");
 pub const filename = "002_smile_rgba.png";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
-    const h = image.height * 2 + 10;
     const w = image.width * 2 + 10;
+    const h = image.height * 2 + 10;
     var sfc = try z2d.createSurface(
         surface_type,
         alloc,
-        h,
         w,
+        h,
     );
 
     // 1st smile
@@ -103,8 +103,8 @@ const backgrounds: [3]z2d.Pixel = .{
 };
 
 const image = .{
-    .height = 41,
     .width = 83,
+    .height = 41,
     // Smile grabbed from stackoverflow here:
     // https://codegolf.stackexchange.com/a/16857
     .data =
