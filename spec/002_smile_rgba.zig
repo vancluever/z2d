@@ -12,7 +12,7 @@ pub const filename = "002_smile_rgba.png";
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const w = image.width * 2 + 10;
     const h = image.height * 2 + 10;
-    var sfc = try z2d.createSurface(
+    var sfc = try z2d.Surface.init(
         surface_type,
         alloc,
         w,

@@ -15,8 +15,31 @@ pub const Surface = union(SurfaceType) {
     image_surface_rgb: *ImageSurface(pixelpkg.RGB),
     image_surface_rgba: *ImageSurface(pixelpkg.RGBA),
 
-    // Releases the underlying surface memory. The surface is invalid to use
-    // after calling this.
+    /// Initializes a surface of the specific type.
+    ///
+    /// The caller owns the memory, so make sure to call deinit to release it.
+    pub fn init(
+        surface_type: SurfaceType,
+        alloc: mem.Allocator,
+        width: u32,
+        height: u32,
+    ) !Surface {
+        switch (surface_type) {
+            .image_surface_rgb => {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height);
+                return sfc.asSurfaceInterface();
+            },
+            .image_surface_rgba => {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
+                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height);
+                return sfc.asSurfaceInterface();
+            },
+        }
+    }
+
+    /// Releases the underlying surface memory. The surface is invalid to use
+    /// after calling this.
     pub fn deinit(self: Surface) void {
         // NOTE: We use the allocator bound to the surface to free the surface
         // instance itself (not just the buffer) ONLY in the interface. This
@@ -36,24 +59,24 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
-    // Gets the width of the surface.
-    pub fn width(self: Surface) u32 {
+    /// Gets the width of the surface.
+    pub fn getWidth(self: Surface) u32 {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.width,
             SurfaceType.image_surface_rgba => |s| s.width,
         };
     }
 
-    // Gets the height of the surface.
-    pub fn height(self: Surface) u32 {
+    /// Gets the height of the surface.
+    pub fn getHeight(self: Surface) u32 {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.height,
             SurfaceType.image_surface_rgba => |s| s.height,
         };
     }
 
-    // Gets the pixel format of the surface.
-    pub fn format(self: Surface) pixelpkg.Format {
+    /// Gets the pixel format of the surface.
+    pub fn getFormat(self: Surface) pixelpkg.Format {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| @TypeOf(s.*).format,
             SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
@@ -77,40 +100,16 @@ pub const Surface = union(SurfaceType) {
     }
 };
 
-/// Initializes a surface of the specific type.
-///
-/// The caller owns the memory, so make sure to call deinit on the surface to
-/// release the surface.
-pub fn createSurface(
-    surface_type: SurfaceType,
-    alloc: mem.Allocator,
-    width: u32,
-    height: u32,
-) !Surface {
-    switch (surface_type) {
-        .image_surface_rgb => {
-            const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
-            sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height);
-            return sfc.asSurfaceInterface();
-        },
-        .image_surface_rgba => {
-            const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
-            sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height);
-            return sfc.asSurfaceInterface();
-        },
-    }
-}
-
 test "Surface interface" {
     {
         // RGB
-        const sfc_if = try createSurface(.image_surface_rgb, testing.allocator, 20, 10);
+        const sfc_if = try Surface.init(.image_surface_rgb, testing.allocator, 20, 10);
         defer sfc_if.deinit();
 
         // getters
-        try testing.expectEqual(20, sfc_if.width());
-        try testing.expectEqual(10, sfc_if.height());
-        try testing.expectEqual(.rgb, sfc_if.format());
+        try testing.expectEqual(20, sfc_if.getWidth());
+        try testing.expectEqual(10, sfc_if.getHeight());
+        try testing.expectEqual(.rgb, sfc_if.getFormat());
 
         // putPixel
         const rgb: pixelpkg.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
@@ -126,13 +125,13 @@ test "Surface interface" {
 
     {
         // RGBA
-        const sfc_if = try createSurface(.image_surface_rgba, testing.allocator, 20, 10);
+        const sfc_if = try Surface.init(.image_surface_rgba, testing.allocator, 20, 10);
         defer sfc_if.deinit();
 
         // getters
-        try testing.expectEqual(20, sfc_if.width());
-        try testing.expectEqual(10, sfc_if.height());
-        try testing.expectEqual(.rgba, sfc_if.format());
+        try testing.expectEqual(20, sfc_if.getWidth());
+        try testing.expectEqual(10, sfc_if.getHeight());
+        try testing.expectEqual(.rgba, sfc_if.getFormat());
 
         // putPixel
         const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
@@ -151,14 +150,19 @@ test "Surface interface" {
 /// RGBA). Call init to return an initialized surface.
 fn ImageSurface(comptime T: type) type {
     return struct {
-        /// The underlying allocator, only needed for deinit. Should not be
-        /// used.
+        /// The underlying allocator, only needed for deinit.
+        ///
+        /// private: should not be edited directly.
         alloc: mem.Allocator,
 
         /// The width of the surface.
+        ///
+        /// read-only: should not be modified directly.
         width: u32,
 
         /// The height of the surface.
+        ///
+        /// read-only: should not be modified directly.
         height: u32,
 
         /// The underlying buffer. It's not advised to access this directly,
@@ -167,9 +171,13 @@ fn ImageSurface(comptime T: type) type {
         /// The buffer is initialized to height * width on initialization,
         /// de-allocated on deinit, and is invalid to use after the latter is
         /// called.
+        ///
+        /// private: should not be edited directly.
         buf: []T,
 
         /// The format for the surface.
+        ///
+        /// read-only: should not be modified directly.
         pub const format: pixelpkg.Format = T.format;
 
         /// Initializes the surface. deinit should be called when finished with

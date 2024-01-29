@@ -9,6 +9,11 @@ const z2d = @import("z2d");
 
 const _001_smile_rgb = @import("001_smile_rgb.zig");
 const _002_smile_rgba = @import("002_smile_rgba.zig");
+const _003_fill_triangle = @import("003_fill_triangle.zig");
+const _004_fill_square = @import("004_fill_square.zig");
+const _005_fill_trapezoid = @import("005_fill_trapezoid.zig");
+const _006_fill_star_even_odd = @import("006_fill_star_even_odd.zig");
+const _007_fill_bezier = @import("007_fill_bezier.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -18,6 +23,11 @@ pub fn main() !void {
 
     try gen_001_smile_rgb(alloc);
     try gen_002_smile_rgba(alloc);
+    try gen_003_fill_triangle(alloc);
+    try gen_004_fill_square(alloc);
+    try gen_005_fill_trapezoid(alloc);
+    try gen_006_fill_star_even_odd(alloc);
+    try gen_007_fill_bezier(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -30,6 +40,36 @@ fn gen_002_smile_rgba(alloc: mem.Allocator) !void {
     var surface = try _002_smile_rgba.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _002_smile_rgba.filename);
+}
+
+fn gen_003_fill_triangle(alloc: mem.Allocator) !void {
+    var surface = try _003_fill_triangle.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _003_fill_triangle.filename);
+}
+
+fn gen_004_fill_square(alloc: mem.Allocator) !void {
+    var surface = try _004_fill_square.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _004_fill_square.filename);
+}
+
+fn gen_005_fill_trapezoid(alloc: mem.Allocator) !void {
+    var surface = try _005_fill_trapezoid.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _005_fill_trapezoid.filename);
+}
+
+fn gen_006_fill_star_even_odd(alloc: mem.Allocator) !void {
+    var surface = try _006_fill_star_even_odd.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _006_fill_star_even_odd.filename);
+}
+
+fn gen_007_fill_bezier(alloc: mem.Allocator) !void {
+    var surface = try _007_fill_bezier.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _007_fill_bezier.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -49,6 +89,56 @@ test "002_smile_rgba" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _002_smile_rgba.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "003_fill_triangle" {
+    var surface = try _003_fill_triangle.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _003_fill_triangle.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "004_fill_square" {
+    var surface = try _004_fill_square.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _004_fill_square.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "005_fill_trapezoid" {
+    var surface = try _005_fill_trapezoid.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _005_fill_trapezoid.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "006_fill_star_even_odd" {
+    var surface = try _006_fill_star_even_odd.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _006_fill_star_even_odd.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "007_fill_bezier" {
+    var surface = try _007_fill_bezier.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _007_fill_bezier.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);

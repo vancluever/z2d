@@ -7,12 +7,14 @@ const pixelpkg = @import("pixel.zig");
 /// The draw context, which connects patterns to surfaces, holds other state
 /// data, and is used to dispatch drawing operations.
 pub const DrawContext = struct {
-    /// The underlying pattern. Do not set directly, use setPattern, which will
-    /// do compatibility checks.
+    /// The underlying pattern.
+    ///
+    /// read-only: should not be modified directly.
     pattern: patternpkg.Pattern,
 
-    /// The underlying surface. Setting this value after initialization is
-    /// undefined behavior. Do not set directly, use init to do so.
+    /// The underlying surface.
+    ///
+    /// read-only: should not be modified directly.
     surface: surfacepkg.Surface,
 
     /// Creates a new context with the underlying surface.
@@ -40,7 +42,7 @@ pub const DrawContext = struct {
         // eventually change so that we can do transformations, etc.
         switch (pattern) {
             .opaque_pattern => |p| {
-                if (p.pixel != self.surface.format()) {
+                if (p.pixel != self.surface.getFormat()) {
                     return error.IncompatiblePatternForSurface;
                 }
             },
@@ -51,7 +53,7 @@ pub const DrawContext = struct {
 };
 
 test "DrawContext, basic" {
-    const sfc = try surfacepkg.createSurface(.image_surface_rgba, testing.allocator, 1, 1);
+    const sfc = try surfacepkg.Surface.init(.image_surface_rgba, testing.allocator, 1, 1);
     defer sfc.deinit();
 
     const ctx = DrawContext.init(sfc);
@@ -61,7 +63,7 @@ test "DrawContext, basic" {
 }
 
 test "DrawContext, setPattern, OK" {
-    const sfc = try surfacepkg.createSurface(.image_surface_rgb, testing.allocator, 1, 1);
+    const sfc = try surfacepkg.Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
     defer sfc.deinit();
 
     var ctx = DrawContext.init(sfc);
@@ -72,7 +74,7 @@ test "DrawContext, setPattern, OK" {
 }
 
 test "DrawContext, setPattern, invalid pixel format" {
-    const sfc = try surfacepkg.createSurface(.image_surface_rgba, testing.allocator, 1, 1);
+    const sfc = try surfacepkg.Surface.init(.image_surface_rgba, testing.allocator, 1, 1);
     defer sfc.deinit();
 
     var ctx = DrawContext.init(sfc);
