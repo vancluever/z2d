@@ -22,8 +22,6 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const p1: z2d.Point = .{ .x = 89, .y = 49 };
     const p2: z2d.Point = .{ .x = 209, .y = 49 };
     const p3: z2d.Point = .{ .x = 279, .y = 249 };
-    // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
-    // then evens (4, 2), with the close connecting 4 and 1.
     try path.moveTo(p0); // 1
     try path.curveTo(p1, p2, p3); // 3
     try path.closePath();
