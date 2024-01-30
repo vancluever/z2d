@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     const spec_update = b.option(
         bool,
         "update",
-        "Update spec (E2E) tests (needs to be run with the \"spec\" target",
+        "Update spec (E2E) tests (needs to be run with the \"spec\" target)",
     );
     const spec_test = spec: {
         const opts = .{
