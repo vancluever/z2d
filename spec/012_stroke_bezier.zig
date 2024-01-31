@@ -24,8 +24,8 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const p1: z2d.Point = .{ .x = 89, .y = 49 };
     const p2: z2d.Point = .{ .x = 209, .y = 49 };
     const p3: z2d.Point = .{ .x = 279, .y = 249 };
-    try path.moveTo(p0); // 1
-    try path.curveTo(p1, p2, p3); // 3
+    try path.moveTo(p0);
+    try path.curveTo(p1, p2, p3);
 
     try path.stroke();
 
