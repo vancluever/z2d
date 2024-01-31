@@ -14,6 +14,11 @@ const _004_fill_square = @import("004_fill_square.zig");
 const _005_fill_trapezoid = @import("005_fill_trapezoid.zig");
 const _006_fill_star_even_odd = @import("006_fill_star_even_odd.zig");
 const _007_fill_bezier = @import("007_fill_bezier.zig");
+const _008_stroke_triangle = @import("008_stroke_triangle.zig");
+const _009_stroke_square = @import("009_stroke_square.zig");
+const _010_stroke_trapezoid = @import("010_stroke_trapezoid.zig");
+const _011_stroke_star = @import("011_stroke_star.zig");
+const _012_stroke_bezier = @import("012_stroke_bezier.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +33,11 @@ pub fn main() !void {
     try gen_005_fill_trapezoid(alloc);
     try gen_006_fill_star_even_odd(alloc);
     try gen_007_fill_bezier(alloc);
+    try gen_008_stroke_triangle(alloc);
+    try gen_009_stroke_square(alloc);
+    try gen_010_stroke_trapezoid(alloc);
+    try gen_011_stroke_star(alloc);
+    try gen_012_stroke_bezier(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -70,6 +80,36 @@ fn gen_007_fill_bezier(alloc: mem.Allocator) !void {
     var surface = try _007_fill_bezier.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _007_fill_bezier.filename);
+}
+
+fn gen_008_stroke_triangle(alloc: mem.Allocator) !void {
+    var surface = try _008_stroke_triangle.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _008_stroke_triangle.filename);
+}
+
+fn gen_009_stroke_square(alloc: mem.Allocator) !void {
+    var surface = try _009_stroke_square.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _009_stroke_square.filename);
+}
+
+fn gen_010_stroke_trapezoid(alloc: mem.Allocator) !void {
+    var surface = try _010_stroke_trapezoid.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _010_stroke_trapezoid.filename);
+}
+
+fn gen_011_stroke_star(alloc: mem.Allocator) !void {
+    var surface = try _011_stroke_star.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _011_stroke_star.filename);
+}
+
+fn gen_012_stroke_bezier(alloc: mem.Allocator) !void {
+    var surface = try _012_stroke_bezier.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _012_stroke_bezier.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -139,6 +179,56 @@ test "007_fill_bezier" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _007_fill_bezier.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "008_stroke_triangle" {
+    var surface = try _008_stroke_triangle.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _008_stroke_triangle.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "009_stroke_square" {
+    var surface = try _009_stroke_square.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _009_stroke_square.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "010_stroke_trapezoid" {
+    var surface = try _010_stroke_trapezoid.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _010_stroke_trapezoid.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "011_stroke_star" {
+    var surface = try _011_stroke_star.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _011_stroke_star.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "012_stroke_bezier" {
+    var surface = try _012_stroke_bezier.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _012_stroke_bezier.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);

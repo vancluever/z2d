@@ -3,6 +3,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const bresenham = @import("bresenham.zig");
 const spline = @import("spline.zig");
 const contextpkg = @import("context.zig");
 
@@ -99,8 +100,8 @@ pub const PathOperation = struct {
     /// starting point. No effect if there is no current point.
     pub fn closePath(self: *PathOperation) !void {
         if (self.current_point == null) return;
-        if (self.nodes.getLast() != .line_to) try self.lineTo(self.last_move_point.?);
-        try self.nodes.append(.{ .close_path = .{} });
+        if (self.last_move_point == null) return error.PathOperationClosePathNoLastMovePoint;
+        try self.nodes.append(.{ .close_path = .{ .point = self.last_move_point.? } });
 
         // Clear our points. For now, this means consumers will need to be
         // more explicit with path commands (e.g. moving after closing),
@@ -110,15 +111,15 @@ pub const PathOperation = struct {
         self.current_point = null;
     }
 
-    /// Runs a fill operation on this current path and any subpaths. If the
-    /// current path is not closed, closes it first.
+    /// Runs a fill operation (even-odd) on this current path and any subpaths.
+    /// If the current path is not closed, closes it first.
     ///
     /// This is a no-op if there are no nodes.
     pub fn fill(self: *PathOperation) !void {
         if (self.nodes.items.len == 0) return;
         if (self.nodes.getLast() != .close_path) try self.closePath();
 
-        // Build the polygon and its corners.
+        // Build the polygon
         self.polygon.clear();
         try self.polygon.parseNodes(self.nodes.items);
 
@@ -149,6 +150,68 @@ pub const PathOperation = struct {
             }
         }
     }
+
+    /// Draws a line along the current path.
+    ///
+    /// This is a no-op if there are no nodes.
+    pub fn stroke(self: *PathOperation) !void {
+        if (self.nodes.items.len == 0) return;
+
+        // Build the polygon
+        self.polygon.clear();
+        try self.polygon.parseNodes(self.nodes.items);
+
+        // Start drawing our edges.
+        for (self.polygon.edges.items) |edge| {
+            if (edge.isHorizontal()) {
+                // Horizontal line
+                const y = u32Clamped(edge.start.y);
+                const start_x = if (edge.start.x > edge.end.x)
+                    u32Clamped(edge.end.x)
+                else
+                    u32Clamped(edge.start.x);
+                const end_x = if (edge.start.x > edge.end.x)
+                    u32Clamped(edge.start.x)
+                else
+                    u32Clamped(edge.end.x);
+                for (start_x..end_x) |x| {
+                    const pixel = try self.context.pattern.getPixel(@intCast(x), y);
+                    try self.context.surface.putPixel(@intCast(x), y, pixel);
+                }
+            } else if (edge.isVertical()) {
+                // Vertical line
+                const x = u32Clamped(edge.start.x);
+                const start_y = if (edge.start.y > edge.end.y)
+                    u32Clamped(edge.end.y)
+                else
+                    u32Clamped(edge.start.y);
+                const end_y = if (edge.start.y > edge.end.y)
+                    u32Clamped(edge.start.y)
+                else
+                    u32Clamped(edge.end.y);
+                for (start_y..end_y) |y| {
+                    const pixel = try self.context.pattern.getPixel(x, @intCast(y));
+                    try self.context.surface.putPixel(x, @intCast(y), pixel);
+                }
+            } else {
+                if (edge.isSteep()) {
+                    // Steep slope, we need to iterate on the y
+                    if (edge.start.y > edge.end.y) {
+                        try bresenham.drawIterY(self.context, edge.end, edge.start);
+                    } else {
+                        try bresenham.drawIterY(self.context, edge.start, edge.end);
+                    }
+                } else {
+                    // Normal slope, iterate on the x
+                    if (edge.start.x > edge.end.x) {
+                        try bresenham.drawIterX(self.context, edge.end, edge.start);
+                    } else {
+                        try bresenham.drawIterX(self.context, edge.start, edge.end);
+                    }
+                }
+            }
+        }
+    }
 };
 
 /// Represents a polygon for filling.
@@ -160,31 +223,46 @@ pub const Polygon = struct {
     /// The corners for the polygon.
     corners: std.ArrayList(Point),
 
+    /// The edges for the polygon. These are essentially lines with metadata.
+    edges: std.ArrayList(PolygonEdge),
+
     /// Initializes a polygon with an empty edge list. The caller should run
     /// deinit when done.
     pub fn init(alloc: mem.Allocator) Polygon {
         return .{
             .alloc = alloc,
             .corners = std.ArrayList(Point).init(alloc),
+            .edges = std.ArrayList(PolygonEdge).init(alloc),
         };
     }
 
-    /// Releases the path node array list. It's invalid to use the
+    /// Releases this polygon's corners and edges. It's invalid to use the
     /// operation after this call.
     pub fn deinit(self: *Polygon) void {
         self.corners.deinit();
+        self.edges.deinit();
     }
 
-    /// Clears all corners in the polygon. Retains capacity. Should be used
-    /// before any processing operation.
+    /// Releases this polygon's corners and edges. Retains capacity. Should be
+    /// used before any processing operation.
     pub fn clear(self: *Polygon) void {
         self.corners.clearRetainingCapacity();
+        self.edges.clearRetainingCapacity();
     }
 
-    /// Builds corners from a set of PathNode items.
+    /// Plots a point on the polygon. Adds to the current corner list, and if
+    /// this is non-zero, computes an edge as well.
+    pub fn plot(self: *Polygon, p: Point) !void {
+        if (self.corners.items.len > 0) {
+            try self.edges.append(PolygonEdge.fromPoints(self.corners.getLast(), p));
+        }
+        try self.corners.append(p);
+    }
+
+    /// Builds corners and edges from a set of PathNode items.
     ///
-    /// Does not clear existing polygon corner set. If a clear polygon is
-    /// desired, clear should be called.
+    /// Does not clear existing items. If a clean polygon is desired, clear
+    /// should be called.
     pub fn parseNodes(self: *Polygon, nodes: []PathNode) !void {
         var lastPoint: ?Point = null;
         for (nodes) |node| {
@@ -211,8 +289,9 @@ pub const Polygon = struct {
         var edge_list = std.ArrayList(u32).init(self.alloc);
         defer edge_list.deinit();
 
-        // Last index, to compare against current index
+        // Get the corners
         const corners = self.corners.items;
+        // Last index, to compare against current index
         var last_idx = corners.len - 1;
         for (0..corners.len) |cur_idx| {
             const last_y = corners[last_idx].y;
@@ -221,8 +300,13 @@ pub const Polygon = struct {
                 const last_x = corners[last_idx].x;
                 const cur_x = corners[cur_idx].x;
                 try edge_list.append(edge: {
-                    const edge_x = cur_x + (line_y - cur_y) / (last_y - cur_y) * (last_x - cur_x);
-                    break :edge @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(edge_x))));
+                    // y(x) = (y1 - y0) / (x1 - x0) * (x - x0) + y0
+                    //
+                    // or:
+                    //
+                    // x(y) = (y - y0) / (y1 - y0) * (x1 - x0) + x0
+                    const edge_x = (line_y - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x;
+                    break :edge u32Clamped(edge_x);
                 });
             }
 
@@ -233,6 +317,30 @@ pub const Polygon = struct {
         const edge_list_sorted = try edge_list.toOwnedSlice();
         mem.sort(u32, edge_list_sorted, {}, comptime (std.sort.asc(u32)));
         return std.ArrayList(u32).fromOwnedSlice(self.alloc, edge_list_sorted);
+    }
+};
+
+const PolygonEdge = struct {
+    start: Point,
+    end: Point,
+
+    pub fn fromPoints(start: Point, end: Point) PolygonEdge {
+        return .{
+            .start = start,
+            .end = end,
+        };
+    }
+
+    pub fn isHorizontal(self: PolygonEdge) bool {
+        return self.start.y == self.end.y;
+    }
+
+    pub fn isVertical(self: PolygonEdge) bool {
+        return self.start.x == self.end.x;
+    }
+
+    pub fn isSteep(self: PolygonEdge) bool {
+        return @abs(self.end.y - self.start.y) >= @abs(self.end.x - self.start.x);
     }
 };
 
@@ -250,7 +358,7 @@ const PathMoveTo = struct {
         if (current_point != null) return error.PolygonMoveToWithCurrentPoint;
         if (polygon.corners.items.len != 0) return error.PolygonMoveToOnNonZeroCorners;
 
-        try polygon.corners.append(self.point);
+        try polygon.plot(self.point);
         return self.point;
     }
 };
@@ -264,11 +372,11 @@ const PathLineTo = struct {
     fn plotNode(self: PathLineTo, polygon: *Polygon, current_point: ?Point) !?Point {
         // We've already reduced our node list by this point in time, so we
         // should always have a current point (e.g. at least moveto), and at
-        // least one edge.
+        // least one corner.
         if (current_point == null) return error.PolygonLineToWithoutCurrentPoint;
         if (polygon.corners.items.len == 0) return error.PolygonLineToWithoutCorners;
 
-        try polygon.corners.append(self.point);
+        try polygon.plot(self.point);
         return self.point;
     }
 };
@@ -304,18 +412,22 @@ const PathCurveTo = struct {
     }
 };
 
-/// Represents a closepath node. This is a meta-node that indicates a hard
-/// close on the current path, and as such has no co-ordinates.
+/// Represents a closepath node. The close is done by connecting the last point
+/// to the first moveTo point, which is stored in this node (under "point").
 const PathClose = struct {
+    point: Point,
+
     /// Plots the node on a polygon.
     fn plotNode(self: PathClose, polygon: *Polygon, current_point: ?Point) !?Point {
-        _ = self;
-        _ = polygon;
-        _ = current_point;
+        // Assert that we have a current point. Our higher-level closePath
+        // method no-ops when it's called without one, so this will never be
+        // null.
+        if (current_point == null) return error.PolygonClosePathToWithoutCurrentPoint;
 
-        // Return null for now from closePath. This asserts that all closePaths
-        // need to be followed by moveTos, but gives clear behavior; we can
-        // alter this in the future.
+        // Do an append on the edges only for now (not corners). We will
+        // simplify this when we remove corners, for now this keeps the
+        // starting corner from being duplicated.
+        try polygon.edges.append(PolygonEdge.fromPoints(current_point.?, self.point));
         return null;
     }
 };
@@ -335,6 +447,10 @@ const PathNode = union(PathNodeTag) {
     close_path: PathClose,
 };
 
+fn u32Clamped(x: f64) u32 {
+    return @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(x))));
+}
+
 test "PathOperation, triangle" {
     var path = PathOperation.init(testing.allocator, undefined);
     defer path.deinit();
@@ -347,7 +463,7 @@ test "PathOperation, triangle" {
         .{ .move_to = .{ .point = .{ .x = 0, .y = 0 } } },
         .{ .line_to = .{ .point = .{ .x = 199, .y = 0 } } },
         .{ .line_to = .{ .point = .{ .x = 100, .y = 199 } } },
-        .{ .close_path = .{} },
+        .{ .close_path = .{ .point = .{ .x = 0, .y = 0 } } },
     }, path.nodes.items);
 
     var poly = Polygon.init(testing.allocator);
@@ -359,6 +475,14 @@ test "PathOperation, triangle" {
         .{ .x = 199, .y = 0 },
         .{ .x = 100, .y = 199 },
     }, poly.corners.items);
+
+    const slope_diag1 = Point.slope(.{ .x = 199, .y = 0 }, .{ .x = 100, .y = 199 });
+    const slope_diag2 = Point.slope(.{ .x = 100, .y = 199 }, .{ .x = 0, .y = 0 });
+    try testing.expectEqualDeep(&[_]PolygonEdge{
+        .{ .start = .{ .x = 0, .y = 0 }, .end = .{ .x = 199, .y = 0 }, .slope = 0 },
+        .{ .start = .{ .x = 199, .y = 0 }, .end = .{ .x = 100, .y = 199 }, .slope = slope_diag1 },
+        .{ .start = .{ .x = 100, .y = 199 }, .end = .{ .x = 0, .y = 0 }, .slope = slope_diag2 },
+    }, poly.edges.items);
 
     var edges = try poly.edgesForY(100);
     defer edges.deinit();

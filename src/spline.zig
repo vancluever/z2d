@@ -66,13 +66,13 @@ pub const Spline = struct {
         try self.decomposeInto(&s1, tolerance * tolerance);
 
         // Plot our last point in the curve before finishing
-        try self.polygon.corners.append(self.knots.d);
+        try self.polygon.plot(self.knots.d);
     }
 
     /// Inner and recursive decomposition into the specified knot set.
     fn decomposeInto(self: *Spline, s1: *Knots, tolerance: f64) !void {
         if (s1.errorSq() < tolerance) {
-            return try self.polygon.corners.append(s1.a);
+            return try self.polygon.plot(s1.a);
         }
 
         // Split our spline
