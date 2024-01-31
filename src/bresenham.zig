@@ -2,10 +2,12 @@
 // as seen in "Algorithm for computer control of a digital plotter" (Bresenham,
 // 1965), and countless citations since.
 //
-// The code here has been derived from the examples on the Wikipedia page:
+// The code here has been derived from the examples on the Wikipedia page, see
+// "Derivation -> All cases":
 //   https://en.wikipedia.org/w/index.php?title=Bresenham%27s_line_algorithm&oldid=1199948423
 //
-// and used under the conditions of the Creative Commons License 4.0, seen at:
+// And is used under the conditions of the Creative Commons Attribution
+// Share-Alike License 4.0, seen at:
 //   https://en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License#License
 
 const Point = @import("path.zig").Point;
