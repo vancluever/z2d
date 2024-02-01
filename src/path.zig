@@ -176,7 +176,7 @@ pub const PathOperation = struct {
                     u32Clamped(edge.start.x)
                 else
                     u32Clamped(edge.end.x);
-                for (start_x..end_x) |x| {
+                for (start_x..end_x + 1) |x| {
                     const pixel = try self.context.pattern.getPixel(@intCast(x), y);
                     try self.context.surface.putPixel(@intCast(x), y, pixel);
                 }
@@ -191,7 +191,7 @@ pub const PathOperation = struct {
                     u32Clamped(edge.start.y)
                 else
                     u32Clamped(edge.end.y);
-                for (start_y..end_y) |y| {
+                for (start_y..end_y + 1) |y| {
                     const pixel = try self.context.pattern.getPixel(x, @intCast(y));
                     try self.context.surface.putPixel(x, @intCast(y), pixel);
                 }

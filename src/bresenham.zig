@@ -29,20 +29,14 @@ pub fn drawIterX(context: *DrawContext, p0: Point, p1: Point) !void {
     var y: i32 = @intFromFloat(p0.y);
     var d = (2 * delta_y) - delta_x;
 
-    // Draw the first pixel. This allows us to put the draw the end of the
-    // loop, versus the beginning, and ensures we catch situations where we
-    // pass the X endpoint when we still needed to draw at a new Y (preventing
-    // gaps).
-    try drawPixel(context, @intFromFloat(p0.x), @intCast(y));
-
-    for (start_x..end_x) |x| {
+    for (start_x..end_x + 1) |x| {
+        try drawPixel(context, @intCast(x), @intCast(y));
         if (d > 0) {
             y += y_increment;
             d += 2 * (delta_y - delta_x);
         } else {
             d += 2 * delta_y;
         }
-        try drawPixel(context, @intCast(x), @intCast(y));
     }
 }
 
@@ -62,20 +56,14 @@ pub fn drawIterY(context: *DrawContext, p0: Point, p1: Point) !void {
     var x: i32 = @intFromFloat(p0.x);
     var d = (2 * delta_x) - delta_y;
 
-    // Draw the first pixel. This allows us to put the draw the end of the
-    // loop, versus the beginning, and ensures we catch situations where we
-    // pass the Y endpoint when we still needed to draw at a new X (preventing
-    // gaps).
-    try drawPixel(context, @intCast(x), @intFromFloat(p0.y));
-
-    for (start_y..end_y) |y| {
+    for (start_y..end_y + 1) |y| {
+        try drawPixel(context, @intCast(x), @intCast(y));
         if (d > 0) {
             x += x_increment;
             d += 2 * (delta_x - delta_y);
         } else {
             d += 2 * delta_x;
         }
-        try drawPixel(context, @intCast(x), @intCast(y));
     }
 }
 
