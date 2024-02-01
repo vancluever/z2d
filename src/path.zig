@@ -282,10 +282,15 @@ pub const Polygon = struct {
     /// The caller owns the returned ArrayList and should use deinit to release
     /// it.
     pub fn edgesForY(self: *Polygon, line_y: f64) !std.ArrayList(u32) {
-        // TODO: This may not be thread-safe.
+        // As mentioned in the method description, the point of this function
+        // is to get a (sorted) list of X-edges so that we can do a scanline
+        // fill on a polygon. The function does this by calculating edges based
+        // on a last -> current vertex (corner) basis.
         //
-        // Scanline and P-I-P algorithms as seen on
-        // http://alienryderflex.com/polygon_fill/.
+        // For an in-depth explanation on how this works, see "Efficient
+        // Polygon Fill Algorithm With C Code Sample" by Darel Rex Finley
+        // (http://alienryderflex.com/polygon_fill/).
+
         var edge_list = std.ArrayList(u32).init(self.alloc);
         defer edge_list.deinit();
 
