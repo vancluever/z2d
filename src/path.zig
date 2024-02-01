@@ -305,7 +305,10 @@ pub const Polygon = struct {
         //
         // For an in-depth explanation on how this works, see "Efficient
         // Polygon Fill Algorithm With C Code Sample" by Darel Rex Finley
-        // (http://alienryderflex.com/polygon_fill/).
+        // (http://alienryderflex.com/polygon_fill/, archive link:
+        // http://web.archive.org/web/20240102043551/http://alienryderflex.com/polygon_fill/).
+        // Parts of this section follows the public-domain code listed in the
+        // sample.
 
         var edge_list = std.ArrayList(u32).init(self.alloc);
         defer edge_list.deinit();
