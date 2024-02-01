@@ -124,7 +124,9 @@ pub const PathOperation = struct {
         try self.polygon.parseNodes(self.nodes.items);
 
         // Now, for every y in our surface, get our edges and set our fill pixels.
-        for (0..self.context.surface.getHeight()) |y| {
+        const poly_start_y: usize = @intFromFloat(self.polygon.start.y);
+        const poly_end_y: usize = @intFromFloat(self.polygon.end.y);
+        for (poly_start_y..poly_end_y + 1) |y| {
             // Get our edges for this y
             var edge_list = try self.polygon.edgesForY(@floatFromInt(y));
             defer edge_list.deinit();
@@ -220,6 +222,12 @@ pub const Polygon = struct {
     /// edge lists.
     alloc: mem.Allocator,
 
+    /// The start (upper left) of the polygon rectangle.
+    start: Point = .{ .x = 0, .y = 0 },
+
+    /// The end (bottom right) of the polygon rectangle.
+    end: Point = .{ .x = 0, .y = 0 },
+
     /// The corners for the polygon.
     corners: std.ArrayList(Point),
 
@@ -255,8 +263,16 @@ pub const Polygon = struct {
     pub fn plot(self: *Polygon, p: Point) !void {
         if (self.corners.items.len > 0) {
             try self.edges.append(PolygonEdge.fromPoints(self.corners.getLast(), p));
+        } else {
+            self.start = p;
+            self.end = p;
         }
         try self.corners.append(p);
+
+        if (self.start.x > p.x) self.start.x = p.x;
+        if (self.start.y > p.y) self.start.y = p.y;
+        if (self.end.x < p.x) self.end.x = p.x;
+        if (self.end.y < p.y) self.end.y = p.y;
     }
 
     /// Builds corners and edges from a set of PathNode items.
@@ -475,18 +491,19 @@ test "PathOperation, triangle" {
     defer poly.deinit();
     try poly.parseNodes(path.nodes.items);
 
+    try testing.expectEqual(Point{ .x = 0, .y = 0 }, poly.start);
+    try testing.expectEqual(Point{ .x = 199, .y = 199 }, poly.end);
+
     try testing.expectEqualDeep(&[_]Point{
         .{ .x = 0, .y = 0 },
         .{ .x = 199, .y = 0 },
         .{ .x = 100, .y = 199 },
     }, poly.corners.items);
 
-    const slope_diag1 = Point.slope(.{ .x = 199, .y = 0 }, .{ .x = 100, .y = 199 });
-    const slope_diag2 = Point.slope(.{ .x = 100, .y = 199 }, .{ .x = 0, .y = 0 });
     try testing.expectEqualDeep(&[_]PolygonEdge{
-        .{ .start = .{ .x = 0, .y = 0 }, .end = .{ .x = 199, .y = 0 }, .slope = 0 },
-        .{ .start = .{ .x = 199, .y = 0 }, .end = .{ .x = 100, .y = 199 }, .slope = slope_diag1 },
-        .{ .start = .{ .x = 100, .y = 199 }, .end = .{ .x = 0, .y = 0 }, .slope = slope_diag2 },
+        .{ .start = .{ .x = 0, .y = 0 }, .end = .{ .x = 199, .y = 0 } },
+        .{ .start = .{ .x = 199, .y = 0 }, .end = .{ .x = 100, .y = 199 } },
+        .{ .start = .{ .x = 100, .y = 199 }, .end = .{ .x = 0, .y = 0 } },
     }, poly.edges.items);
 
     var edges = try poly.edgesForY(100);
