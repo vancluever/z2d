@@ -19,16 +19,12 @@ pub const Polygon = struct {
     /// The corners for the polygon.
     corners: std.ArrayList(units.Point),
 
-    /// The edges for the polygon. These are essentially lines with metadata.
-    edges: std.ArrayList(PolygonEdge),
-
-    /// Initializes a polygon with an empty edge list. The caller should run
+    /// Initializes a polygon with an empty corner list. The caller should run
     /// deinit when done.
     pub fn init(alloc: mem.Allocator) Polygon {
         return .{
             .alloc = alloc,
             .corners = std.ArrayList(units.Point).init(alloc),
-            .edges = std.ArrayList(PolygonEdge).init(alloc),
         };
     }
 
@@ -36,22 +32,11 @@ pub const Polygon = struct {
     /// this call.
     pub fn deinit(self: *Polygon) void {
         self.corners.deinit();
-        self.edges.deinit();
     }
 
-    /// Releases this polygon's corners and edges. Retains capacity. Should be
-    /// used before any processing operation.
-    pub fn clear(self: *Polygon) void {
-        self.corners.clearRetainingCapacity();
-        self.edges.clearRetainingCapacity();
-    }
-
-    /// Plots a point on the polygon. Adds to the current corner list, and if
-    /// this is non-zero, computes an edge as well.
+    /// Plots a point on the polygon and updates its dimensions.
     pub fn plot(self: *Polygon, p: units.Point) !void {
-        if (self.corners.items.len > 0) {
-            try self.edges.append(PolygonEdge.fromPoints(self.corners.getLast(), p));
-        } else {
+        if (self.corners.items.len == 0) {
             self.start = p;
             self.end = p;
         }
@@ -116,26 +101,69 @@ pub const Polygon = struct {
     }
 };
 
-pub const PolygonEdge = struct {
-    start: units.Point,
-    end: units.Point,
+/// Represents a list of Polygons, intended for multiple subpath operations.
+/// Passes most operations down to Polygon.
+pub const PolygonList = struct {
+    alloc: mem.Allocator,
+    items: std.ArrayList(*Polygon),
+    start: units.Point = .{ .x = 0, .y = 0 },
+    end: units.Point = .{ .x = 0, .y = 0 },
 
-    pub fn fromPoints(start: units.Point, end: units.Point) PolygonEdge {
+    /// Initializes a new PolygonList. Call deinit to de-initialize the list.
+    pub fn init(alloc: mem.Allocator) PolygonList {
         return .{
-            .start = start,
-            .end = end,
+            .alloc = alloc,
+            .items = std.ArrayList(*Polygon).init(alloc),
         };
     }
 
-    pub fn isHorizontal(self: PolygonEdge) bool {
-        return self.start.y == self.end.y;
+    /// Frees the entire list and its underlying memory.
+    pub fn deinit(self: *PolygonList) void {
+        for (self.items.items) |poly| {
+            poly.deinit();
+            self.alloc.destroy(poly);
+        }
+        self.items.deinit();
     }
 
-    pub fn isVertical(self: PolygonEdge) bool {
-        return self.start.x == self.end.x;
+    /// Starts a new Polygon within the list.
+    pub fn beginNew(self: *PolygonList) !void {
+        const poly = try self.alloc.create(Polygon);
+        poly.* = Polygon.init(self.alloc);
+        errdefer poly.deinit();
+        try self.items.append(poly);
     }
 
-    pub fn isSteep(self: PolygonEdge) bool {
-        return @abs(self.end.y - self.start.y) >= @abs(self.end.x - self.start.x);
+    /// Plots a point on the last Polygon in the list.
+    pub fn plot(self: *PolygonList, p: units.Point) !void {
+        if (self.items.items.len == 0) {
+            self.start = p;
+            self.end = p;
+        }
+
+        try self.items.getLast().plot(p);
+
+        if (self.start.x > p.x) self.start.x = p.x;
+        if (self.start.y > p.y) self.start.y = p.y;
+        if (self.end.x < p.x) self.end.x = p.x;
+        if (self.end.y < p.y) self.end.y = p.y;
+    }
+
+    /// As an individual edgesForY call, but for all Polygons in the list. This
+    /// ensures that corners are checked in the correct order for each Polygon
+    /// so that edges are correctly calculated.
+    pub fn edgesForY(self: *PolygonList, line_y: f64) !std.ArrayList(u32) {
+        var edge_list = std.ArrayList(u32).init(self.alloc);
+        defer edge_list.deinit();
+
+        for (self.items.items) |poly| {
+            var poly_edge_list = try poly.edgesForY(line_y);
+            defer poly_edge_list.deinit();
+            try edge_list.appendSlice(poly_edge_list.items);
+        }
+
+        const edge_list_sorted = try edge_list.toOwnedSlice();
+        mem.sort(u32, edge_list_sorted, {}, comptime (std.sort.asc(u32)));
+        return std.ArrayList(u32).fromOwnedSlice(self.alloc, edge_list_sorted);
     }
 };

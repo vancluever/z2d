@@ -53,6 +53,7 @@ pub const PathOperation = struct {
 
     /// Starts a new path, and moves the current point to it.
     pub fn moveTo(self: *PathOperation, point: units.Point) !void {
+        try self.checkBounds(point);
         try self.nodes.append(.{ .move_to = .{ .point = point } });
         self.last_move_point = point;
         self.current_point = point;
@@ -63,6 +64,7 @@ pub const PathOperation = struct {
     ///
     /// Acts as a moveTo instead if there is no current point.
     pub fn lineTo(self: *PathOperation, point: units.Point) !void {
+        try self.checkBounds(point);
         if (self.current_point == null) return self.moveTo(point);
         try self.nodes.append(.{ .line_to = .{ .point = point } });
         self.current_point = point;
@@ -73,6 +75,9 @@ pub const PathOperation = struct {
     ///
     /// It is an error to call this without a current point.
     pub fn curveTo(self: *PathOperation, p1: units.Point, p2: units.Point, p3: units.Point) !void {
+        try self.checkBounds(p1);
+        try self.checkBounds(p2);
+        try self.checkBounds(p3);
         if (self.current_point == null) return error.PathOperationCurveToNoCurrentPoint;
         try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
         self.current_point = p3;
@@ -101,5 +106,15 @@ pub const PathOperation = struct {
         if (self.nodes.items.len == 0) return;
         if (self.nodes.getLast() != .close_path) try self.closePath();
         try fillerpkg.fill(self.alloc, &self.nodes, self.context.surface, self.context.pattern);
+    }
+
+    fn checkBounds(self: *PathOperation, point: units.Point) !void {
+        if (point.x < 0 or
+            point.y < 0 or
+            point.x >= @as(f64, @floatFromInt(self.context.surface.getWidth())) or
+            point.y >= @as(f64, @floatFromInt(self.context.surface.getHeight())))
+        {
+            return error.PointOutOfRange;
+        }
     }
 };
