@@ -3,6 +3,7 @@ const mem = @import("std").mem;
 
 const contextpkg = @import("../context.zig");
 const fillerpkg = @import("filler.zig");
+const strokerpkg = @import("stroker.zig");
 const nodepkg = @import("nodes.zig");
 const polypkg = @import("polygon.zig");
 const units = @import("../units.zig");
@@ -106,6 +107,15 @@ pub const PathOperation = struct {
         if (self.nodes.items.len == 0) return;
         if (self.nodes.getLast() != .close_path) try self.closePath();
         try fillerpkg.fill(self.alloc, &self.nodes, self.context.surface, self.context.pattern);
+    }
+
+    /// Strokes a line.
+    ///
+    /// This is a no-op if there are no nodes.
+    pub fn stroke(self: *PathOperation) !void {
+        if (self.nodes.items.len == 0) return;
+        // TODO: make thickness configurable
+        try strokerpkg.stroke(self.alloc, &self.nodes, self.context.surface, self.context.pattern, 2);
     }
 
     fn checkBounds(self: *PathOperation, point: units.Point) !void {
