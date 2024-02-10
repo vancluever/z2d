@@ -21,6 +21,7 @@ const _007_fill_bezier = @import("007_fill_bezier.zig");
 // const _012_stroke_bezier = @import("012_stroke_bezier.zig");
 const _013_fill_combined = @import("013_fill_combined.zig");
 const _014_stroke_lines = @import("014_stroke_lines.zig");
+const _015_stroke_miter = @import("015_stroke_miter.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +43,7 @@ pub fn main() !void {
     // try gen_012_stroke_bezier(alloc);
     try gen_013_fill_combined(alloc);
     try gen_014_stroke_lines(alloc);
+    try gen_015_stroke_miter(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -126,6 +128,12 @@ fn gen_014_stroke_lines(alloc: mem.Allocator) !void {
     var surface = try _014_stroke_lines.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _014_stroke_lines.filename);
+}
+
+fn gen_015_stroke_miter(alloc: mem.Allocator) !void {
+    var surface = try _015_stroke_miter.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _015_stroke_miter.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -265,6 +273,16 @@ test "014_stroke_lines" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _014_stroke_lines.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "015_stroke_miter" {
+    var surface = try _015_stroke_miter.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _015_stroke_miter.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);
