@@ -158,7 +158,14 @@ const StrokeNodeIterator = struct {
                             for (outer_joins.items) |j| try result.append(.{ .line_to = .{ .point = j } });
                             try result.append(.{ .line_to = .{ .point = cap_points_end[1] } });
                             try result.append(.{ .line_to = .{ .point = cap_points_end[2] } });
-                            for (inner_joins.items) |j| try result.append(.{ .line_to = .{ .point = j } });
+                            {
+                                var i: i32 = @intCast(inner_joins.items.len - 1);
+                                while (i >= 0) : (i -= 1) {
+                                    try result.append(
+                                        .{ .line_to = .{ .point = inner_joins.items[@intCast(i)] } },
+                                    );
+                                }
+                            }
                             try result.append(.{ .line_to = .{ .point = cap_points_start[3] } });
                             try result.append(.{ .close_path = .{} });
                         } else {

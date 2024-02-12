@@ -32,6 +32,19 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         .y = 50,
     });
 
+    try path.lineTo(.{
+        .x = 30,
+        .y = 70,
+    });
+    try path.lineTo(.{
+        .x = 10,
+        .y = 90,
+    });
+    try path.lineTo(.{
+        .x = 30,
+        .y = 110,
+    });
+
     try path.stroke();
 
     return sfc;
