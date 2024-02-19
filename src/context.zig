@@ -17,6 +17,15 @@ pub const DrawContext = struct {
     /// read-only: should not be modified directly.
     surface: surfacepkg.Surface,
 
+    /// The current line width for drawing operations, in pixels. This value is
+    /// taken at call time during stroke operations in a path, and has no
+    /// effect during path construction.
+    ///
+    /// The default line width is 2.0.
+    ///
+    /// read-write: can be set directly, but can also be set with setLineWidth.
+    line_width: f64,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -29,6 +38,7 @@ pub const DrawContext = struct {
         return .{
             .pattern = .{ .opaque_pattern = .{ .pixel = px } },
             .surface = surface,
+            .line_width = 2.0,
         };
     }
 
@@ -49,6 +59,15 @@ pub const DrawContext = struct {
         }
 
         self.pattern = pattern;
+    }
+
+    /// Sets the current line width for drawing operations, in pixels. This value is
+    /// taken at call time during stroke operations in a path, and has no
+    /// effect during path construction.
+    ///
+    /// The default line width is 2.0.
+    pub fn setLineWidth(self: *DrawContext, value: f64) void {
+        self.line_width = value;
     }
 };
 

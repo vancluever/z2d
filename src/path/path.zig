@@ -115,7 +115,13 @@ pub const PathOperation = struct {
     pub fn stroke(self: *PathOperation) !void {
         if (self.nodes.items.len == 0) return;
         // TODO: make thickness configurable
-        try strokerpkg.stroke(self.alloc, &self.nodes, self.context.surface, self.context.pattern, 2);
+        try strokerpkg.stroke(
+            self.alloc,
+            &self.nodes,
+            self.context.surface,
+            self.context.pattern,
+            self.context.line_width,
+        );
     }
 
     fn checkBounds(self: *PathOperation, point: units.Point) !void {
