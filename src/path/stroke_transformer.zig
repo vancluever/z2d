@@ -139,7 +139,7 @@ const StrokeNodeIterator = struct {
 
                                     // Mark as closed and break. We need to
                                     // increment our iterator too, as the break
-                                    // here means the for loop does not do it.
+                                    // here means the while loop does not do it.
                                     closed = true;
                                     it.index += 1;
                                     break;
