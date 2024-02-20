@@ -14,7 +14,6 @@ const native_endian = builtin.cpu.arch.endian();
 /// This is currently a very rudimentary export with default zlib
 /// compression and no pixel filtering.
 pub fn writeToPNGFile(
-    alloc: mem.Allocator,
     surface: surfacepkg.Surface,
     filename: []const u8,
 ) !void {
@@ -25,7 +24,7 @@ pub fn writeToPNGFile(
     // Write out magic header, and various chunks.
     try writePNGMagic(file);
     try writePNGIHDR(file, surface);
-    try writePNGIDATStream(alloc, file, surface);
+    try writePNGIDATStream(file, surface);
     try writePNGIEND(file);
 }
 
@@ -72,7 +71,6 @@ fn writePNGIHDR(file: fs.File, surface: surfacepkg.Surface) !void {
 /// This is currently a very rudimentary algorithm - default zlib
 /// compression and no pixel filtering.
 fn writePNGIDATStream(
-    alloc: mem.Allocator,
     file: fs.File,
     surface: surfacepkg.Surface,
 ) !void {
@@ -98,8 +96,7 @@ fn writePNGIDATStream(
     // need for headers (see above).
     var zlib_buffer_underlying = [_]u8{0} ** 8192;
     var zlib_buffer = io.fixedBufferStream(&zlib_buffer_underlying);
-    var zlib_stream = try zlib.compressStream(alloc, zlib_buffer.writer(), .{});
-    defer zlib_stream.deinit();
+    var zlib_stream = try zlib.compressor(zlib_buffer.writer(), .{});
 
     // Initialize our remaining buffer size. We keep track of this as
     // we need to flush regularly to output IDAT chunks.
@@ -161,7 +158,7 @@ fn writePNGIDATStream(
             if (zlib_buffer_remaining < min_remaining) {
                 // If we possibly could have less remaining than our minimum
                 // buffer size, we need to flush. This should always succeed.
-                try zlib_stream.deflator.flush();
+                try zlib_stream.flush();
 
                 // We can now check to see how much remaining is in our
                 // underlying buffer.

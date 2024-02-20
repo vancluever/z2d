@@ -275,7 +275,7 @@ const Face = union(FaceType) {
             };
         }
 
-        const theta = math.atan2(f64, dy, dx);
+        const theta = math.atan2(dy, dx);
         const offset_x = thickness / 2 * @sin(theta);
         const offset_y = thickness / 2 * @cos(theta);
         return .{
