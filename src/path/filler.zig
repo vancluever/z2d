@@ -16,8 +16,16 @@ pub fn fill(
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
 ) !void {
-    debug.assert(nodes.items.len != 0); // Should not be called with zero nodes
-    debug.assert(nodes.getLast() == .close_path); // Path should be pre-closed by higher-level callers
+    // There should be a minimum of two nodes in anything passed here.
+    // Additionally, the higher-level path API also always adds an explicit
+    // move_to after close_path nodes, so we assert on this.
+    //
+    // NOTE: obviously, to be useful, there would be much more than two nodes,
+    // but this is just the minimum for us to assert that the path has been
+    // closed correctly.
+    debug.assert(nodes.items.len >= 2);
+    debug.assert(nodes.items[nodes.items.len - 2] == .close_path);
+    debug.assert(nodes.getLast() == .move_to);
 
     var polygon_list = try plot(alloc, nodes);
     defer polygon_list.deinit();
@@ -63,9 +71,16 @@ fn plot(alloc: mem.Allocator, nodes: *std.ArrayList(nodepkg.PathNode)) !polypkg.
     var initial_point: ?units.Point = null;
     var current_point: ?units.Point = null;
 
-    for (nodes.items) |node| {
+    for (nodes.items, 0..) |node, i| {
         switch (node) {
             .move_to => |n| {
+                // Check if this is the last node, an no-op if it is, as this
+                // is the auto-added move_to node that is given after
+                // close_path.
+                if (i == nodes.items.len - 1) {
+                    break;
+                }
+
                 try polygon_list.beginNew();
                 try polygon_list.plot(n.point);
                 initial_point = n.point;

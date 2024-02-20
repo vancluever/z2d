@@ -1,4 +1,8 @@
 //! Case: Renders and strokes a star on a 300x300 surface.
+//!
+//! Note that this test also validates that we always fill strokes using the
+//! non-zero rule, since drawing a star means tracing a path that overlaps as
+//! you move from point to point.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
@@ -14,6 +18,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var context = z2d.DrawContext.init(sfc);
     const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
     try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
+    context.setLineWidth(6); // Triple line width to detect gaps easier
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();

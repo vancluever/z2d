@@ -59,6 +59,9 @@ const StrokeNodeIterator = struct {
         // calculate a join, so we keep track of 2 points here (last point, current
         // point) and combine that with the point being processed. The initial
         // point stores the point of our last move_to.
+        //
+        // We also keep track of if the path was closed.
+        var closed: bool = false;
         var initial_point_: ?units.Point = null;
         var first_line_point_: ?units.Point = null;
         var current_point_: ?units.Point = null;
@@ -104,8 +107,45 @@ const StrokeNodeIterator = struct {
                     } else unreachable; // line_to should never be called internally without move_to
                 },
                 .close_path => {
-                    if (initial_point_ != null) {
-                        // TODO: handle close_path
+                    if (initial_point_) |initial_point| {
+                        if (current_point_) |current_point| {
+                            if (last_point_) |last_point| {
+                                // Only proceed if our last_point !=
+                                // initial_point. For example, if we just did
+                                // move_to -> line_to -> close_path, this path
+                                // is degenerate and should just be drawn as a
+                                // single unclosed segment. All close_path
+                                // nodes are followed by move_to nodes, so the
+                                // state machine will return on the next
+                                // move_to anyway.
+                                //
+                                // TODO: This obviously does not cover every
+                                // case, there will be more complex situations
+                                // where a semi-degenerate path could throw the
+                                // machine into this state. We will handle
+                                // those eventually.
+                                if (!last_point.equal(initial_point)) {
+                                    // Join the lines last -> current -> initial, with
+                                    // the join points representing the points
+                                    // around current.
+                                    const current_joins = join(
+                                        last_point,
+                                        current_point,
+                                        initial_point,
+                                        it.thickness,
+                                    );
+                                    try outer_joins.append(current_joins[0]);
+                                    try inner_joins.append(current_joins[1]);
+
+                                    // Mark as closed and break. We need to
+                                    // increment our iterator too, as the break
+                                    // here means the for loop does not do it.
+                                    closed = true;
+                                    it.index += 1;
+                                    break;
+                                }
+                            }
+                        } else unreachable; // move_to always sets both initial and current points
                     } else unreachable; // close_path should never be called internally without move_to
                 },
             }
@@ -136,13 +176,45 @@ const StrokeNodeIterator = struct {
                         );
                         errdefer result.deinit();
 
-                        // What we do to add points depends on whether or not we have joins.
+                        // What we do to add points depends on if we're a
+                        // closed path, or whether or not we have joins.
                         //
                         // Note that we always expect the joins to be
                         // symmetrical, so we can just check one (here, the
                         // outer).
                         debug.assert(outer_joins.items.len == inner_joins.items.len);
-                        if (outer_joins.items.len > 0) {
+                        if (closed) {
+                            // Closed path; we draw two polygons, one for each
+                            // side of our stroke.
+                            //
+                            // NOTE: This part of the state machine should only
+                            // be reached if we have joins as well, so we
+                            // assert that here.
+                            debug.assert(outer_joins.items.len > 0);
+
+                            const start_join = join(
+                                current_point,
+                                initial_point,
+                                first_line_point,
+                                it.thickness,
+                            );
+                            try result.append(.{ .move_to = .{ .point = start_join[0] } });
+                            for (outer_joins.items) |j| try result.append(.{ .line_to = .{ .point = j } });
+                            try result.append(.{ .close_path = .{} });
+                            try result.append(.{ .move_to = .{ .point = start_join[1] } });
+                            {
+                                var i: i32 = @intCast(inner_joins.items.len - 1);
+                                while (i >= 0) : (i -= 1) {
+                                    try result.append(
+                                        .{ .line_to = .{ .point = inner_joins.items[@intCast(i)] } },
+                                    );
+                                }
+                            }
+                            try result.append(.{ .close_path = .{} });
+                            try result.append(.{ .move_to = .{ .point = start_join[1] } });
+                        } else if (outer_joins.items.len > 0) {
+                            // Open path, draw as an unclosed line, capped at
+                            // the start and end.
                             const cap_points_start = Face.init(
                                 initial_point,
                                 first_line_point,
@@ -167,15 +239,17 @@ const StrokeNodeIterator = struct {
                             }
                             try result.append(.{ .line_to = .{ .point = cap_points_start.p0_cw() } });
                             try result.append(.{ .close_path = .{} });
+                            try result.append(.{ .move_to = .{ .point = cap_points_start.p0_ccw() } });
                         } else {
-                            // We can just fast-path here to drawing the single
-                            // line off of our start line caps.
+                            // Single-segment line. This can be drawn off of
+                            // our start line caps.
                             const cap_points = Face.init(initial_point, current_point, it.thickness);
                             try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw() } });
                             try result.append(.{ .line_to = .{ .point = cap_points.p1_ccw() } });
                             try result.append(.{ .line_to = .{ .point = cap_points.p1_cw() } });
                             try result.append(.{ .line_to = .{ .point = cap_points.p0_cw() } });
                             try result.append(.{ .close_path = .{} });
+                            try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw() } });
                         }
 
                         // Done

@@ -54,6 +54,19 @@ pub const PathOperation = struct {
 
     /// Starts a new path, and moves the current point to it.
     pub fn moveTo(self: *PathOperation, point: units.Point) !void {
+        // If our last operation is a move_to to this point, this is a no-op.
+        // This ensures that there's no duplicates on things like explicit
+        // definitions on close_path -> move_to (versus the implicit add in the
+        // closePath operation).
+        if (self.nodes.getLastOrNull()) |node| {
+            switch (node) {
+                .move_to => |move_to| {
+                    if (move_to.point.equal(point)) return;
+                },
+                else => {},
+            }
+        }
+
         try self.checkBounds(point);
         try self.nodes.append(.{ .move_to = .{ .point = point } });
         self.last_move_point = point;
@@ -88,15 +101,14 @@ pub const PathOperation = struct {
     /// starting point. No effect if there is no current point.
     pub fn closePath(self: *PathOperation) !void {
         if (self.current_point == null) return;
-        if (self.last_move_point == null) return error.PathOperationClosePathNoLastMovePoint;
-        try self.nodes.append(.{ .close_path = .{} });
+        if (self.last_move_point) |last_move_point| {
+            try self.nodes.append(.{ .close_path = .{} });
 
-        // Clear our points. For now, this means consumers will need to be
-        // more explicit with path commands (e.g. moving after closing),
-        // but it keeps intent clean without overthinking things. We will
-        // likely revisit this later.
-        self.last_move_point = null;
-        self.current_point = null;
+            // Add a move_to immediately after the close_path node. This is
+            // explicit, to ensure that the state machine for draw operations
+            // (fill, stroke) do not get put into an unreachable state.
+            try self.moveTo(last_move_point);
+        } else return error.PathOperationClosePathNoLastMovePoint;
     }
 
     /// Runs a fill operation (even-odd) on this current path and any subpaths.
