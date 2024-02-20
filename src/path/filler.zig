@@ -74,7 +74,7 @@ fn plot(alloc: mem.Allocator, nodes: *std.ArrayList(nodepkg.PathNode)) !polypkg.
     for (nodes.items, 0..) |node, i| {
         switch (node) {
             .move_to => |n| {
-                // Check if this is the last node, an no-op if it is, as this
+                // Check if this is the last node, and no-op if it is, as this
                 // is the auto-added move_to node that is given after
                 // close_path.
                 if (i == nodes.items.len - 1) {
