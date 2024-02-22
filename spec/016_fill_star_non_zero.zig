@@ -1,13 +1,13 @@
 //! Case: Renders and fills a star on a 300x300 surface.
 //!
-//! NOTE: This star fills with even-odd rule, so it's expected for there to be
-//! a gap in the middle.
+//! NOTE: This star explicitly fills with non-zero rule, so it's expected for
+//! there to NOT be a gap in the middle.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "006_fill_star_even_odd.png";
+pub const filename = "016_fill_star_non_zero.png";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const width = 300;
@@ -17,7 +17,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var context = z2d.DrawContext.init(sfc);
     const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
     try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
-    context.setFillRule(.even_odd);
+    context.setFillRule(.non_zero);
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();

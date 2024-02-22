@@ -3,6 +3,17 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 const units = @import("../units.zig");
+const options = @import("../options.zig");
+
+/// Represents an edge on a polygon for a particular y-scanline.
+const PolygonEdge = struct {
+    x: u32,
+    dir: i2,
+
+    fn sort_asc(_: void, a: @This(), b: @This()) bool {
+        return a.x < b.x;
+    }
+};
 
 /// Represents a polygon for filling.
 pub const Polygon = struct {
@@ -48,13 +59,7 @@ pub const Polygon = struct {
         if (self.end.y < p.y) self.end.y = p.y;
     }
 
-    /// For a given y-coordinate, return a sorted slice of edge x-coordinates,
-    /// defining the boundaries for the polygon at that line. This slice is
-    /// appropriate for filling using an even-odd rule.
-    ///
-    /// The caller owns the returned ArrayList and should use deinit to release
-    /// it.
-    pub fn edgesForY(self: *Polygon, line_y: f64) !std.ArrayList(u32) {
+    pub fn edgesForY(self: *Polygon, line_y: f64) !std.ArrayList(PolygonEdge) {
         // As mentioned in the method description, the point of this function
         // is to get a (sorted) list of X-edges so that we can do a scanline
         // fill on a polygon. The function does this by calculating edges based
@@ -67,7 +72,7 @@ pub const Polygon = struct {
         // Parts of this section follows the public-domain code listed in the
         // sample.
 
-        var edge_list = std.ArrayList(u32).init(self.alloc);
+        var edge_list = std.ArrayList(PolygonEdge).init(self.alloc);
         defer edge_list.deinit();
 
         // Get the corners
@@ -87,17 +92,27 @@ pub const Polygon = struct {
                     //
                     // x(y) = (y - y0) / (y1 - y0) * (x1 - x0) + x0
                     const edge_x = (line_y - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x;
-                    break :edge @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(edge_x))));
+                    break :edge .{
+                        .x = @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(edge_x)))),
+                        // Apply the edge direction to the winding number.
+                        // Down-up is +1, up-down is -1.
+                        .dir = if (cur_y > last_y)
+                            -1
+                        else if (cur_y < last_y)
+                            1
+                        else
+                            unreachable, // We have already filtered out horizontal edges
+                    };
                 });
             }
 
             last_idx = cur_idx;
         }
 
-        // Sort and return.
+        // Sort our edges
         const edge_list_sorted = try edge_list.toOwnedSlice();
-        mem.sort(u32, edge_list_sorted, {}, comptime (std.sort.asc(u32)));
-        return std.ArrayList(u32).fromOwnedSlice(self.alloc, edge_list_sorted);
+        mem.sort(PolygonEdge, edge_list_sorted, {}, PolygonEdge.sort_asc);
+        return std.ArrayList(PolygonEdge).fromOwnedSlice(self.alloc, edge_list_sorted);
     }
 };
 
@@ -136,7 +151,7 @@ pub const PolygonList = struct {
 
     /// Plots a point on the last Polygon in the list.
     pub fn plot(self: *PolygonList, p: units.Point) !void {
-        if (self.items.items.len == 0) {
+        if (self.items.items.len == 1 and self.items.getLast().corners.items.len == 0) {
             self.start = p;
             self.end = p;
         }
@@ -152,8 +167,8 @@ pub const PolygonList = struct {
     /// As an individual edgesForY call, but for all Polygons in the list. This
     /// ensures that corners are checked in the correct order for each Polygon
     /// so that edges are correctly calculated.
-    pub fn edgesForY(self: *PolygonList, line_y: f64) !std.ArrayList(u32) {
-        var edge_list = std.ArrayList(u32).init(self.alloc);
+    pub fn edgesForY(self: *PolygonList, line_y: f64, fill_rule: options.FillRule) !std.ArrayList(u32) {
+        var edge_list = std.ArrayList(PolygonEdge).init(self.alloc);
         defer edge_list.deinit();
 
         for (self.items.items) |poly| {
@@ -163,7 +178,44 @@ pub const PolygonList = struct {
         }
 
         const edge_list_sorted = try edge_list.toOwnedSlice();
-        mem.sort(u32, edge_list_sorted, {}, comptime (std.sort.asc(u32)));
-        return std.ArrayList(u32).fromOwnedSlice(self.alloc, edge_list_sorted);
+        mem.sort(PolygonEdge, edge_list_sorted, {}, PolygonEdge.sort_asc);
+        defer self.alloc.free(edge_list_sorted);
+
+        // We need to now process our edge list, particularly in the case of
+        // non-zero fill rules.
+        //
+        // TODO: This could probably be optimized by simply returning the edge
+        // list directly and having the filler work off of that, which would
+        // remove the need to O(N) copy the edge X-coordinates for even-odd.
+        // Conversely, orderedRemove in an ArrayList is O(N) and would need to
+        // be run each time an edge needs to be removed during non-zero rule
+        // processing. Currently, at the very least, we pre-allocate capacity
+        // to the incoming sorted edge list.
+        var final_edge_list = try std.ArrayList(u32).initCapacity(self.alloc, edge_list_sorted.len);
+        errdefer final_edge_list.deinit();
+        var winding_number: i32 = 0;
+        var start: u32 = undefined;
+        if (fill_rule == .even_odd) {
+            // Just copy all of our edges - the outer filler fills by
+            // even-odd rule naively, so this is the correct set for that
+            // method.
+            for (edge_list_sorted) |e| {
+                try final_edge_list.append(e.x);
+            }
+        } else {
+            // Go through our edges and filter based on the winding number.
+            for (edge_list_sorted) |e| {
+                if (winding_number == 0) {
+                    start = e.x;
+                }
+                winding_number += @intCast(e.dir);
+                if (winding_number == 0) {
+                    try final_edge_list.append(start);
+                    try final_edge_list.append(e.x);
+                }
+            }
+        }
+
+        return final_edge_list;
     }
 };

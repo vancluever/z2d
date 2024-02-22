@@ -3,6 +3,7 @@ const testing = @import("std").testing;
 const surfacepkg = @import("surface.zig");
 const patternpkg = @import("pattern.zig");
 const pixelpkg = @import("pixel.zig");
+const options = @import("options.zig");
 
 /// The draw context, which connects patterns to surfaces, holds other state
 /// data, and is used to dispatch drawing operations.
@@ -26,6 +27,11 @@ pub const DrawContext = struct {
     /// read-write: can be set directly, but can also be set with setLineWidth.
     line_width: f64,
 
+    /// The current fill rule. The default is non_zero.
+    ///
+    /// read-write: can be set directly, but can also be set with setFillRule.
+    fill_rule: options.FillRule,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -39,6 +45,7 @@ pub const DrawContext = struct {
             .pattern = .{ .opaque_pattern = .{ .pixel = px } },
             .surface = surface,
             .line_width = 2.0,
+            .fill_rule = .non_zero,
         };
     }
 
@@ -68,6 +75,11 @@ pub const DrawContext = struct {
     /// The default line width is 2.0.
     pub fn setLineWidth(self: *DrawContext, value: f64) void {
         self.line_width = value;
+    }
+
+    /// Sets the rule for filling operations. The default is non_zero.
+    pub fn setFillRule(self: *DrawContext, value: options.FillRule) void {
+        self.fill_rule = value;
     }
 };
 

@@ -111,14 +111,20 @@ pub const PathOperation = struct {
         } else return error.PathOperationClosePathNoLastMovePoint;
     }
 
-    /// Runs a fill operation (even-odd) on this current path and any subpaths.
-    /// If the current path is not closed, closes it first.
+    /// Runs a fill operation on this current path and any subpaths. If the
+    /// current path is not closed, closes it first.
     ///
     /// This is a no-op if there are no nodes.
     pub fn fill(self: *PathOperation) !void {
         if (self.nodes.items.len == 0) return;
         if (self.nodes.getLast() != .close_path) try self.closePath();
-        try fillerpkg.fill(self.alloc, &self.nodes, self.context.surface, self.context.pattern);
+        try fillerpkg.fill(
+            self.alloc,
+            &self.nodes,
+            self.context.surface,
+            self.context.pattern,
+            self.context.fill_rule,
+        );
     }
 
     /// Strokes a line.

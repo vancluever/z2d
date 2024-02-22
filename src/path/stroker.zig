@@ -22,5 +22,5 @@ pub fn stroke(
 
     var stroke_nodes = try stroke_transformer.transform(alloc, nodes, thickness);
     defer stroke_nodes.deinit();
-    try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern);
+    try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern, .non_zero);
 }

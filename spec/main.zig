@@ -22,6 +22,7 @@ const _011_stroke_star = @import("011_stroke_star.zig");
 const _013_fill_combined = @import("013_fill_combined.zig");
 const _014_stroke_lines = @import("014_stroke_lines.zig");
 const _015_stroke_miter = @import("015_stroke_miter.zig");
+const _016_fill_star_non_zero = @import("016_fill_star_non_zero.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -44,6 +45,7 @@ pub fn main() !void {
     try gen_013_fill_combined(alloc);
     try gen_014_stroke_lines(alloc);
     try gen_015_stroke_miter(alloc);
+    try gen_016_fill_star_non_zero(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -134,6 +136,12 @@ fn gen_015_stroke_miter(alloc: mem.Allocator) !void {
     var surface = try _015_stroke_miter.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _015_stroke_miter.filename);
+}
+
+fn gen_016_fill_star_non_zero(alloc: mem.Allocator) !void {
+    var surface = try _016_fill_star_non_zero.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _016_fill_star_non_zero.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -283,6 +291,16 @@ test "015_stroke_miter" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _015_stroke_miter.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "016_fill_star_non_zero" {
+    var surface = try _016_fill_star_non_zero.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _016_fill_star_non_zero.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);

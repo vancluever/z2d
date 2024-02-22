@@ -8,13 +8,15 @@ const polypkg = @import("polygon.zig");
 const surfacepkg = @import("../surface.zig");
 const spline = @import("spline_transformer.zig");
 const units = @import("../units.zig");
+const options = @import("../options.zig");
 
-/// Runs a fill operation (even-odd) on this current path and any subpaths.
+/// Runs a fill operation on this current path and any subpaths.
 pub fn fill(
     alloc: mem.Allocator,
     nodes: *std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
+    fill_rule: options.FillRule,
 ) !void {
     // There should be a minimum of two nodes in anything passed here.
     // Additionally, the higher-level path API also always adds an explicit
@@ -35,10 +37,9 @@ pub fn fill(
     const poly_end_y: usize = @intFromFloat(polygon_list.end.y);
     for (poly_start_y..poly_end_y + 1) |y| {
         // Get our edges for this y
-        var edge_list = try polygon_list.edgesForY(@floatFromInt(y));
+        var edge_list = try polygon_list.edgesForY(@floatFromInt(y), fill_rule);
         defer edge_list.deinit();
 
-        // Currently even-odd fill only. TODO: add non-zero.
         var start_idx: usize = 0;
         while (start_idx + 1 < edge_list.items.len) {
             const start_x = @min(
