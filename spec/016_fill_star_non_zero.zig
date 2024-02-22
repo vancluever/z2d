@@ -1,14 +1,13 @@
-//! Case: Renders and strokes a star on a 300x300 surface.
+//! Case: Renders and fills a star on a 300x300 surface.
 //!
-//! Note that this test also validates that we always fill strokes using the
-//! non-zero rule, since drawing a star means tracing a path that overlaps as
-//! you move from point to point.
+//! NOTE: This star explicitly fills with non-zero rule, so it's expected for
+//! there to NOT be a gap in the middle.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "011_stroke_star.png";
+pub const filename = "016_fill_star_non_zero.png";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const width = 300;
@@ -18,7 +17,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var context = z2d.DrawContext.init(sfc);
     const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
     try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
-    context.setLineWidth(6); // Triple line width to detect gaps easier
+    context.setFillRule(.non_zero);
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
@@ -35,7 +34,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     try path.lineTo(.{ .x = 0 + margin * x_scale, .y = height - margin - 1 }); // 4
     try path.closePath();
 
-    try path.stroke();
+    try path.fill();
 
     return sfc;
 }

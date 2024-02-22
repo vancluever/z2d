@@ -27,11 +27,13 @@ pub const Surface = union(SurfaceType) {
         switch (surface_type) {
             .image_surface_rgb => {
                 const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+                errdefer alloc.destroy(sfc);
                 sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height);
                 return sfc.asSurfaceInterface();
             },
             .image_surface_rgba => {
                 const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
+                errdefer alloc.destroy(sfc);
                 sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height);
                 return sfc.asSurfaceInterface();
             },
