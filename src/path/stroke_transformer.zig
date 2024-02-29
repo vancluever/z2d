@@ -269,25 +269,10 @@ const StrokeNodeIterator = struct {
 /// calculations, the lines are treated as pointing in towards each other
 /// (e.g., p0 -> p1, p1 <- p2).
 fn join(p0: units.Point, p1: units.Point, p2: units.Point, thickness: f64) [2]units.Point {
-    // TODO: I'm not 100% about calculating the lines as pointing inward,
-    // but it was helpful for me when learning how to understand things
-    // like miters, intersections, etc.
-    //
-    // I might eventually switch this to terminology that works like Cairo
-    // where faces in joins seem to have an incoming -> outgoing nomenclature
-    // (e.g. p0 -> p1, p1 -> p2). This would mean we would compare the same
-    // side on both faces when calculating inner and outer joins, and you can
-    // see the point path following this method during final path generation in
-    // the iterator (p0.ccw -> p1.ccw -> p1.cw -> p0.cw).
-    //
-    // If that happens, we need to update the face intersection logic as well,
-    // noting not only the change in sides but also slope direction (another
-    // important thing we get from pointing the lines inward for intersection
-    // calculation purposes).
-    const face_01 = Face.init(p0, p1, thickness);
-    const face_12 = Face.init(p2, p1, thickness);
-    const outer = face_01.intersect_outer(face_12);
-    const inner = face_01.intersect_inner(face_12);
+    const in = Face.init(p0, p1, thickness);
+    const out = Face.init(p1, p2, thickness);
+    const outer = in.intersect_outer(out);
+    const inner = in.intersect_inner(out);
 
     return .{ outer, inner };
 }
@@ -303,8 +288,8 @@ const FaceType = enum {
 ///
 /// The face is computed from p0 -> p1 (see init). Interactions, such as
 /// intersections, are specifically dictated by the orientation of any two
-/// faces in relation to each other, when the faces are treated as lines
-/// pointing inwards towards each other (e.g., p0 -> p1, p1 <- p2).
+/// faces in relation to each other, when the faces are treated as segments
+/// along the path, traveling in the same direction (e.g., p0 -> p1, p1 -> p2).
 ///
 /// For each face, its stroked endpoints, denoted by cw (clockwise) and ccw
 /// (counter-clockwise) are taken by rotating a point 90 degrees in that
@@ -402,20 +387,20 @@ const Face = union(FaceType) {
     }
 
     /// Returns the intersection of the outer edges of this face and another.
-    fn intersect_outer(self: Face, other: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.intersect_outer(other),
-            .vertical => |f| f.intersect_outer(other),
-            .diagonal => |f| f.intersect_outer(other),
+    fn intersect_outer(in: Face, out: Face) units.Point {
+        return switch (in) {
+            .horizontal => |f| f.intersect_outer(out),
+            .vertical => |f| f.intersect_outer(out),
+            .diagonal => |f| f.intersect_outer(out),
         };
     }
 
     /// Returns the intersection of the inner edges of this face and another.
-    fn intersect_inner(self: Face, other: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.intersect_inner(other),
-            .vertical => |f| f.intersect_inner(other),
-            .diagonal => |f| f.intersect_inner(other),
+    fn intersect_inner(in: Face, out: Face) units.Point {
+        return switch (in) {
+            .horizontal => |f| f.intersect_inner(out),
+            .vertical => |f| f.intersect_inner(out),
+            .diagonal => |f| f.intersect_inner(out),
         };
     }
 };
@@ -430,48 +415,48 @@ const HorizontalFace = struct {
     p1_cw: units.Point,
     p1_ccw: units.Point,
 
-    fn intersect_outer(self: HorizontalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_outer(in: HorizontalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => {
                 // We can just return our end-point outer
-                return self.p1_ccw;
+                return in.p1_ccw;
             },
             .vertical => |vert| {
                 // Take the x/y intersection of our outer points.
                 return .{
-                    .x = vert.p0_cw.x,
-                    .y = self.p0_ccw.y,
+                    .x = vert.p1_ccw.x,
+                    .y = in.p0_ccw.y,
                 };
             },
             .diagonal => |diag| {
                 // Take the x-intercept with the origin being the horizontal
                 // line outer point.
                 return .{
-                    .x = diag.p0_cw.x - ((diag.p0_cw.y - self.p0_ccw.y) / diag.slope),
-                    .y = self.p0_ccw.y,
+                    .x = diag.p1_ccw.x - ((diag.p1_ccw.y - in.p0_ccw.y) / diag.slope),
+                    .y = in.p0_ccw.y,
                 };
             },
         }
     }
-    fn intersect_inner(self: HorizontalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_inner(in: HorizontalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => {
                 // We can just return our end-point inner
-                return self.p1_cw;
+                return in.p1_cw;
             },
             .vertical => |vert| {
                 // Take the x/y intersection of our inner points.
                 return .{
-                    .x = vert.p0_ccw.x,
-                    .y = self.p0_cw.y,
+                    .x = vert.p1_cw.x,
+                    .y = in.p0_cw.y,
                 };
             },
             .diagonal => |diag| {
                 // Take the x-intercept with the origin being the horizontal
                 // line inner point.
                 return .{
-                    .x = diag.p0_ccw.x - ((diag.p0_ccw.y - self.p0_cw.y) / diag.slope),
-                    .y = self.p0_cw.y,
+                    .x = diag.p1_cw.x - ((diag.p1_cw.y - in.p0_cw.y) / diag.slope),
+                    .y = in.p0_cw.y,
                 };
             },
         }
@@ -488,49 +473,49 @@ const VerticalFace = struct {
     p1_cw: units.Point,
     p1_ccw: units.Point,
 
-    fn intersect_outer(self: VerticalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_outer(in: VerticalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => |horiz| {
                 // Take the x/y intersection of our outer points.
                 return .{
-                    .x = self.p0_ccw.x,
-                    .y = horiz.p0_cw.y,
+                    .x = in.p0_ccw.x,
+                    .y = horiz.p1_ccw.y,
                 };
             },
             .vertical => {
                 // We can just return our end-point outer
-                return self.p1_ccw;
+                return in.p1_ccw;
             },
             .diagonal => |diag| {
                 // Take the y-intercept with the origin being the vertical
                 // line outer point.
                 return .{
-                    .x = self.p0_ccw.x,
-                    .y = diag.p0_cw.y - (diag.slope * (diag.p0_cw.x - self.p0_ccw.x)),
+                    .x = in.p0_ccw.x,
+                    .y = diag.p1_ccw.y - (diag.slope * (diag.p1_ccw.x - in.p0_ccw.x)),
                 };
             },
         }
     }
 
-    fn intersect_inner(self: VerticalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_inner(in: VerticalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => |horiz| {
                 // Take the x/y intersection of our inner points.
                 return .{
-                    .x = self.p0_cw.x,
-                    .y = horiz.p0_ccw.y,
+                    .x = in.p0_cw.x,
+                    .y = horiz.p1_cw.y,
                 };
             },
             .vertical => {
                 // We can just return our end-point inner
-                return self.p1_cw;
+                return in.p1_cw;
             },
             .diagonal => |diag| {
                 // Take the y-intercept with the origin being the vertical
                 // line inner point.
                 return .{
-                    .x = self.p0_cw.x,
-                    .y = diag.p0_ccw.y - (diag.slope * (diag.p0_ccw.x - self.p0_cw.x)),
+                    .x = in.p0_cw.x,
+                    .y = diag.p1_cw.y - (diag.slope * (diag.p1_cw.x - in.p0_cw.x)),
                 };
             },
         }
@@ -550,50 +535,50 @@ const DiagonalFace = struct {
     p1_cw: units.Point,
     p1_ccw: units.Point,
 
-    fn intersect_outer(self: DiagonalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_outer(in: DiagonalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => |horiz| {
                 // Take the x-intercept with the origin being the horizontal
                 // line outer point.
                 return .{
-                    .x = self.p0_ccw.x + ((horiz.p0_cw.y - self.p0_ccw.y) / self.slope),
-                    .y = horiz.p0_cw.y,
+                    .x = in.p0_ccw.x + ((horiz.p1_ccw.y - in.p0_ccw.y) / in.slope),
+                    .y = horiz.p1_ccw.y,
                 };
             },
             .vertical => |vert| {
                 // Take the y-intercept with the origin being the vertical
                 // line outer point.
                 return .{
-                    .x = vert.p0_cw.x,
-                    .y = self.p0_ccw.y + (self.slope * (vert.p0_cw.x - self.p0_ccw.x)),
+                    .x = vert.p1_ccw.x,
+                    .y = in.p0_ccw.y + (in.slope * (vert.p1_ccw.x - in.p0_ccw.x)),
                 };
             },
             .diagonal => |diag| {
-                return intersect(self.p0_ccw, diag.p0_cw, self.slope, diag.slope);
+                return intersect(in.p0_ccw, diag.p1_ccw, in.slope, diag.slope);
             },
         }
     }
 
-    fn intersect_inner(self: DiagonalFace, other: Face) units.Point {
-        switch (other) {
+    fn intersect_inner(in: DiagonalFace, out: Face) units.Point {
+        switch (out) {
             .horizontal => |horiz| {
                 // Take the x-intercept with the origin being the horizontal
                 // line outer point.
                 return .{
-                    .x = self.p0_cw.x + ((horiz.p0_ccw.y - self.p0_cw.y) / self.slope),
-                    .y = horiz.p0_ccw.y,
+                    .x = in.p0_cw.x + ((horiz.p1_cw.y - in.p0_cw.y) / in.slope),
+                    .y = horiz.p1_cw.y,
                 };
             },
             .vertical => |vert| {
                 // Take the y-intercept with the origin being the vertical
                 // line outer point.
                 return .{
-                    .x = vert.p0_ccw.x,
-                    .y = self.p0_cw.y + (self.slope * (vert.p0_ccw.x - self.p0_cw.x)),
+                    .x = vert.p1_cw.x,
+                    .y = in.p0_cw.y + (in.slope * (vert.p1_cw.x - in.p0_cw.x)),
                 };
             },
             .diagonal => |diag| {
-                return intersect(self.p0_cw, diag.p0_ccw, self.slope, diag.slope);
+                return intersect(in.p0_cw, diag.p1_cw, in.slope, diag.slope);
             },
         }
     }
