@@ -24,3 +24,18 @@ pub const FillRule = enum {
     /// is outside of the path and not drawn, otherwise it's inside and drawn.
     even_odd,
 };
+
+/// Represents how lines are joined when stroking paths.
+///
+/// TODO: Add bevel join
+pub const JoinMode = enum {
+    /// Lines are joined with a miter (pointed end).
+    ///
+    /// TODO: Add a miter limit, for which when the miter length exceeds this
+    /// threshold, a bevel is used instead.
+    miter,
+
+    /// Lines are joined with a circle centered around the middle point of the
+    /// joined line.
+    round,
+};

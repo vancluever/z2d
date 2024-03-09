@@ -139,6 +139,7 @@ pub const PathOperation = struct {
             self.context.surface,
             self.context.pattern,
             self.context.line_width,
+            self.context.line_join_mode,
         );
     }
 

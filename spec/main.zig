@@ -23,6 +23,8 @@ const _013_fill_combined = @import("013_fill_combined.zig");
 const _014_stroke_lines = @import("014_stroke_lines.zig");
 const _015_stroke_miter = @import("015_stroke_miter.zig");
 const _016_fill_star_non_zero = @import("016_fill_star_non_zero.zig");
+const _017_stroke_star_round = @import("017_stroke_star_round.zig");
+const _018_stroke_square_spiral_round = @import("018_stroke_square_spiral_round.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -46,6 +48,8 @@ pub fn main() !void {
     try gen_014_stroke_lines(alloc);
     try gen_015_stroke_miter(alloc);
     try gen_016_fill_star_non_zero(alloc);
+    try gen_017_stroke_star_round(alloc);
+    try gen_018_stroke_square_spiral_round(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -142,6 +146,18 @@ fn gen_016_fill_star_non_zero(alloc: mem.Allocator) !void {
     var surface = try _016_fill_star_non_zero.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _016_fill_star_non_zero.filename);
+}
+
+fn gen_017_stroke_star_round(alloc: mem.Allocator) !void {
+    var surface = try _017_stroke_star_round.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _017_stroke_star_round.filename);
+}
+
+fn gen_018_stroke_square_spiral_round(alloc: mem.Allocator) !void {
+    var surface = try _018_stroke_square_spiral_round.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _018_stroke_square_spiral_round.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -301,6 +317,26 @@ test "016_fill_star_non_zero" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _016_fill_star_non_zero.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "017_stroke_star_round" {
+    var surface = try _017_stroke_star_round.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _017_stroke_star_round.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "018_stroke_square_spiral_round" {
+    var surface = try _018_stroke_square_spiral_round.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _018_stroke_square_spiral_round.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);

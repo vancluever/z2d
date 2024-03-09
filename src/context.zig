@@ -32,6 +32,11 @@ pub const DrawContext = struct {
     /// read-write: can be set directly, but can also be set with setFillRule.
     fill_rule: options.FillRule,
 
+    /// The current line join style for stroking. The default is miter.
+    ///
+    /// read-write: can be set directly, but can also be set with setLineJoin.
+    line_join_mode: options.JoinMode,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -46,6 +51,7 @@ pub const DrawContext = struct {
             .surface = surface,
             .line_width = 2.0,
             .fill_rule = .non_zero,
+            .line_join_mode = .miter,
         };
     }
 
@@ -80,6 +86,11 @@ pub const DrawContext = struct {
     /// Sets the rule for filling operations. The default is non_zero.
     pub fn setFillRule(self: *DrawContext, value: options.FillRule) void {
         self.fill_rule = value;
+    }
+
+    /// Sets line join style for stroking. The default is miter.
+    pub fn setLineJoin(self: *DrawContext, value: options.JoinMode) void {
+        self.line_join_mode = value;
     }
 };
 
