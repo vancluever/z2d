@@ -1,6 +1,7 @@
-//! Case: Renders and strokes a bezier curve on a 300x300 surface.
+//! Case: Renders and strokes stacked beziers of varying thickness on a 300x300
+//! surface.
 //!
-//! This bezier is not closed.
+//! The beziers are not closed.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
@@ -20,13 +21,32 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
 
-    const p0: z2d.Point = .{ .x = 19, .y = 249 };
-    const p1: z2d.Point = .{ .x = 89, .y = 49 };
-    const p2: z2d.Point = .{ .x = 209, .y = 49 };
-    const p3: z2d.Point = .{ .x = 279, .y = 249 };
+    var p0: z2d.Point = .{ .x = 19, .y = 149 };
+    var p1: z2d.Point = .{ .x = 89, .y = 0 };
+    var p2: z2d.Point = .{ .x = 209, .y = 0 };
+    var p3: z2d.Point = .{ .x = 279, .y = 149 };
     try path.moveTo(p0);
     try path.curveTo(p1, p2, p3);
+    try path.stroke();
 
+    context.setLineWidth(6);
+    path.reset();
+    p0 = .{ .x = 19, .y = 199 };
+    p1 = .{ .x = 89, .y = 24 };
+    p2 = .{ .x = 209, .y = 24 };
+    p3 = .{ .x = 279, .y = 199 };
+    try path.moveTo(p0);
+    try path.curveTo(p1, p2, p3);
+    try path.stroke();
+
+    context.setLineWidth(10);
+    path.reset();
+    p0 = .{ .x = 19, .y = 249 };
+    p1 = .{ .x = 89, .y = 49 };
+    p2 = .{ .x = 209, .y = 49 };
+    p3 = .{ .x = 279, .y = 249 };
+    try path.moveTo(p0);
+    try path.curveTo(p1, p2, p3);
     try path.stroke();
 
     return sfc;

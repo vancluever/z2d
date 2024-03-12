@@ -4,6 +4,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 const options = @import("../options.zig");
+const spline = @import("spline_transformer.zig");
 const units = @import("../units.zig");
 const nodepkg = @import("nodes.zig");
 
@@ -337,8 +338,45 @@ const StrokeNodeIteratorState = struct {
     }
 
     fn curve_to(self: *StrokeNodeIteratorState, node: nodepkg.PathCurveTo) !bool {
-        _ = self;
-        _ = node;
+        if (self.initial_point_ != null) {
+            if (self.current_point_) |current_point| {
+                var transformed_nodes = try spline.transform(
+                    self.alloc,
+                    current_point,
+                    node.p1,
+                    node.p2,
+                    node.p3,
+                    0.1, // TODO: make tolerance configurable
+                );
+                defer transformed_nodes.deinit();
+
+                // Curves are always joined rounded, so we temporarily override
+                // the existing join method. Put this back when we're done.
+                const actual_join_mode = self.join_mode;
+                self.join_mode = .round;
+                defer self.join_mode = actual_join_mode;
+
+                // Iterate through the node list here. Note that this should
+                // never *not* proceed, so if we ultimately end up stopping as
+                // a result of this, we're in an undefined state. So we assert
+                // on true (or just drop the result completely if optimized).
+                //
+                // TODO: We can't use full recursion here without making the
+                // code "ugly" due the current lack of inferred error sets in
+                // recursion. So we just short-circuit to line_to and do
+                // unreachable on the rest. I have thought of just having the
+                // spline transformer just return line_to directly (not via the
+                // tagged union), so that might be the other path I go down.
+                for (transformed_nodes.items) |tn| {
+                    const proceed = switch (tn) {
+                        .line_to => |tnn| try self.line_to(tnn),
+                        else => unreachable, // spline transformer does not return anything else
+                    };
+                    debug.assert(proceed);
+                }
+            }
+        } else unreachable; // line_to should never be called internally without move_to
+
         return true;
     }
 
@@ -506,13 +544,30 @@ fn join(
             defer pen.deinit();
             var verts = try pen.verticesForJoin(in, out, clockwise);
             defer verts.deinit();
-            for (verts.items) |v| {
+            if (verts.items.len == 0) {
+                // In the case where we could not find appropriate vertices for
+                // a join, it's likely that our outer angle is too small. In
+                // this case, just bevel the joint.
+                //
+                // TODO: I feel like this is going to be the case most of the
+                // time for curves. As such, we should probably review this and
+                // think of a better way to handle joins for the decomposed
+                // splines.
                 try outer_joins.append(
-                    .{
-                        .x = p1.x + v.point.x,
-                        .y = p1.y + v.point.y,
-                    },
+                    if (clockwise) in.p1_ccw() else in.p1_cw(),
                 );
+                try outer_joins.append(
+                    if (clockwise) out.p0_ccw() else out.p0_cw(),
+                );
+            } else {
+                for (verts.items) |v| {
+                    try outer_joins.append(
+                        .{
+                            .x = p1.x + v.point.x,
+                            .y = p1.y + v.point.y,
+                        },
+                    );
+                }
             }
         },
     }

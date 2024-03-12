@@ -18,7 +18,7 @@ const _008_stroke_triangle = @import("008_stroke_triangle.zig");
 const _009_stroke_square = @import("009_stroke_square.zig");
 const _010_stroke_trapezoid = @import("010_stroke_trapezoid.zig");
 const _011_stroke_star = @import("011_stroke_star.zig");
-// const _012_stroke_bezier = @import("012_stroke_bezier.zig");
+const _012_stroke_bezier = @import("012_stroke_bezier.zig");
 const _013_fill_combined = @import("013_fill_combined.zig");
 const _014_stroke_lines = @import("014_stroke_lines.zig");
 const _015_stroke_miter = @import("015_stroke_miter.zig");
@@ -44,7 +44,7 @@ pub fn main() !void {
     try gen_009_stroke_square(alloc);
     try gen_010_stroke_trapezoid(alloc);
     try gen_011_stroke_star(alloc);
-    // try gen_012_stroke_bezier(alloc);
+    try gen_012_stroke_bezier(alloc);
     try gen_013_fill_combined(alloc);
     try gen_014_stroke_lines(alloc);
     try gen_015_stroke_miter(alloc);
@@ -120,11 +120,11 @@ fn gen_011_stroke_star(alloc: mem.Allocator) !void {
     try specExportPNG(alloc, surface, _011_stroke_star.filename);
 }
 
-// fn gen_012_stroke_bezier(alloc: mem.Allocator) !void {
-//     var surface = try _012_stroke_bezier.render(alloc);
-//     defer surface.deinit();
-//     try specExportPNG(alloc, surface, _012_stroke_bezier.filename);
-// }
+fn gen_012_stroke_bezier(alloc: mem.Allocator) !void {
+    var surface = try _012_stroke_bezier.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _012_stroke_bezier.filename);
+}
 
 fn gen_013_fill_combined(alloc: mem.Allocator) !void {
     var surface = try _013_fill_combined.render(alloc);

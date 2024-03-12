@@ -46,7 +46,7 @@ pub fn transform(
 
     // Decompose the curve into its individual points, plotting them along
     // the way.
-    try decomposeInto(&nodes, &s1, tolerance * tolerance);
+    try decomposeInto(&nodes, &s1, a, tolerance * tolerance);
 
     // Plot our last point in the curve before finishing
     try nodes.append(.{ .line_to = .{ .point = d } });
@@ -55,17 +55,32 @@ pub fn transform(
 }
 
 /// Inner and recursive decomposition into the specified knot set.
-fn decomposeInto(nodes: *std.ArrayList(nodepkg.PathNode), s1: *Knots, tolerance: f64) !void {
+fn decomposeInto(
+    nodes: *std.ArrayList(nodepkg.PathNode),
+    s1: *Knots,
+    start: units.Point,
+    tolerance: f64,
+) !void {
     if (s1.errorSq() < tolerance) {
-        return try nodes.append(.{ .line_to = .{ .point = s1.a } });
+        // Add the point if we're not the actual initial point itself in the
+        // larger curve (our implementations will always plot the initial
+        // move_to or last line point, so this would be a redundant/degenerate
+        // point, and it also throws out current stroke state machine in an
+        // unreachable state).
+        if (!s1.a.equal(start)) {
+            try nodes.append(.{ .line_to = .{ .point = s1.a } });
+        }
+
+        // Return in all cases since we're done recursion.
+        return;
     }
 
     // Split our spline
     var s2 = s1.deCasteljau();
 
     // Recurse into each half
-    try decomposeInto(nodes, s1, tolerance);
-    return try decomposeInto(nodes, &s2, tolerance);
+    try decomposeInto(nodes, s1, start, tolerance);
+    return try decomposeInto(nodes, &s2, start, tolerance);
 }
 
 /// Represents knots on a spline.
