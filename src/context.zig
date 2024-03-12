@@ -37,6 +37,23 @@ pub const DrawContext = struct {
     /// read-write: can be set directly, but can also be set with setLineJoin.
     line_join_mode: options.JoinMode,
 
+    /// The limit when line_join_mode is set to miter; in this mode, this value
+    /// determines when the join is instead drawn as a bevel. This can be used
+    /// to prevent extremely large miter points that result from very sharp
+    /// angled joins.
+    ///
+    /// The value here is the maximum allowed ratio of the miter distance (the
+    /// distance of the center of the stroke to the miter point) divided by the
+    /// line width. This is also described by 1 / sin(Θ / 2), where Θ is the
+    /// interior angle.
+    ///
+    /// The default limit is 10.0, which sets the cutoff at ~11 degrees. A
+    /// miter limit of 2.0 translates to ~60 degrees, and a limit of 1.414
+    /// translates to ~90 degrees.
+    ///
+    /// read-write: can be set directly, but can also be set with setMiterLimit.
+    miter_limit: f64,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -52,6 +69,7 @@ pub const DrawContext = struct {
             .line_width = 2.0,
             .fill_rule = .non_zero,
             .line_join_mode = .miter,
+            .miter_limit = 10.0,
         };
     }
 
@@ -91,6 +109,11 @@ pub const DrawContext = struct {
     /// Sets line join style for stroking. The default is miter.
     pub fn setLineJoin(self: *DrawContext, value: options.JoinMode) void {
         self.line_join_mode = value;
+    }
+
+    /// Sets the miter limit. The default is 10.0.
+    pub fn setMiterLimit(self: *DrawContext, value: f64) void {
+        self.miter_limit = value;
     }
 };
 

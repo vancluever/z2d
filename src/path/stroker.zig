@@ -19,10 +19,11 @@ pub fn stroke(
     pattern: patternpkg.Pattern,
     thickness: f64,
     join_mode: options.JoinMode,
+    miter_limit: f64,
 ) !void {
     debug.assert(nodes.items.len != 0); // Should not be called with zero nodes
 
-    var stroke_nodes = try stroke_transformer.transform(alloc, nodes, thickness, join_mode);
+    var stroke_nodes = try stroke_transformer.transform(alloc, nodes, thickness, join_mode, miter_limit);
     defer stroke_nodes.deinit();
     try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern, .non_zero);
 }

@@ -52,6 +52,13 @@ pub const PathOperation = struct {
         self.nodes.deinit();
     }
 
+    /// Rests the path operation, clearing all nodes and state.
+    pub fn reset(self: *PathOperation) void {
+        self.nodes.clearRetainingCapacity();
+        self.last_move_point = null;
+        self.current_point = null;
+    }
+
     /// Starts a new path, and moves the current point to it.
     pub fn moveTo(self: *PathOperation, point: units.Point) !void {
         // If our last operation is a move_to to this point, this is a no-op.
@@ -140,6 +147,7 @@ pub const PathOperation = struct {
             self.context.pattern,
             self.context.line_width,
             self.context.line_join_mode,
+            self.context.miter_limit,
         );
     }
 

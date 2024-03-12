@@ -31,11 +31,16 @@ pub const FillRule = enum {
 pub const JoinMode = enum {
     /// Lines are joined with a miter (pointed end).
     ///
-    /// TODO: Add a miter limit, for which when the miter length exceeds this
-    /// threshold, a bevel is used instead.
+    /// See the miter_limit setting in DrawContext for details on how to
+    /// control the miter limit.
     miter,
 
     /// Lines are joined with a circle centered around the middle point of the
     /// joined line.
     round,
+
+    /// Lines are joined with a bevel (cut-off). The cut-off points are taken
+    /// at the outer adjoining line ends as they would be seen if the lines
+    /// were not closed.
+    bevel,
 };

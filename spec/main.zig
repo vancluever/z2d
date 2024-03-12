@@ -25,6 +25,7 @@ const _015_stroke_miter = @import("015_stroke_miter.zig");
 const _016_fill_star_non_zero = @import("016_fill_star_non_zero.zig");
 const _017_stroke_star_round = @import("017_stroke_star_round.zig");
 const _018_stroke_square_spiral_round = @import("018_stroke_square_spiral_round.zig");
+const _019_stroke_bevel_miterlimit = @import("019_stroke_bevel_miterlimit.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -50,6 +51,7 @@ pub fn main() !void {
     try gen_016_fill_star_non_zero(alloc);
     try gen_017_stroke_star_round(alloc);
     try gen_018_stroke_square_spiral_round(alloc);
+    try gen_019_stroke_bevel_miterlimit(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -158,6 +160,12 @@ fn gen_018_stroke_square_spiral_round(alloc: mem.Allocator) !void {
     var surface = try _018_stroke_square_spiral_round.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _018_stroke_square_spiral_round.filename);
+}
+
+fn gen_019_stroke_bevel_miterlimit(alloc: mem.Allocator) !void {
+    var surface = try _019_stroke_bevel_miterlimit.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _019_stroke_bevel_miterlimit.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -337,6 +345,16 @@ test "018_stroke_square_spiral_round" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _018_stroke_square_spiral_round.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "019_stroke_bevel_miterlimit" {
+    var surface = try _019_stroke_bevel_miterlimit.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _019_stroke_bevel_miterlimit.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);

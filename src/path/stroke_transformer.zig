@@ -7,6 +7,9 @@ const options = @import("../options.zig");
 const units = @import("../units.zig");
 const nodepkg = @import("nodes.zig");
 
+// TODO: remove this
+const default_miter_limit = 4;
+
 /// Transforms a set of PathNode into a new PathNode set that represents a
 /// fillable path for a line stroke operation. The path is generated with the
 /// supplied thickness.
@@ -18,6 +21,7 @@ pub fn transform(
     nodes: *std.ArrayList(nodepkg.PathNode),
     thickness: f64,
     join_mode: options.JoinMode,
+    miter_limit: f64,
 ) !std.ArrayList(nodepkg.PathNode) {
     var result = std.ArrayList(nodepkg.PathNode).init(alloc);
     errdefer result.deinit();
@@ -27,6 +31,7 @@ pub fn transform(
         .thickness = thickness,
         .items = nodes,
         .join_mode = join_mode,
+        .miter_limit = miter_limit,
     };
 
     while (try it.next()) |x| {
@@ -44,6 +49,7 @@ const StrokeNodeIterator = struct {
     items: *const std.ArrayList(nodepkg.PathNode),
     index: usize = 0,
     join_mode: options.JoinMode,
+    miter_limit: f64,
 
     pub fn next(it: *StrokeNodeIterator) !?std.ArrayList(nodepkg.PathNode) {
         debug.assert(it.index <= it.items.items.len);
@@ -94,6 +100,7 @@ const StrokeNodeIterator = struct {
                                     node.point,
                                     it.thickness,
                                     it.join_mode,
+                                    it.miter_limit,
                                 );
                                 try joins.items.append(current_join);
                             }
@@ -134,6 +141,7 @@ const StrokeNodeIterator = struct {
                                         initial_point,
                                         it.thickness,
                                         it.join_mode,
+                                        it.miter_limit,
                                     );
                                     try joins.items.append(current_join);
 
@@ -195,6 +203,7 @@ const StrokeNodeIterator = struct {
                                 first_line_point,
                                 it.thickness,
                                 it.join_mode,
+                                it.miter_limit,
                             );
                             defer start_join.deinit();
                             try result.append(.{ .move_to = .{ .point = start_join.outer.items[0] } });
@@ -363,6 +372,7 @@ fn join(
     p2: units.Point,
     thickness: f64,
     mode: options.JoinMode,
+    miter_limit: f64,
 ) !Join {
     var outer_joins = std.ArrayList(units.Point).init(alloc);
     errdefer outer_joins.deinit();
@@ -370,10 +380,51 @@ fn join(
     const in = Face.init(p0, p1, thickness);
     const out = Face.init(p1, p2, thickness);
     const clockwise = in.slope().compare(out.slope()) < 0;
+
+    // Calculate our inner join ahead of time as we may need it for miter limit
+    // calculation
+    const inner_join = if (clockwise) in.intersect_inner(out) else in.intersect_outer(out);
     switch (mode) {
         .miter => {
+            // Compare the miter length to the miter limit. This is the ratio,
+            // as per the definition for stroke-miterlimit in the SVG spec:
+            //
+            // miter-length / stroke-width
+            //
+            // Source:
+            // https://www.w3.org/TR/SVG11/painting.html#StrokeProperties
+            //
+            // Get our miter point (intersection) so that we can compare it.
+            const miter_point = if (clockwise) in.intersect_outer(out) else in.intersect_inner(out);
+
+            // We do our comparison as per above, get distance as hypotenuse of
+            // dy and dx between miter point and the inner join point
+            const dx = miter_point.x - inner_join.x;
+            const dy = miter_point.y - inner_join.y;
+            const miter_length_squared = @sqrt(dx * dx + dy * dy);
+            const ratio = miter_length_squared / thickness;
+
+            // Now compare this against the miter limit, if it exceeds the
+            // limit, draw a bevel instead.
+            if (ratio > miter_limit) {
+                try outer_joins.append(
+                    if (clockwise) in.p1_ccw() else in.p1_cw(),
+                );
+                try outer_joins.append(
+                    if (clockwise) out.p0_ccw() else out.p0_cw(),
+                );
+            } else {
+                // Under limit, we are OK to use our miter
+                try outer_joins.append(miter_point);
+            }
+        },
+
+        .bevel => {
             try outer_joins.append(
-                if (clockwise) in.intersect_outer(out) else in.intersect_inner(out),
+                if (clockwise) in.p1_ccw() else in.p1_cw(),
+            );
+            try outer_joins.append(
+                if (clockwise) out.p0_ccw() else out.p0_cw(),
             );
         },
 
@@ -399,7 +450,7 @@ fn join(
 
     return .{
         .outer = outer_joins,
-        .inner = if (clockwise) in.intersect_inner(out) else in.intersect_outer(out),
+        .inner = inner_join,
         .clockwise = clockwise,
     };
 }
@@ -760,9 +811,10 @@ const Pen = struct {
     /// than tolerance.
     fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
         // You can find the proof for our calculation here in cairo-pen.c in
-        // the Cairo project. It shows that ultimately, the maximum error of an
-        // ellipse is along its major axis, and to get our needed number of
-        // vertices, we can calculate the following:
+        // the Cairo project (https://www.cairographics.org/, MPL 1.1). It
+        // shows that ultimately, the maximum error of an ellipse is along its
+        // major axis, and to get our needed number of vertices, we can
+        // calculate the following:
         //
         // ceil(2 * Π / acos(1 - tolerance / M))
         //
