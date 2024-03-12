@@ -55,119 +55,40 @@ const StrokeNodeIterator = struct {
         debug.assert(it.index <= it.items.items.len);
         if (it.index >= it.items.items.len) return null;
 
-        // Our line joins.
-        var joins = JoinSet.init(it.alloc);
-        defer joins.deinit();
-
-        // Our point state for the transformer. We need at least 3 points to
-        // calculate a join, so we keep track of 2 points here (last point, current
-        // point) and combine that with the point being processed. The initial
-        // point stores the point of our last move_to.
-        //
-        // We also keep track of if the path was closed.
-        var closed: bool = false;
-        var initial_point_: ?units.Point = null;
-        var first_line_point_: ?units.Point = null;
-        var current_point_: ?units.Point = null;
-        var last_point_: ?units.Point = null;
+        // Init the node iterator state that we will use to process our nodes.
+        // We use a separate state and functions within that to keep things
+        // clean and also allow for recursion (e.g. on curve_to -> line_to).
+        var state = StrokeNodeIteratorState.init(
+            it.alloc,
+            it.thickness,
+            it.join_mode,
+            it.miter_limit,
+        );
+        defer state.deinit();
 
         while (it.index < it.items.items.len) : (it.index += 1) {
-            switch (it.items.items[it.index]) {
-                .move_to => |node| {
-                    // move_to with initial point means we're at the end of the
-                    // current line
-                    if (initial_point_ != null) break;
+            if (!(try state.process(it.items.items[it.index]))) {
+                // Special case: When breaking, we need to increment on
+                // close_path if this is our current node. This is because we
+                // actually want to move to the next move_to the next time the
+                // iterator is called.
+                if (it.items.items[it.index] == .close_path) {
+                    it.index += 1;
+                }
 
-                    initial_point_ = node.point;
-                    current_point_ = node.point;
-                },
-                .curve_to => {
-                    if (initial_point_ != null) {
-                        // TODO: handle curve_to
-                    } else unreachable; // curve_to should never be called internally without move_to
-                },
-                .line_to => |node| {
-                    if (initial_point_ != null) {
-                        if (current_point_) |current_point| {
-                            if (last_point_) |last_point| {
-                                // Join the lines last -> current -> node, with
-                                // the join points representing the points
-                                // around current.
-                                const current_join = try join(
-                                    it.alloc,
-                                    last_point,
-                                    current_point,
-                                    node.point,
-                                    it.thickness,
-                                    it.join_mode,
-                                    it.miter_limit,
-                                );
-                                try joins.items.append(current_join);
-                            }
-                        } else unreachable; // move_to always sets both initial and current points
-                        if (first_line_point_ == null) {
-                            first_line_point_ = node.point;
-                        }
-                        last_point_ = current_point_;
-                        current_point_ = node.point;
-                    } else unreachable; // line_to should never be called internally without move_to
-                },
-                .close_path => {
-                    if (initial_point_) |initial_point| {
-                        if (current_point_) |current_point| {
-                            if (last_point_) |last_point| {
-                                // Only proceed if our last_point !=
-                                // initial_point. For example, if we just did
-                                // move_to -> line_to -> close_path, this path
-                                // is degenerate and should just be drawn as a
-                                // single unclosed segment. All close_path
-                                // nodes are followed by move_to nodes, so the
-                                // state machine will return on the next
-                                // move_to anyway.
-                                //
-                                // TODO: This obviously does not cover every
-                                // case, there will be more complex situations
-                                // where a semi-degenerate path could throw the
-                                // machine into this state. We will handle
-                                // those eventually.
-                                if (!last_point.equal(initial_point)) {
-                                    // Join the lines last -> current -> initial, with
-                                    // the join points representing the points
-                                    // around current.
-                                    const current_join = try join(
-                                        it.alloc,
-                                        last_point,
-                                        current_point,
-                                        initial_point,
-                                        it.thickness,
-                                        it.join_mode,
-                                        it.miter_limit,
-                                    );
-                                    try joins.items.append(current_join);
-
-                                    // Mark as closed and break. We need to
-                                    // increment our iterator too, as the break
-                                    // here means the while loop does not do it.
-                                    closed = true;
-                                    it.index += 1;
-                                    break;
-                                }
-                            }
-                        } else unreachable; // move_to always sets both initial and current points
-                    } else unreachable; // close_path should never be called internally without move_to
-                },
+                break;
             }
         }
 
-        if (initial_point_) |initial_point| {
-            if (current_point_) |current_point| {
-                if (initial_point.equal(current_point) and joins.items.items.len == 0) {
+        if (state.initial_point_) |initial_point| {
+            if (state.current_point_) |current_point| {
+                if (initial_point.equal(current_point) and state.joins.items.items.len == 0) {
                     // This means that the line was never effectively moved to
                     // another point, so we should not draw anything.
                     return std.ArrayList(nodepkg.PathNode).init(it.alloc);
                 }
-                if (first_line_point_) |first_line_point| {
-                    if (last_point_) |last_point| {
+                if (state.first_line_point_) |first_line_point| {
+                    if (state.last_point_) |last_point| {
                         // Initialize the result to the size of our joins, plus 5 nodes for:
                         //
                         // * Initial move_to (outer cap point)
@@ -180,20 +101,20 @@ const StrokeNodeIterator = struct {
                         // pre-determine capacity).
                         var result = try std.ArrayList(nodepkg.PathNode).initCapacity(
                             it.alloc,
-                            joins.lenAll() + 5,
+                            state.joins.lenAll() + 5,
                         );
                         errdefer result.deinit();
 
                         // What we do to add points depends on if we're a
                         // closed path, or whether or not we have joins.
-                        if (closed) {
+                        if (state.closed) {
                             // Closed path; we draw two polygons, one for each
                             // side of our stroke.
                             //
                             // NOTE: This part of the state machine should only
                             // be reached if we have joins as well, so we
                             // assert that here.
-                            debug.assert(joins.lenAll() > 0);
+                            debug.assert(state.joins.lenAll() > 0);
 
                             // Start join
                             var start_join = try join(
@@ -214,7 +135,7 @@ const StrokeNodeIterator = struct {
                             }
 
                             // Outer joins
-                            for (joins.items.items) |j| {
+                            for (state.joins.items.items) |j| {
                                 for (j.outer.items) |point| {
                                     try result.append(.{ .line_to = .{ .point = point } });
                                 }
@@ -224,10 +145,10 @@ const StrokeNodeIterator = struct {
                             // Inner joins
                             try result.append(.{ .move_to = .{ .point = start_join.inner } });
                             {
-                                var i: i32 = @intCast(joins.items.items.len - 1);
+                                var i: i32 = @intCast(state.joins.items.items.len - 1);
                                 while (i >= 0) : (i -= 1) {
                                     try result.append(
-                                        .{ .line_to = .{ .point = joins.items.items[@intCast(i)].inner } },
+                                        .{ .line_to = .{ .point = state.joins.items.items[@intCast(i)].inner } },
                                     );
                                 }
                             }
@@ -235,7 +156,7 @@ const StrokeNodeIterator = struct {
 
                             // Reset our position after plotting
                             try result.append(.{ .move_to = .{ .point = start_join.outer.items[0] } });
-                        } else if (joins.lenAll() > 0) {
+                        } else if (state.joins.lenAll() > 0) {
                             // Open path, draw as an unclosed line, capped at
                             // the start and end.
                             const cap_points_start = Face.init(
@@ -250,8 +171,8 @@ const StrokeNodeIterator = struct {
                             );
 
                             // Check our join directions so we know how to plot our cap points
-                            const start_clockwise = joins.items.items[0].clockwise;
-                            const end_clockwise = joins.items.items[joins.items.items.len - 1].clockwise;
+                            const start_clockwise = state.joins.items.items[0].clockwise;
+                            const end_clockwise = state.joins.items.items[state.joins.items.items.len - 1].clockwise;
 
                             // Start point
                             const start_point = if (start_clockwise)
@@ -261,7 +182,7 @@ const StrokeNodeIterator = struct {
                             try result.append(.{ .move_to = .{ .point = start_point } });
 
                             // Outer joins
-                            for (joins.items.items) |j| {
+                            for (state.joins.items.items) |j| {
                                 for (j.outer.items) |point| {
                                     try result.append(.{ .line_to = .{ .point = point } });
                                 }
@@ -278,10 +199,10 @@ const StrokeNodeIterator = struct {
 
                             // Inner joins
                             {
-                                var i: i32 = @intCast(joins.items.items.len - 1);
+                                var i: i32 = @intCast(state.joins.items.items.len - 1);
                                 while (i >= 0) : (i -= 1) {
                                     try result.append(
-                                        .{ .line_to = .{ .point = joins.items.items[@intCast(i)].inner } },
+                                        .{ .line_to = .{ .point = state.joins.items.items[@intCast(i)].inner } },
                                     );
                                 }
                             }
@@ -320,6 +241,157 @@ const StrokeNodeIterator = struct {
 
         // Invalid if we've hit this point (state machine never allows initial
         // point to not be set)
+        unreachable;
+    }
+};
+
+const StrokeNodeIteratorState = struct {
+    alloc: mem.Allocator,
+    thickness: f64,
+    join_mode: options.JoinMode,
+    miter_limit: f64,
+
+    joins: JoinSet,
+    closed: bool = false,
+    initial_point_: ?units.Point = null,
+    first_line_point_: ?units.Point = null,
+    current_point_: ?units.Point = null,
+    last_point_: ?units.Point = null,
+
+    fn init(
+        alloc: mem.Allocator,
+        thickness: f64,
+        join_mode: options.JoinMode,
+        miter_limit: f64,
+    ) StrokeNodeIteratorState {
+        return .{
+            .alloc = alloc,
+            .thickness = thickness,
+            .join_mode = join_mode,
+            .miter_limit = miter_limit,
+
+            .joins = JoinSet.init(alloc),
+        };
+    }
+
+    fn deinit(self: *StrokeNodeIteratorState) void {
+        self.joins.deinit();
+    }
+
+    fn process(self: *StrokeNodeIteratorState, node: nodepkg.PathNode) !bool {
+        switch (node) {
+            .move_to => |n| {
+                return self.move_to(n);
+            },
+            .line_to => |n| {
+                return self.line_to(n);
+            },
+            .curve_to => |n| {
+                return self.curve_to(n);
+            },
+            .close_path => {
+                return self.close_path();
+            },
+        }
+    }
+
+    fn move_to(self: *StrokeNodeIteratorState, node: nodepkg.PathMoveTo) !bool {
+        // move_to with initial point means we're at the end of the
+        // current line
+        if (self.initial_point_ != null) {
+            return false;
+        }
+
+        self.initial_point_ = node.point;
+        self.current_point_ = node.point;
+        return true;
+    }
+
+    fn line_to(self: *StrokeNodeIteratorState, node: nodepkg.PathLineTo) !bool {
+        if (self.initial_point_ != null) {
+            if (self.current_point_) |current_point| {
+                if (self.last_point_) |last_point| {
+                    // Join the lines last -> current -> node, with
+                    // the join points representing the points
+                    // around current.
+                    const current_join = try join(
+                        self.alloc,
+                        last_point,
+                        current_point,
+                        node.point,
+                        self.thickness,
+                        self.join_mode,
+                        self.miter_limit,
+                    );
+                    try self.joins.items.append(current_join);
+                }
+            } else unreachable; // move_to always sets both initial and current points
+            if (self.first_line_point_ == null) {
+                self.first_line_point_ = node.point;
+            }
+            self.last_point_ = self.current_point_;
+            self.current_point_ = node.point;
+        } else unreachable; // line_to should never be called internally without move_to
+
+        return true;
+    }
+
+    fn curve_to(self: *StrokeNodeIteratorState, node: nodepkg.PathCurveTo) !bool {
+        _ = self;
+        _ = node;
+        return true;
+    }
+
+    fn close_path(self: *StrokeNodeIteratorState) !bool {
+        if (self.initial_point_) |initial_point| {
+            if (self.current_point_) |current_point| {
+                if (self.last_point_) |last_point| {
+                    // Only proceed if our last_point !=
+                    // initial_point. For example, if we just did
+                    // move_to -> line_to -> close_path, this path
+                    // is degenerate and should just be drawn as a
+                    // single unclosed segment. All close_path
+                    // nodes are followed by move_to nodes, so the
+                    // state machine will return on the next
+                    // move_to anyway.
+                    //
+                    // TODO: This obviously does not cover every
+                    // case, there will be more complex situations
+                    // where a semi-degenerate path could throw the
+                    // machine into this state. We will handle
+                    // those eventually.
+                    if (!last_point.equal(initial_point)) {
+                        // Join the lines last -> current -> initial, with
+                        // the join points representing the points
+                        // around current.
+                        const current_join = try join(
+                            self.alloc,
+                            last_point,
+                            current_point,
+                            initial_point,
+                            self.thickness,
+                            self.join_mode,
+                            self.miter_limit,
+                        );
+                        try self.joins.items.append(current_join);
+
+                        // Mark as closed and break.
+                        //
+                        // NOTE: We need to increment our iterator
+                        // too, as the break here means the while
+                        // loop does not do it. This is handled in
+                        // the iterator though as a special case,
+                        // versus in the state parser.
+                        self.closed = true;
+                        return false;
+                    }
+                }
+            } else unreachable; // move_to always sets both initial and current points
+        }
+
+        // close_path should never be called internally without move_to. This
+        // means that close_path should *never* return true, and if we hit a
+        // point where it would, we've hit an undefined state.
         unreachable;
     }
 };
