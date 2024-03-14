@@ -8,8 +8,7 @@ const spline = @import("spline_transformer.zig");
 const units = @import("../units.zig");
 const nodepkg = @import("nodes.zig");
 
-// TODO: remove this
-const default_miter_limit = 4;
+const Face = @import("face.zig");
 
 /// Transforms a set of PathNode into a new PathNode set that represents a
 /// fillable path for a line stroke operation. The path is generated with the
@@ -177,9 +176,9 @@ const StrokeNodeIterator = struct {
 
                             // Start point
                             const start_point = if (start_clockwise)
-                                cap_points_start.p0_ccw()
+                                cap_points_start.p0_ccw
                             else
-                                cap_points_start.p0_cw();
+                                cap_points_start.p0_cw;
                             try result.append(.{ .move_to = .{ .point = start_point } });
 
                             // Outer joins
@@ -191,11 +190,11 @@ const StrokeNodeIterator = struct {
 
                             // End points
                             if (end_clockwise) {
-                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_ccw() } });
-                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_cw() } });
+                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_ccw } });
+                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_cw } });
                             } else {
-                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_cw() } });
-                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_ccw() } });
+                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_cw } });
+                                try result.append(.{ .line_to = .{ .point = cap_points_end.p1_ccw } });
                             }
 
                             // Inner joins
@@ -212,9 +211,9 @@ const StrokeNodeIterator = struct {
                             try result.append(.{
                                 .line_to = .{
                                     .point = if (start_clockwise)
-                                        cap_points_start.p0_cw()
+                                        cap_points_start.p0_cw
                                     else
-                                        cap_points_start.p0_ccw(),
+                                        cap_points_start.p0_ccw,
                                 },
                             });
                             try result.append(.{ .close_path = .{} });
@@ -225,12 +224,12 @@ const StrokeNodeIterator = struct {
                             // Single-segment line. This can be drawn off of
                             // our start line caps.
                             const cap_points = Face.init(initial_point, current_point, it.thickness);
-                            try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw() } });
-                            try result.append(.{ .line_to = .{ .point = cap_points.p1_ccw() } });
-                            try result.append(.{ .line_to = .{ .point = cap_points.p1_cw() } });
-                            try result.append(.{ .line_to = .{ .point = cap_points.p0_cw() } });
+                            try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw } });
+                            try result.append(.{ .line_to = .{ .point = cap_points.p1_ccw } });
+                            try result.append(.{ .line_to = .{ .point = cap_points.p1_cw } });
+                            try result.append(.{ .line_to = .{ .point = cap_points.p0_cw } });
                             try result.append(.{ .close_path = .{} });
-                            try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw() } });
+                            try result.append(.{ .move_to = .{ .point = cap_points.p0_ccw } });
                         }
 
                         // Done
@@ -489,11 +488,11 @@ fn join(
 
     const in = Face.init(p0, p1, thickness);
     const out = Face.init(p1, p2, thickness);
-    const clockwise = in.slope().compare(out.slope()) < 0;
+    const clockwise = in.slope.compare(out.slope) < 0;
 
     // Calculate our inner join ahead of time as we may need it for miter limit
     // calculation
-    const inner_join = if (clockwise) in.intersect_inner(out) else in.intersect_outer(out);
+    const inner_join = if (clockwise) in.intersectInner(out) else in.intersectOuter(out);
     switch (mode) {
         .miter => {
             // Compare the miter length to the miter limit. This is the ratio,
@@ -505,7 +504,7 @@ fn join(
             // https://www.w3.org/TR/SVG11/painting.html#StrokeProperties
             //
             // Get our miter point (intersection) so that we can compare it.
-            const miter_point = if (clockwise) in.intersect_outer(out) else in.intersect_inner(out);
+            const miter_point = if (clockwise) in.intersectOuter(out) else in.intersectInner(out);
 
             // We do our comparison as per above, get distance as hypotenuse of
             // dy and dx between miter point and the inner join point
@@ -518,10 +517,10 @@ fn join(
             // limit, draw a bevel instead.
             if (ratio > miter_limit) {
                 try outer_joins.append(
-                    if (clockwise) in.p1_ccw() else in.p1_cw(),
+                    if (clockwise) in.p1_ccw else in.p1_cw,
                 );
                 try outer_joins.append(
-                    if (clockwise) out.p0_ccw() else out.p0_cw(),
+                    if (clockwise) out.p0_ccw else out.p0_cw,
                 );
             } else {
                 // Under limit, we are OK to use our miter
@@ -531,10 +530,10 @@ fn join(
 
         .bevel => {
             try outer_joins.append(
-                if (clockwise) in.p1_ccw() else in.p1_cw(),
+                if (clockwise) in.p1_ccw else in.p1_cw,
             );
             try outer_joins.append(
-                if (clockwise) out.p0_ccw() else out.p0_cw(),
+                if (clockwise) out.p0_ccw else out.p0_cw,
             );
         },
 
@@ -554,10 +553,10 @@ fn join(
                 // think of a better way to handle joins for the decomposed
                 // splines.
                 try outer_joins.append(
-                    if (clockwise) in.p1_ccw() else in.p1_cw(),
+                    if (clockwise) in.p1_ccw else in.p1_cw,
                 );
                 try outer_joins.append(
-                    if (clockwise) out.p0_ccw() else out.p0_cw(),
+                    if (clockwise) out.p0_ccw else out.p0_cw,
                 );
             } else {
                 for (verts.items) |v| {
@@ -579,342 +578,6 @@ fn join(
         .outer = outer_joins,
         .inner = inner_join,
         .clockwise = clockwise,
-    };
-}
-
-const FaceType = enum {
-    horizontal,
-    vertical,
-    diagonal,
-};
-
-/// A Face represents a hypothetically-computed polygon edge for a stroked
-/// line.
-///
-/// The face is computed from p0 -> p1 (see init). Interactions, such as
-/// intersections, are specifically dictated by the orientation of any two
-/// faces in relation to each other, when the faces are treated as segments
-/// along the path, traveling in the same direction (e.g., p0 -> p1, p1 -> p2).
-///
-/// For each face, its stroked endpoints, denoted by cw (clockwise) and ccw
-/// (counter-clockwise) are taken by rotating a point 90 degrees in that
-/// direction along the line, starting from p0 (or p1), to half of the line
-/// thickness, in the same direction of the line (e.g., p0 -> p1).
-const Face = union(FaceType) {
-    horizontal: HorizontalFace,
-    vertical: VerticalFace,
-    diagonal: DiagonalFace,
-
-    /// Computes a Face from two points in the direction of p0 -> p1.
-    fn init(p0: units.Point, p1: units.Point, thickness: f64) Face {
-        const _slope = units.Slope.init(p0, p1);
-        const width = thickness / 2;
-        if (_slope.dy == 0) {
-            return .{
-                .horizontal = .{
-                    .p0 = p0,
-                    .p1 = p1,
-                    .slope = _slope,
-                    .offset_y = width,
-                    .p0_cw = .{ .x = p0.x, .y = p0.y + math.copysign(width, _slope.dx) },
-                    .p0_ccw = .{ .x = p0.x, .y = p0.y - math.copysign(width, _slope.dx) },
-                    .p1_cw = .{ .x = p1.x, .y = p1.y + math.copysign(width, _slope.dx) },
-                    .p1_ccw = .{ .x = p1.x, .y = p1.y - math.copysign(width, _slope.dx) },
-                },
-            };
-        }
-        if (_slope.dx == 0) {
-            return .{
-                .vertical = .{
-                    .p0 = p0,
-                    .p1 = p1,
-                    .slope = _slope,
-                    .offset_x = width,
-                    .p0_cw = .{ .x = p0.x - math.copysign(width, _slope.dy), .y = p0.y },
-                    .p0_ccw = .{ .x = p0.x + math.copysign(width, _slope.dy), .y = p0.y },
-                    .p1_cw = .{ .x = p1.x - math.copysign(width, _slope.dy), .y = p1.y },
-                    .p1_ccw = .{ .x = p1.x + math.copysign(width, _slope.dy), .y = p1.y },
-                },
-            };
-        }
-
-        const theta = math.atan2(_slope.dy, _slope.dx);
-        const offset_x = thickness / 2 * @sin(theta);
-        const offset_y = thickness / 2 * @cos(theta);
-        return .{
-            .diagonal = .{
-                .p0 = p0,
-                .p1 = p1,
-                .slope = _slope,
-                .offset_x = offset_x,
-                .offset_y = offset_y,
-                .p0_cw = .{ .x = p0.x - offset_x, .y = p0.y + offset_y },
-                .p0_ccw = .{ .x = p0.x + offset_x, .y = p0.y - offset_y },
-                .p1_cw = .{ .x = p1.x - offset_x, .y = p1.y + offset_y },
-                .p1_ccw = .{ .x = p1.x + offset_x, .y = p1.y - offset_y },
-            },
-        };
-    }
-
-    fn slope(self: Face) units.Slope {
-        return switch (self) {
-            .horizontal => |f| f.slope,
-            .vertical => |f| f.slope,
-            .diagonal => |f| f.slope,
-        };
-    }
-
-    fn p0_cw(self: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.p0_cw,
-            .vertical => |f| f.p0_cw,
-            .diagonal => |f| f.p0_cw,
-        };
-    }
-
-    fn p0_ccw(self: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.p0_ccw,
-            .vertical => |f| f.p0_ccw,
-            .diagonal => |f| f.p0_ccw,
-        };
-    }
-
-    fn p1_cw(self: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.p1_cw,
-            .vertical => |f| f.p1_cw,
-            .diagonal => |f| f.p1_cw,
-        };
-    }
-
-    fn p1_ccw(self: Face) units.Point {
-        return switch (self) {
-            .horizontal => |f| f.p1_ccw,
-            .vertical => |f| f.p1_ccw,
-            .diagonal => |f| f.p1_ccw,
-        };
-    }
-
-    /// Returns the intersection of the outer edges of this face and another.
-    fn intersect_outer(in: Face, out: Face) units.Point {
-        return switch (in) {
-            .horizontal => |f| f.intersectOuter(out),
-            .vertical => |f| f.intersectOuter(out),
-            .diagonal => |f| f.intersectOuter(out),
-        };
-    }
-
-    /// Returns the intersection of the inner edges of this face and another.
-    fn intersect_inner(in: Face, out: Face) units.Point {
-        return switch (in) {
-            .horizontal => |f| f.intersectInner(out),
-            .vertical => |f| f.intersectInner(out),
-            .diagonal => |f| f.intersectInner(out),
-        };
-    }
-};
-
-const HorizontalFace = struct {
-    p0: units.Point,
-    p1: units.Point,
-    slope: units.Slope,
-    offset_y: f64,
-    p0_cw: units.Point,
-    p0_ccw: units.Point,
-    p1_cw: units.Point,
-    p1_ccw: units.Point,
-
-    fn intersectOuter(in: HorizontalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => {
-                // We can just return our end-point outer
-                return in.p1_ccw;
-            },
-            .vertical => |vert| {
-                // Take the x/y intersection of our outer points.
-                return .{
-                    .x = vert.p1_ccw.x,
-                    .y = in.p0_ccw.y,
-                };
-            },
-            .diagonal => |diag| {
-                // Take the x-intercept with the origin being the horizontal
-                // line outer point.
-                return .{
-                    .x = diag.p1_ccw.x - ((diag.p1_ccw.y - in.p0_ccw.y) / diag.slope.calculate()),
-                    .y = in.p0_ccw.y,
-                };
-            },
-        }
-    }
-    fn intersectInner(in: HorizontalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => {
-                // We can just return our end-point inner
-                return in.p1_cw;
-            },
-            .vertical => |vert| {
-                // Take the x/y intersection of our inner points.
-                return .{
-                    .x = vert.p1_cw.x,
-                    .y = in.p0_cw.y,
-                };
-            },
-            .diagonal => |diag| {
-                // Take the x-intercept with the origin being the horizontal
-                // line inner point.
-                return .{
-                    .x = diag.p1_cw.x - ((diag.p1_cw.y - in.p0_cw.y) / diag.slope.calculate()),
-                    .y = in.p0_cw.y,
-                };
-            },
-        }
-    }
-};
-
-const VerticalFace = struct {
-    p0: units.Point,
-    p1: units.Point,
-    slope: units.Slope,
-    offset_x: f64,
-    p0_cw: units.Point,
-    p0_ccw: units.Point,
-    p1_cw: units.Point,
-    p1_ccw: units.Point,
-
-    fn intersectOuter(in: VerticalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => |horiz| {
-                // Take the x/y intersection of our outer points.
-                return .{
-                    .x = in.p0_ccw.x,
-                    .y = horiz.p1_ccw.y,
-                };
-            },
-            .vertical => {
-                // We can just return our end-point outer
-                return in.p1_ccw;
-            },
-            .diagonal => |diag| {
-                // Take the y-intercept with the origin being the vertical
-                // line outer point.
-                return .{
-                    .x = in.p0_ccw.x,
-                    .y = diag.p1_ccw.y - (diag.slope.calculate() * (diag.p1_ccw.x - in.p0_ccw.x)),
-                };
-            },
-        }
-    }
-
-    fn intersectInner(in: VerticalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => |horiz| {
-                // Take the x/y intersection of our inner points.
-                return .{
-                    .x = in.p0_cw.x,
-                    .y = horiz.p1_cw.y,
-                };
-            },
-            .vertical => {
-                // We can just return our end-point inner
-                return in.p1_cw;
-            },
-            .diagonal => |diag| {
-                // Take the y-intercept with the origin being the vertical
-                // line inner point.
-                return .{
-                    .x = in.p0_cw.x,
-                    .y = diag.p1_cw.y - (diag.slope.calculate() * (diag.p1_cw.x - in.p0_cw.x)),
-                };
-            },
-        }
-    }
-};
-
-const DiagonalFace = struct {
-    p0: units.Point,
-    p1: units.Point,
-    slope: units.Slope,
-    offset_x: f64,
-    offset_y: f64,
-    p0_cw: units.Point,
-    p0_ccw: units.Point,
-    p1_cw: units.Point,
-    p1_ccw: units.Point,
-
-    fn intersectOuter(in: DiagonalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => |horiz| {
-                // Take the x-intercept with the origin being the horizontal
-                // line outer point.
-                return .{
-                    .x = in.p0_ccw.x + ((horiz.p1_ccw.y - in.p0_ccw.y) / in.slope.calculate()),
-                    .y = horiz.p1_ccw.y,
-                };
-            },
-            .vertical => |vert| {
-                // Take the y-intercept with the origin being the vertical
-                // line outer point.
-                return .{
-                    .x = vert.p1_ccw.x,
-                    .y = in.p0_ccw.y + (in.slope.calculate() * (vert.p1_ccw.x - in.p0_ccw.x)),
-                };
-            },
-            .diagonal => |diag| {
-                return intersect(in.p0_ccw, diag.p1_ccw, in.slope.calculate(), diag.slope.calculate());
-            },
-        }
-    }
-
-    fn intersectInner(in: DiagonalFace, out: Face) units.Point {
-        switch (out) {
-            .horizontal => |horiz| {
-                // Take the x-intercept with the origin being the horizontal
-                // line outer point.
-                return .{
-                    .x = in.p0_cw.x + ((horiz.p1_cw.y - in.p0_cw.y) / in.slope.calculate()),
-                    .y = horiz.p1_cw.y,
-                };
-            },
-            .vertical => |vert| {
-                // Take the y-intercept with the origin being the vertical
-                // line outer point.
-                return .{
-                    .x = vert.p1_cw.x,
-                    .y = in.p0_cw.y + (in.slope.calculate() * (vert.p1_cw.x - in.p0_cw.x)),
-                };
-            },
-            .diagonal => |diag| {
-                return intersect(in.p0_cw, diag.p1_cw, in.slope.calculate(), diag.slope.calculate());
-            },
-        }
-    }
-};
-
-fn intersect(p0: units.Point, p1: units.Point, m0: f64, m1: f64) units.Point {
-    // We do line-line intersection, based on the following equation:
-    //
-    // self.dy/self.dx + self.p0.y == other.dy/other.dx + other.p0.y
-    //
-    // This is line-line intercept when both y positions are normalized at
-    // their y-intercepts (e.g. x=0).
-    //
-    // We take p0 at self as our reference origin, so normalize our other
-    // point based on the difference between the two points in x-position.
-    //
-    // Source: Line-line intersection, Wikipedia contributors:
-    // https://en.wikipedia.org/w/index.php?title=Line%E2%80%93line_intersection&oldid=1198068392.
-    // See link for further details.
-    const other_y_intercept = p1.y - (m1 * (p1.x - p0.x));
-
-    // We can now compute our intersections. Note that we have to add the x of
-    // p0 as an offset, as we have assumed this is the origin.
-    const intersect_x = (other_y_intercept - p0.y) / (m0 - m1) + p0.x;
-    const intersect_y = m0 * ((other_y_intercept - p0.y) / (m0 - m1)) + p0.y;
-    return .{
-        .x = intersect_x,
-        .y = intersect_y,
     };
 }
 
@@ -1057,25 +720,25 @@ const Pen = struct {
             var high: i32 = vertices_len;
             var i: i32 = (low + high) >> 1;
             while (high - low > 1) : (i = (low + high) >> 1) {
-                if (self.vertices.items[@intCast(i)].slope_cw.compare(from.slope()) < 0)
+                if (self.vertices.items[@intCast(i)].slope_cw.compare(from.slope) < 0)
                     low = i
                 else
                     high = i;
             }
 
-            if (self.vertices.items[@intCast(i)].slope_cw.compare(from.slope()) < 0) {
+            if (self.vertices.items[@intCast(i)].slope_cw.compare(from.slope) < 0) {
                 i += 1;
                 if (i == vertices_len) i = 0;
             }
             start = @intCast(i);
 
-            if (to.slope().compare(self.vertices.items[@intCast(i)].slope_ccw) >= 0) {
+            if (to.slope.compare(self.vertices.items[@intCast(i)].slope_ccw) >= 0) {
                 low = i;
                 high = i + vertices_len;
                 i = (low + high) >> 1;
                 while (high - low > 1) : (i = (low + high) >> 1) {
                     const j: i32 = if (i >= vertices_len) i - vertices_len else i;
-                    if (self.vertices.items[@intCast(j)].slope_cw.compare(to.slope()) > 0)
+                    if (self.vertices.items[@intCast(j)].slope_cw.compare(to.slope) > 0)
                         high = i
                     else
                         low = i;
@@ -1091,25 +754,25 @@ const Pen = struct {
             var high: i32 = vertices_len;
             var i: i32 = (low + high) >> 1;
             while (high - low > 1) : (i = (low + high) >> 1) {
-                if (from.slope().compare(self.vertices.items[@intCast(i)].slope_ccw) < 0)
+                if (from.slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0)
                     low = i
                 else
                     high = i;
             }
 
-            if (from.slope().compare(self.vertices.items[@intCast(i)].slope_ccw) < 0) {
+            if (from.slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0) {
                 i += 1;
                 if (i == vertices_len) i = 0;
             }
             start = @intCast(i);
 
-            if (self.vertices.items[@intCast(i)].slope_cw.compare(to.slope()) <= 0) {
+            if (self.vertices.items[@intCast(i)].slope_cw.compare(to.slope) <= 0) {
                 low = i;
                 high = i + vertices_len;
                 i = (low + high) >> 1;
                 while (high - low > 1) : (i = (low + high) >> 1) {
                     const j: i32 = if (i >= vertices_len) i - vertices_len else i;
-                    if (to.slope().compare(self.vertices.items[@intCast(j)].slope_ccw) > 0)
+                    if (to.slope.compare(self.vertices.items[@intCast(j)].slope_ccw) > 0)
                         high = i
                     else
                         low = i;
