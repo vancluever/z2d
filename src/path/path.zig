@@ -148,6 +148,7 @@ pub const PathOperation = struct {
             self.context.line_width,
             self.context.line_join_mode,
             self.context.miter_limit,
+            self.context.line_cap_mode,
         );
     }
 

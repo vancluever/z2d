@@ -44,3 +44,19 @@ pub const JoinMode = enum {
     /// were not closed.
     bevel,
 };
+
+/// Represents how lines are capped when stroking paths.
+///
+/// TODO: Add bevel join
+pub const CapMode = enum {
+    /// Lines are cut off at the ends, right at their center point
+    /// perpendicular to their thickness. In other words, a path will not
+    /// extend beyond the two endpoints.
+    butt,
+
+    /// Lines are rounded at the ends.
+    round,
+
+    /// Lines are squared on the ends, to the thickness / 2.
+    square,
+};

@@ -54,6 +54,11 @@ pub const DrawContext = struct {
     /// read-write: can be set directly, but can also be set with setMiterLimit.
     miter_limit: f64,
 
+    /// The current line cap rule. The default is butt.
+    ///
+    /// read-write: can be set directly, but can also be set with setLineCap.
+    line_cap_mode: options.CapMode,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -70,6 +75,7 @@ pub const DrawContext = struct {
             .fill_rule = .non_zero,
             .line_join_mode = .miter,
             .miter_limit = 10.0,
+            .line_cap_mode = .butt,
         };
     }
 
@@ -114,6 +120,11 @@ pub const DrawContext = struct {
     /// Sets the miter limit. The default is 10.0.
     pub fn setMiterLimit(self: *DrawContext, value: f64) void {
         self.miter_limit = value;
+    }
+
+    /// Sets the line cap mode. The default is butt.
+    pub fn setLineCap(self: *DrawContext, value: options.CapMode) void {
+        self.line_cap_mode = value;
     }
 };
 

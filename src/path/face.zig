@@ -12,9 +12,14 @@
 /// thickness, in the same direction of the line (e.g., p0 -> p1).
 const Face = @This();
 
+const std = @import("std");
 const math = @import("std").math;
+const mem = @import("std").mem;
 
+const options = @import("../options.zig");
 const units = @import("../units.zig");
+
+const Pen = @import("pen.zig");
 
 const FaceType = enum {
     horizontal,
@@ -25,6 +30,7 @@ const FaceType = enum {
 type: FaceType,
 p0: units.Point,
 p1: units.Point,
+width: f64,
 slope: units.Slope,
 offset_x: f64,
 offset_y: f64,
@@ -36,19 +42,20 @@ p1_ccw: units.Point,
 /// Computes a Face from two points in the direction of p0 -> p1.
 pub fn init(p0: units.Point, p1: units.Point, thickness: f64) Face {
     const slope = units.Slope.init(p0, p1);
-    const width = thickness / 2;
+    const half_width = thickness / 2;
     if (slope.dy == 0) {
         return .{
             .type = .horizontal,
             .p0 = p0,
             .p1 = p1,
+            .width = thickness,
             .slope = slope,
             .offset_x = 0,
-            .offset_y = width,
-            .p0_cw = .{ .x = p0.x, .y = p0.y + math.copysign(width, slope.dx) },
-            .p0_ccw = .{ .x = p0.x, .y = p0.y - math.copysign(width, slope.dx) },
-            .p1_cw = .{ .x = p1.x, .y = p1.y + math.copysign(width, slope.dx) },
-            .p1_ccw = .{ .x = p1.x, .y = p1.y - math.copysign(width, slope.dx) },
+            .offset_y = math.copysign(half_width, slope.dx),
+            .p0_cw = .{ .x = p0.x, .y = p0.y + math.copysign(half_width, slope.dx) },
+            .p0_ccw = .{ .x = p0.x, .y = p0.y - math.copysign(half_width, slope.dx) },
+            .p1_cw = .{ .x = p1.x, .y = p1.y + math.copysign(half_width, slope.dx) },
+            .p1_ccw = .{ .x = p1.x, .y = p1.y - math.copysign(half_width, slope.dx) },
         };
     }
     if (slope.dx == 0) {
@@ -56,23 +63,25 @@ pub fn init(p0: units.Point, p1: units.Point, thickness: f64) Face {
             .type = .vertical,
             .p0 = p0,
             .p1 = p1,
+            .width = thickness,
             .slope = slope,
-            .offset_x = width,
+            .offset_x = math.copysign(half_width, slope.dy),
             .offset_y = 0,
-            .p0_cw = .{ .x = p0.x - math.copysign(width, slope.dy), .y = p0.y },
-            .p0_ccw = .{ .x = p0.x + math.copysign(width, slope.dy), .y = p0.y },
-            .p1_cw = .{ .x = p1.x - math.copysign(width, slope.dy), .y = p1.y },
-            .p1_ccw = .{ .x = p1.x + math.copysign(width, slope.dy), .y = p1.y },
+            .p0_cw = .{ .x = p0.x - math.copysign(half_width, slope.dy), .y = p0.y },
+            .p0_ccw = .{ .x = p0.x + math.copysign(half_width, slope.dy), .y = p0.y },
+            .p1_cw = .{ .x = p1.x - math.copysign(half_width, slope.dy), .y = p1.y },
+            .p1_ccw = .{ .x = p1.x + math.copysign(half_width, slope.dy), .y = p1.y },
         };
     }
 
     const theta = math.atan2(slope.dy, slope.dx);
-    const offset_x = thickness / 2 * @sin(theta);
-    const offset_y = thickness / 2 * @cos(theta);
+    const offset_x = half_width * @sin(theta);
+    const offset_y = half_width * @cos(theta);
     return .{
         .type = .diagonal,
         .p0 = p0,
         .p1 = p1,
+        .width = thickness,
         .slope = slope,
         .offset_x = offset_x,
         .offset_y = offset_y,
@@ -237,4 +246,138 @@ fn intersect(p0: units.Point, p1: units.Point, m0: f64, m1: f64) units.Point {
         .x = intersect_x,
         .y = intersect_y,
     };
+}
+
+pub fn cap_p0(
+    self: Face,
+    alloc: mem.Allocator,
+    cap_mode: options.CapMode,
+    clockwise: bool,
+    tolerance: f64,
+) !std.ArrayList(units.Point) {
+    const reversed = init(self.p1, self.p0, self.width);
+    return reversed.cap(
+        alloc,
+        cap_mode,
+        clockwise,
+        tolerance,
+    );
+}
+
+pub fn cap_p1(
+    self: Face,
+    alloc: mem.Allocator,
+    cap_mode: options.CapMode,
+    clockwise: bool,
+    tolerance: f64,
+) !std.ArrayList(units.Point) {
+    return self.cap(
+        alloc,
+        cap_mode,
+        clockwise,
+        tolerance,
+    );
+}
+
+fn cap(
+    self: Face,
+    alloc: mem.Allocator,
+    cap_mode: options.CapMode,
+    clockwise: bool,
+    tolerance: f64,
+) !std.ArrayList(units.Point) {
+    var result = std.ArrayList(units.Point).init(alloc);
+    errdefer result.deinit();
+
+    switch (cap_mode) {
+        .butt => {
+            try self.capButt(&result, clockwise);
+        },
+        .square => {
+            try self.capSquare(&result, clockwise);
+        },
+        .round => {
+            try self.capRound(alloc, &result, clockwise, tolerance);
+        },
+    }
+
+    return result;
+}
+
+fn capButt(
+    self: Face,
+    result: *std.ArrayList(units.Point),
+    clockwise: bool,
+) !void {
+    if (clockwise) {
+        try result.append(self.p1_ccw);
+        try result.append(self.p1_cw);
+    } else {
+        try result.append(self.p1_cw);
+        try result.append(self.p1_ccw);
+    }
+}
+
+fn capSquare(
+    self: Face,
+    result: *std.ArrayList(units.Point),
+    clockwise: bool,
+) !void {
+    if (clockwise) {
+        try result.append(self.p1_ccw);
+        try result.append(.{
+            .x = self.p1_ccw.x + self.offset_y,
+            .y = self.p1_ccw.y + self.offset_x,
+        });
+        try result.append(.{
+            .x = self.p1_cw.x + self.offset_y,
+            .y = self.p1_cw.y + self.offset_x,
+        });
+        try result.append(self.p1_cw);
+    } else {
+        try result.append(self.p1_cw);
+        try result.append(.{
+            .x = self.p1_cw.x + self.offset_y,
+            .y = self.p1_cw.y + self.offset_x,
+        });
+        try result.append(.{
+            .x = self.p1_ccw.x + self.offset_y,
+            .y = self.p1_ccw.y + self.offset_x,
+        });
+        try result.append(self.p1_ccw);
+    }
+}
+
+fn capRound(
+    self: Face,
+    alloc: mem.Allocator,
+    result: *std.ArrayList(units.Point),
+    clockwise: bool,
+    tolerance: f64,
+) !void {
+    var pen = try Pen.init(alloc, self.width, tolerance);
+    defer pen.deinit();
+
+    // We need to calculate our fan along the end as if we were
+    // dealing with a 180 degree joint. So, treat it as if there
+    // were two lines going in exactly opposite directions, i.e., flip the
+    // incoming slope for the outgoing one.
+    var verts = try pen.verticesForJoin(
+        self.slope,
+        .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
+        clockwise,
+    );
+    defer verts.deinit();
+    if (verts.items.len == 0) {
+        try self.capButt(result, clockwise);
+    } else {
+        for (verts.items) |v| {
+            try result.append(
+                .{
+                    .x = self.p1.x + v.point.x,
+                    .y = self.p1.y + v.point.y,
+                },
+            );
+        }
+    }
 }

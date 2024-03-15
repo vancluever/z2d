@@ -26,6 +26,9 @@ const _016_fill_star_non_zero = @import("016_fill_star_non_zero.zig");
 const _017_stroke_star_round = @import("017_stroke_star_round.zig");
 const _018_stroke_square_spiral_round = @import("018_stroke_square_spiral_round.zig");
 const _019_stroke_bevel_miterlimit = @import("019_stroke_bevel_miterlimit.zig");
+const _020_stroke_lines_round_caps = @import("020_stroke_lines_round_caps.zig");
+const _021_stroke_lines_square_caps = @import("021_stroke_lines_square_caps.zig");
+const _022_stroke_lines_butt_caps = @import("022_stroke_lines_butt_caps.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +55,9 @@ pub fn main() !void {
     try gen_017_stroke_star_round(alloc);
     try gen_018_stroke_square_spiral_round(alloc);
     try gen_019_stroke_bevel_miterlimit(alloc);
+    try gen_020_stroke_lines_round_caps(alloc);
+    try gen_021_stroke_lines_square_caps(alloc);
+    try gen_022_stroke_lines_butt_caps(alloc);
 }
 
 fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
@@ -166,6 +172,24 @@ fn gen_019_stroke_bevel_miterlimit(alloc: mem.Allocator) !void {
     var surface = try _019_stroke_bevel_miterlimit.render(alloc);
     defer surface.deinit();
     try specExportPNG(alloc, surface, _019_stroke_bevel_miterlimit.filename);
+}
+
+fn gen_020_stroke_lines_round_caps(alloc: mem.Allocator) !void {
+    var surface = try _020_stroke_lines_round_caps.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _020_stroke_lines_round_caps.filename);
+}
+
+fn gen_021_stroke_lines_square_caps(alloc: mem.Allocator) !void {
+    var surface = try _021_stroke_lines_square_caps.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _021_stroke_lines_square_caps.filename);
+}
+
+fn gen_022_stroke_lines_butt_caps(alloc: mem.Allocator) !void {
+    var surface = try _022_stroke_lines_butt_caps.render(alloc);
+    defer surface.deinit();
+    try specExportPNG(alloc, surface, _022_stroke_lines_butt_caps.filename);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -355,6 +379,36 @@ test "019_stroke_bevel_miterlimit" {
     defer surface.deinit();
 
     var exported_file = try testExportPNG(testing.allocator, surface, _019_stroke_bevel_miterlimit.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "020_stroke_lines_round_caps" {
+    var surface = try _020_stroke_lines_round_caps.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _020_stroke_lines_round_caps.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "021_stroke_lines_square_caps" {
+    var surface = try _021_stroke_lines_square_caps.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _021_stroke_lines_square_caps.filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+test "022_stroke_lines_butt_caps" {
+    var surface = try _022_stroke_lines_butt_caps.render(testing.allocator);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(testing.allocator, surface, _022_stroke_lines_butt_caps.filename);
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);
