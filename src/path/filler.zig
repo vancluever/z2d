@@ -99,8 +99,12 @@ fn paintComposite(
     const mask_sfc = sfc_m: {
         const offset_x: u32 = @intFromFloat(polygon_list.start.x);
         const offset_y: u32 = @intFromFloat(polygon_list.start.y);
-        const mask_width: u32 = @intFromFloat(polygon_list.end.x - polygon_list.start.x);
-        const mask_height: u32 = @intFromFloat(polygon_list.end.y - polygon_list.start.y);
+        // Add scale to our relative dimensions here, as our polygon extent
+        // figures stop at the end pixel, instead of what would technically be
+        // one over. Using scale instead of 1 here ensures that we downscale
+        // evenly to our original extent dimensions.
+        const mask_width: u32 = @intFromFloat(polygon_list.end.x - polygon_list.start.x + scale);
+        const mask_height: u32 = @intFromFloat(polygon_list.end.y - polygon_list.start.y + scale);
         const surface_width: u32 = surface.getWidth() * @as(u32, @intFromFloat(scale));
 
         const scaled_sfc = try surfacepkg.Surface.init(
@@ -113,7 +117,7 @@ fn paintComposite(
 
         const poly_start_y: usize = @intFromFloat(polygon_list.start.y);
         const poly_end_y: usize = @intFromFloat(polygon_list.end.y);
-        for (poly_start_y..poly_end_y) |y| {
+        for (poly_start_y..poly_end_y + 1) |y| {
             var edge_list = try polygon_list.edgesForY(@floatFromInt(y), fill_rule);
             defer edge_list.deinit();
 
@@ -129,24 +133,11 @@ fn paintComposite(
                 );
 
                 for (start_x..end_x) |x| {
-                    // try scaled_sfc.putPixel(
-                    //     @intCast(x - offset_x),
-                    //     @intCast(y - offset_y),
-                    //     .{ .alpha8 = .{ .a = 255 } },
-                    // );
-                    scaled_sfc.putPixel(
+                    try scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
                         .{ .alpha8 = .{ .a = 255 } },
-                    ) catch |err| {
-                        // Drop out of range errors, return anything else.
-                        // These are more than likely off-by-one errors due to
-                        // rounding, and can be safely ignored (for now).
-                        //
-                        // TODO: I'd love to not have to do this. Take a further
-                        // look.
-                        if (err != error.ImageSurfacePutPixelOutOfRange) return err;
-                    };
+                    );
                 }
 
                 start_idx += 2;
@@ -160,8 +151,10 @@ fn paintComposite(
     // Downscaled offsets
     const offset_x: u32 = @intFromFloat(polygon_list.start.x / scale);
     const offset_y: u32 = @intFromFloat(polygon_list.start.y / scale);
-    const width: u32 = @intFromFloat(polygon_list.end.x / scale - polygon_list.start.x / scale);
-    const height: u32 = @intFromFloat(polygon_list.end.y / scale - polygon_list.start.y / scale);
+    // Add a 1 to our relative dimensions here, as our polygon extent figures
+    // stop at the end pixel, instead of what would technically be one over.
+    const width: u32 = @intFromFloat(polygon_list.end.x / scale - polygon_list.start.x / scale + 1);
+    const height: u32 = @intFromFloat(polygon_list.end.y / scale - polygon_list.start.y / scale + 1);
 
     const foreground_sfc = switch (pattern) {
         // This is the surface that we composite our mask on to get the final
