@@ -415,9 +415,9 @@ pub const Pixel = union(Format) {
     /// All pixel types with color channels are expected to be pre-multiplied.
     pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
         return switch (dst) {
-            .rgb => |d| d.dstIn(src),
-            .rgba => |d| d.dstIn(src),
-            .alpha8 => |d| d.dstIn(src),
+            .rgb => |d| d.srcOver(src),
+            .rgba => |d| d.srcOver(src),
+            .alpha8 => |d| d.srcOver(src),
         };
     }
 
