@@ -13,7 +13,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
 
     var context = z2d.DrawContext.init(sfc);
     comptime var pixel: z2d.Pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
+    try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineCap(.square);
     context.setLineWidth(20);
 
@@ -218,7 +218,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     // We draw a hairline in the same path in red - this validates how the caps
     // and joins are aligned.
     pixel = .{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } }; // Red
-    try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
+    try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineWidth(1);
 
     try path.stroke();

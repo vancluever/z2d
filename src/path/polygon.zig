@@ -121,14 +121,16 @@ pub const Polygon = struct {
 pub const PolygonList = struct {
     alloc: mem.Allocator,
     items: std.ArrayList(*Polygon),
+    scale: f64,
     start: units.Point = .{ .x = 0, .y = 0 },
     end: units.Point = .{ .x = 0, .y = 0 },
 
     /// Initializes a new PolygonList. Call deinit to de-initialize the list.
-    pub fn init(alloc: mem.Allocator) PolygonList {
+    pub fn init(alloc: mem.Allocator, scale: f64) PolygonList {
         return .{
             .alloc = alloc,
             .items = std.ArrayList(*Polygon).init(alloc),
+            .scale = scale,
         };
     }
 
@@ -151,17 +153,22 @@ pub const PolygonList = struct {
 
     /// Plots a point on the last Polygon in the list.
     pub fn plot(self: *PolygonList, p: units.Point) !void {
+        const scaled: units.Point = .{
+            .x = p.x * self.scale,
+            .y = p.y * self.scale,
+        };
+
         if (self.items.items.len == 1 and self.items.getLast().corners.items.len == 0) {
-            self.start = p;
-            self.end = p;
+            self.start = scaled;
+            self.end = scaled;
         }
 
-        try self.items.getLast().plot(p);
+        try self.items.getLast().plot(scaled);
 
-        if (self.start.x > p.x) self.start.x = p.x;
-        if (self.start.y > p.y) self.start.y = p.y;
-        if (self.end.x < p.x) self.end.x = p.x;
-        if (self.end.y < p.y) self.end.y = p.y;
+        if (self.start.x > scaled.x) self.start.x = scaled.x;
+        if (self.start.y > scaled.y) self.start.y = scaled.y;
+        if (self.end.x < scaled.x) self.end.x = scaled.x;
+        if (self.end.y < scaled.y) self.end.y = scaled.y;
     }
 
     /// As an individual edgesForY call, but for all Polygons in the list. This

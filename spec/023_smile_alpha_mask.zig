@@ -1,91 +1,104 @@
-//! Case: Basic test case for rendering a group of smiles on to an image
-//! surface, and exporting them to a PNG file.
-//!
-//! This test uses the RGBA pixel format.
+//! Case: Render a smile (similar to 001_smile_rgb.zig and 002_smile_rgba.zig),
+//! but use an alpha mask as the template image instead of iterating over the
+//! image data every single time. Demonstrates basic composting onto a surface.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "002_smile_rgba.png";
+pub const filename = "023_smile_alpha_mask.png";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const w = image.width * 2 + 10;
     const h = image.height * 2 + 10;
-    var sfc = try z2d.Surface.init(
+    var result_sfc = try z2d.Surface.init(
         surface_type,
         alloc,
         w,
         h,
     );
 
-    // 1st smile
-    var x: u32 = 2;
-    var y: u32 = 3;
+    // Our template alpha8 mask surface
+    var mask_sfc = try z2d.Surface.init(
+        .image_surface_alpha8,
+        alloc,
+        image.width,
+        image.height,
+    );
+    defer mask_sfc.deinit();
 
+    var x: u32 = 0;
+    var y: u32 = 0;
     for (image.data[0..image.data.len]) |c| {
         if (c == '\n') {
             y += 1;
-            x = 2;
+            x = 0;
             continue;
         }
 
-        const px: z2d.Pixel = if (c == '0') foregrounds[0] else backgrounds[0];
-        sfc.putPixel(x, y, px) catch |err| {
+        const px: z2d.Pixel = if (c == '0') .{ .alpha8 = .{ .a = 255 } } else .{ .alpha8 = .{ .a = 0 } };
+        mask_sfc.putPixel(x, y, px) catch |err| {
             debug.print(
-                "error at image 1, pixel (x, y): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
+                "error at mask image, pixel (x, y): ({}, {}), ({}, {})\n",
+                .{ x, y, image.width, image.height },
             );
             return err;
         };
         x += 1;
     }
+
+    // 1st smile
+    //
+    // We used to do a simple iterate over and handle foreground and background
+    // on a per-pixel basis (see 001_smile_rgb.zig or 002_smile_rgba.zig).
+    // However, since this is a compositing test, we need to go what is
+    // ultimately a much more complicated route, one that actually, funny
+    // enough, uses much more memory (we need 3 extra buffers of the HxW of the
+    // smile itself) and is likely orders of magnitude slower (the composition
+    // operations iterate pixel-by-pixel). This is actually a good
+    // demonstration of the tradeoffs of both methods and why for simple tasks
+    // you are probably better off just writing directly.
+
+    // Create a working surface and paint it with the background color
+    const background_sfc = try z2d.Surface.initPixel(backgrounds[0], alloc, image.width, image.height);
+    defer background_sfc.deinit();
+    // Make our foreground surface
+    const foreground_sfc = try z2d.Surface.initPixel(foregrounds[0], alloc, image.width, image.height);
+    defer foreground_sfc.deinit();
+    // Apply mask to foreground
+    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    // Apply foreground to background
+    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    // Composite our working surface at our first offset co-ordinates
+    try result_sfc.srcOver(background_sfc, 12, 13);
 
     // 2nd smile
-    x = w / 2 + 3;
-    y = 3;
-
-    for (image.data[0..image.data.len]) |c| {
-        if (c == '\n') {
-            y += 1;
-            x = w / 2 + 3;
-            continue;
-        }
-
-        const px: z2d.Pixel = if (c == '0') foregrounds[1] else backgrounds[1];
-        sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at image 2, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
-            );
-            return err;
-        };
-        x += 1;
-    }
+    //
+    // Re-paint with the second background color.
+    try background_sfc.paintPixel(backgrounds[1]);
+    // Re-paint foreground and apply mask
+    try foreground_sfc.paintPixel(foregrounds[1]);
+    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    // Apply foreground to background
+    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    // Composite our working surface at our second offset co-ordinates
+    try result_sfc.srcOver(background_sfc, w / 2 - 7, 13);
 
     // 3rd smile
-    x = w / 4 + 2;
-    y = h / 2 + 3;
+    //
+    // Re-paint with the third background color.
+    try background_sfc.paintPixel(backgrounds[2]);
+    // Re-paint foreground and apply mask
+    try foreground_sfc.paintPixel(foregrounds[2]);
+    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    // Apply foreground to background
+    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    // Composite our working surface at our second offset co-ordinates
+    try result_sfc.srcOver(background_sfc, w / 4 + 2, h / 2 - 7);
 
-    for (image.data[0..image.data.len]) |c| {
-        if (c == '\n') {
-            y += 1;
-            x = w / 4 + 2;
-            continue;
-        }
+    // done!
 
-        const px: z2d.Pixel = if (c == '0') foregrounds[2] else backgrounds[2];
-        sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at image 3, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
-            );
-            return err;
-        };
-        x += 1;
-    }
-
-    return sfc;
+    return result_sfc;
 }
 
 const surface_type: z2d.SurfaceType = .image_surface_rgba;

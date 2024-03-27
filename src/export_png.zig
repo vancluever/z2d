@@ -17,6 +17,13 @@ pub fn writeToPNGFile(
     surface: surfacepkg.Surface,
     filename: []const u8,
 ) !void {
+    switch (surface.getFormat()) {
+        .rgba, .rgb => {},
+        else => {
+            return error.WriteToPNGFileUnsupportedSurfaceFormat;
+        },
+    }
+
     // Open and create the file.
     const file = try fs.cwd().createFile(filename, .{});
     defer file.close();
@@ -44,10 +51,12 @@ fn writePNGIHDR(file: fs.File, surface: surfacepkg.Surface) !void {
     const depth: u8 = switch (surface.getFormat()) {
         .rgba => 8,
         .rgb => 8,
+        else => unreachable,
     };
     const color_type: u8 = switch (surface.getFormat()) {
         .rgba => 6,
         .rgb => 2,
+        else => unreachable,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -140,10 +149,11 @@ fn writePNGIDATStream(
                         mem.copyForwards(
                             u8,
                             pixel_buffer[nbytes..pixel_buffer.len],
-                            &u32PixelToBytesLittle(@bitCast(px)),
+                            &u32PixelToBytesLittle(@bitCast(px.demultiply())),
                         );
                         break :written 4; // 4 bytes
                     },
+                    else => unreachable,
                 }
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {

@@ -13,7 +13,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
 
     var context = z2d.DrawContext.init(sfc);
     const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(.{ .opaque_pattern = .{ .pixel = pixel } });
+    try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineWidth(10); // Minimum width to properly detect round joins (until we get AA)
     context.setLineJoin(.round);
 

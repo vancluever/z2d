@@ -124,12 +124,21 @@ pub const PathOperation = struct {
     /// This is a no-op if there are no nodes.
     pub fn fill(self: *PathOperation) !void {
         if (self.nodes.items.len == 0) return;
-        if (self.nodes.getLast() != .close_path) try self.closePath();
+        if (unclosed: {
+            if (self.nodes.items.len < 2) break :unclosed true;
+            if (self.nodes.items[self.nodes.items.len - 2] != .close_path or
+                self.nodes.items[self.nodes.items.len - 1] != .move_to)
+            {
+                break :unclosed true;
+            }
+            break :unclosed false;
+        }) try self.closePath();
         try fillerpkg.fill(
             self.alloc,
             &self.nodes,
             self.context.surface,
             self.context.pattern,
+            self.context.anti_aliasing_mode,
             self.context.fill_rule,
         );
     }
@@ -145,6 +154,7 @@ pub const PathOperation = struct {
             &self.nodes,
             self.context.surface,
             self.context.pattern,
+            self.context.anti_aliasing_mode,
             self.context.line_width,
             self.context.line_join_mode,
             self.context.miter_limit,
