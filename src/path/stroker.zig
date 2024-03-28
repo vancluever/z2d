@@ -17,6 +17,7 @@ pub fn stroke(
     nodes: *std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
+    anti_aliasing_mode: options.AntiAliasMode,
     thickness: f64,
     join_mode: options.JoinMode,
     miter_limit: f64,
@@ -33,5 +34,5 @@ pub fn stroke(
         cap_mode,
     );
     defer stroke_nodes.deinit();
-    try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern, .non_zero);
+    try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern, anti_aliasing_mode, .non_zero);
 }

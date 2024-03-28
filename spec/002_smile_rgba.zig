@@ -7,7 +7,7 @@ const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "002_smile_rgba.png";
+pub const filename = "002_smile_rgba";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const w = image.width * 2 + 10;
@@ -91,15 +91,15 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
 const surface_type: z2d.SurfaceType = .image_surface_rgba;
 
 const foregrounds: [3]z2d.Pixel = .{
-    .{ .rgba = .{ .r = 0xC5, .g = 0x0F, .b = 0x1F, .a = 0xFF } }, // Red
-    .{ .rgba = .{ .r = 0x88, .g = 0x17, .b = 0x98, .a = 0xFF } }, // Purple
-    .{ .rgba = .{ .r = 0xFC, .g = 0x7F, .b = 0x11, .a = 0xFF } }, // Orange
+    .{ .rgba = (z2d.RGBA{ .r = 0xC5, .g = 0x0F, .b = 0x1F, .a = 0xFF }).multiply() }, // Red
+    .{ .rgba = (z2d.RGBA{ .r = 0x88, .g = 0x17, .b = 0x98, .a = 0xFF }).multiply() }, // Purple
+    .{ .rgba = (z2d.RGBA{ .r = 0xFC, .g = 0x7F, .b = 0x11, .a = 0xFF }).multiply() }, // Orange
 };
 
 const backgrounds: [3]z2d.Pixel = .{
-    .{ .rgba = .{ .r = 0xC1, .g = 0x9C, .b = 0x10, .a = 0x99 } }, // Yellow-ish green
-    .{ .rgba = .{ .r = 0x3A, .g = 0x96, .b = 0xDD, .a = 0x99 } }, // Blue
-    .{ .rgba = .{ .r = 0x01, .g = 0x24, .b = 0x86, .a = 0x99 } }, // Deep blue
+    .{ .rgba = (z2d.RGBA{ .r = 0xC1, .g = 0x9C, .b = 0x10, .a = 0x99 }).multiply() }, // Yellow-ish green
+    .{ .rgba = (z2d.RGBA{ .r = 0x3A, .g = 0x96, .b = 0xDD, .a = 0x99 }).multiply() }, // Blue
+    .{ .rgba = (z2d.RGBA{ .r = 0x01, .g = 0x24, .b = 0x86, .a = 0x99 }).multiply() }, // Deep blue
 };
 
 const image = .{

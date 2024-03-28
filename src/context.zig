@@ -59,6 +59,12 @@ pub const DrawContext = struct {
     /// read-write: can be set directly, but can also be set with setLineCap.
     line_cap_mode: options.CapMode,
 
+    /// The current anti-aliasing mode. The default is the aptly-named
+    /// "default" anti-aliasing mode.
+    ///
+    /// read-write: can be set directly, but can also be set with setAntiAlias.
+    anti_aliasing_mode: options.AntiAliasMode,
+
     /// Creates a new context with the underlying surface.
     ///
     /// The initial pattern is set to opaque black, appropriate to the pixel
@@ -67,6 +73,7 @@ pub const DrawContext = struct {
         const px: pixelpkg.Pixel = switch (surface) {
             .image_surface_rgb => .{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
             .image_surface_rgba => .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
+            .image_surface_alpha8 => .{ .alpha8 = .{ .a = 0xFF } },
         };
         return .{
             .pattern = .{ .opaque_pattern = .{ .pixel = px } },
@@ -76,6 +83,7 @@ pub const DrawContext = struct {
             .line_join_mode = .miter,
             .miter_limit = 10.0,
             .line_cap_mode = .butt,
+            .anti_aliasing_mode = .default,
         };
     }
 
@@ -125,6 +133,11 @@ pub const DrawContext = struct {
     /// Sets the line cap mode. The default is butt.
     pub fn setLineCap(self: *DrawContext, value: options.CapMode) void {
         self.line_cap_mode = value;
+    }
+
+    /// Sets the anti-aliasing mode. The default is "default".
+    pub fn setAntiAlias(self: *DrawContext, value: options.AntiAliasMode) void {
+        self.anti_aliasing_mode = value;
     }
 };
 

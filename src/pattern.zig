@@ -19,6 +19,22 @@ pub const Pattern = union(PatternType) {
             .opaque_pattern => |s| s.pixel,
         };
     }
+
+    /// Initializes a new opaque pattern with the supplied pixel.
+    ///
+    /// If the pixel has both color an alpha channels (e.g., RGBA), do not
+    /// supply the value pre-multiplied, it will be multiplied by this
+    /// function.
+    pub fn initOpaque(px: pixelpkg.Pixel) Pattern {
+        return .{
+            .opaque_pattern = .{
+                .pixel = switch (px) {
+                    .rgba => |rgba| rgba.multiply().asPixel(),
+                    else => px,
+                },
+            },
+        };
+    }
 };
 
 /// A simple opaque color pattern that writes the set color to every pixel.

@@ -46,8 +46,6 @@ pub const JoinMode = enum {
 };
 
 /// Represents how lines are capped when stroking paths.
-///
-/// TODO: Add bevel join
 pub const CapMode = enum {
     /// Lines are cut off at the ends, right at their center point
     /// perpendicular to their thickness. In other words, a path will not
@@ -59,4 +57,11 @@ pub const CapMode = enum {
 
     /// Lines are squared on the ends, to the thickness / 2.
     square,
+};
+
+/// Represents the anti-aliasing mode used when drawing paths, which smoothes
+/// out jagged lines (aka "jaggies"). "none" represents no anti-aliasing.
+pub const AntiAliasMode = enum {
+    none,
+    default,
 };

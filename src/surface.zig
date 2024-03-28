@@ -4,18 +4,26 @@ const testing = @import("std").testing;
 
 const pixelpkg = @import("pixel.zig");
 
+// The scale factor used for super-sample anti-aliasing. Any functionality
+// using the downsample method in a surface should import this value.
+pub const supersample_scale = 4;
+
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
     image_surface_rgb,
     image_surface_rgba,
+    image_surface_alpha8,
 };
 
 /// Represents an interface as a union of the pixel formats.
 pub const Surface = union(SurfaceType) {
     image_surface_rgb: *ImageSurface(pixelpkg.RGB),
     image_surface_rgba: *ImageSurface(pixelpkg.RGBA),
+    image_surface_alpha8: *ImageSurface(pixelpkg.Alpha8),
 
-    /// Initializes a surface of the specific type.
+    /// Initializes a surface of the specific type. The surface buffer is
+    /// initialized with the zero value for the pixel type (typically black or
+    /// transparent).
     ///
     /// The caller owns the memory, so make sure to call deinit to release it.
     pub fn init(
@@ -28,13 +36,51 @@ pub const Surface = union(SurfaceType) {
             .image_surface_rgb => {
                 const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
                 errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height);
+                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height, null);
                 return sfc.asSurfaceInterface();
             },
             .image_surface_rgba => {
                 const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
                 errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height);
+                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height, null);
+                return sfc.asSurfaceInterface();
+            },
+            .image_surface_alpha8 => {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.Alpha8));
+                errdefer alloc.destroy(sfc);
+                sfc.* = try ImageSurface(pixelpkg.Alpha8).init(alloc, width, height, null);
+                return sfc.asSurfaceInterface();
+            },
+        }
+    }
+
+    /// Initializes a surface with the buffer set to the supplied pixel. The
+    /// surface type is inferred from it.
+    ///
+    /// The caller owns the memory, so make sure to call deinit to release it.
+    pub fn initPixel(
+        initial_px: pixelpkg.Pixel,
+        alloc: mem.Allocator,
+        width: u32,
+        height: u32,
+    ) !Surface {
+        switch (initial_px) {
+            .rgb => |px| {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+                errdefer alloc.destroy(sfc);
+                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height, px);
+                return sfc.asSurfaceInterface();
+            },
+            .rgba => |px| {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
+                errdefer alloc.destroy(sfc);
+                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height, px);
+                return sfc.asSurfaceInterface();
+            },
+            .alpha8 => |px| {
+                const sfc = try alloc.create(ImageSurface(pixelpkg.Alpha8));
+                errdefer alloc.destroy(sfc);
+                sfc.* = try ImageSurface(pixelpkg.Alpha8).init(alloc, width, height, px);
                 return sfc.asSurfaceInterface();
             },
         }
@@ -58,7 +104,64 @@ pub const Surface = union(SurfaceType) {
                 s.deinit();
                 s.alloc.destroy(s);
             },
+            SurfaceType.image_surface_alpha8 => |s| {
+                s.deinit();
+                s.alloc.destroy(s);
+            },
         }
+    }
+
+    /// Downsamples the image, using simple pixel averaging. The original
+    /// surface is not altered.
+    ///
+    /// Uses the same allocator as the original surface. deinit should be
+    /// called when finished with the surface, which invalidates it, after
+    /// which it should not be used.
+    pub fn downsample(self: Surface) !Surface {
+        // Our initialization process is the same here as init, since we are
+        // creating a new surface for the downsampled copy.
+        switch (self) {
+            .image_surface_rgb => |s| {
+                const sfc = try s.alloc.create(ImageSurface(pixelpkg.RGB));
+                errdefer s.alloc.destroy(sfc);
+                sfc.* = try s.downsample();
+                return sfc.asSurfaceInterface();
+            },
+            .image_surface_rgba => |s| {
+                const sfc = try s.alloc.create(ImageSurface(pixelpkg.RGBA));
+                errdefer s.alloc.destroy(sfc);
+                sfc.* = try s.downsample();
+                return sfc.asSurfaceInterface();
+            },
+            .image_surface_alpha8 => |s| {
+                const sfc = try s.alloc.create(ImageSurface(pixelpkg.Alpha8));
+                errdefer s.alloc.destroy(sfc);
+                sfc.* = try s.downsample();
+                return sfc.asSurfaceInterface();
+            },
+        }
+    }
+
+    /// Composites the source surface onto this surface using the Porter-Duff
+    /// src-over operation at the destination. Any parts of the source outside
+    /// of the destination are ignored.
+    pub fn srcOver(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
+        return switch (dst) {
+            SurfaceType.image_surface_rgb => |s| s.srcOver(src, dst_x, dst_y),
+            SurfaceType.image_surface_rgba => |s| s.srcOver(src, dst_x, dst_y),
+            SurfaceType.image_surface_alpha8 => |s| s.srcOver(src, dst_x, dst_y),
+        };
+    }
+
+    /// Composites the source surface onto this surface using the Porter-Duff
+    /// dst-in operation at the destination. Any parts of the source outside
+    /// of the destination are ignored.
+    pub fn dstIn(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
+        return switch (dst) {
+            SurfaceType.image_surface_rgb => |s| s.dstIn(src, dst_x, dst_y),
+            SurfaceType.image_surface_rgba => |s| s.dstIn(src, dst_x, dst_y),
+            SurfaceType.image_surface_alpha8 => |s| s.dstIn(src, dst_x, dst_y),
+        };
     }
 
     /// Gets the width of the surface.
@@ -66,6 +169,7 @@ pub const Surface = union(SurfaceType) {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.width,
             SurfaceType.image_surface_rgba => |s| s.width,
+            SurfaceType.image_surface_alpha8 => |s| s.width,
         };
     }
 
@@ -74,6 +178,7 @@ pub const Surface = union(SurfaceType) {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.height,
             SurfaceType.image_surface_rgba => |s| s.height,
+            SurfaceType.image_surface_alpha8 => |s| s.height,
         };
     }
 
@@ -82,6 +187,7 @@ pub const Surface = union(SurfaceType) {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| @TypeOf(s.*).format,
             SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
+            SurfaceType.image_surface_alpha8 => |s| @TypeOf(s.*).format,
         };
     }
 
@@ -90,6 +196,7 @@ pub const Surface = union(SurfaceType) {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.getPixel(x, y),
             SurfaceType.image_surface_rgba => |s| s.getPixel(x, y),
+            SurfaceType.image_surface_alpha8 => |s| s.getPixel(x, y),
         };
     }
 
@@ -98,6 +205,16 @@ pub const Surface = union(SurfaceType) {
         return switch (self) {
             SurfaceType.image_surface_rgb => |s| s.putPixel(x, y, px),
             SurfaceType.image_surface_rgba => |s| s.putPixel(x, y, px),
+            SurfaceType.image_surface_alpha8 => |s| s.putPixel(x, y, px),
+        };
+    }
+
+    /// Replaces the surface with the supplied pixel.
+    pub fn paintPixel(self: Surface, px: pixelpkg.Pixel) !void {
+        return switch (self) {
+            SurfaceType.image_surface_rgb => |s| s.paintPixel(px),
+            SurfaceType.image_surface_rgba => |s| s.paintPixel(px),
+            SurfaceType.image_surface_alpha8 => |s| s.paintPixel(px),
         };
     }
 };
@@ -182,12 +299,23 @@ fn ImageSurface(comptime T: type) type {
         /// read-only: should not be modified directly.
         pub const format: pixelpkg.Format = T.format;
 
-        /// Initializes the surface. deinit should be called when finished with
+        /// Initializes a surface. deinit should be called when finished with
         /// the surface, which invalidates it, after which it should not be
-        /// used.
-        pub fn init(alloc: mem.Allocator, width: u32, height: u32) !ImageSurface(T) {
+        /// used. If non-null, the surface is initialized with the supplied
+        /// pixel.
+        pub fn init(
+            alloc: mem.Allocator,
+            width: u32,
+            height: u32,
+            initial_px_: ?T,
+        ) !ImageSurface(T) {
             const buf = try alloc.alloc(T, height * width);
-            @memset(buf, mem.zeroes(T));
+            if (initial_px_) |initial_px| {
+                @memset(buf, initial_px);
+            } else {
+                @memset(buf, mem.zeroes(T));
+            }
+
             return .{
                 .alloc = alloc,
                 .width = width,
@@ -202,11 +330,90 @@ fn ImageSurface(comptime T: type) type {
             self.alloc.free(self.buf);
         }
 
+        /// Downsamples the image, using simple pixel averaging. The original
+        /// surface is not altered.
+        ///
+        /// Uses the same allocator as the original surface. deinit should be
+        /// called when finished with the surface, which invalidates it, after
+        /// which it should not be used.
+        pub fn downsample(self: *ImageSurface(T)) !ImageSurface(T) {
+            const scale = supersample_scale;
+            const height = self.height / scale;
+            const width = self.width / scale;
+            const buf = try self.alloc.alloc(T, height * width);
+            @memset(buf, mem.zeroes(T));
+
+            for (0..height) |y| {
+                for (0..width) |x| {
+                    var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
+                    for (0..scale) |i| {
+                        for (0..scale) |j| {
+                            const idx = (y * scale + i) * self.width + (x * scale + j);
+                            pixels[i * scale + j] = self.buf[idx];
+                        }
+                    }
+                    buf[y * width + x] = T.average(&pixels);
+                }
+            }
+
+            return .{
+                .alloc = self.alloc,
+                .width = width,
+                .height = height,
+                .buf = buf,
+            };
+        }
+
+        /// Composites the source surface onto this surface using the
+        /// Porter-Duff src-over operation at the destination. Any parts of the
+        /// source outside of the destination are ignored.
+        pub fn srcOver(dst: *ImageSurface(T), src: Surface, dst_x: u32, dst_y: u32) !void {
+            return dst.composite(src, T.srcOver, dst_x, dst_y);
+        }
+
+        /// Composites the source surface onto this surface using the
+        /// Porter-Duff dst-in operation at the destination. Any parts of the
+        /// source outside of the destination are ignored.
+        pub fn dstIn(dst: *ImageSurface(T), src: Surface, dst_x: u32, dst_y: u32) !void {
+            return dst.composite(src, T.dstIn, dst_x, dst_y);
+        }
+
+        fn composite(
+            dst: *ImageSurface(T),
+            src: Surface,
+            op: fn (T, pixelpkg.Pixel) T,
+            dst_x: u32,
+            dst_y: u32,
+        ) !void {
+            if (dst_x >= dst.width or dst_y >= dst.height) return;
+
+            var height = src.getHeight();
+            if (src.getHeight() + dst_y > dst.height) {
+                height -= src.getHeight() + dst_y - dst.height;
+            }
+            var width = src.getWidth();
+            if (src.getWidth() + dst_x > dst.width) {
+                width -= src.getWidth() + dst_x - dst.width;
+            }
+
+            for (0..height) |src_y| {
+                for (0..width) |src_x| {
+                    const dst_put_x = src_x + dst_x;
+                    const dst_put_y = src_y + dst_y;
+                    const dst_idx = dst.width * dst_put_y + dst_put_x;
+                    const src_px = try src.getPixel(@intCast(src_x), @intCast(src_y));
+                    const dst_px = dst.buf[dst_idx];
+                    dst.buf[dst_idx] = op(dst_px, src_px);
+                }
+            }
+        }
+
         /// Returns a Surface interface for this surface.
         pub fn asSurfaceInterface(self: *ImageSurface(T)) Surface {
             return switch (T.format) {
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
+                .alpha8 => .{ .image_surface_alpha8 = self },
             };
         }
 
@@ -227,6 +434,11 @@ fn ImageSurface(comptime T: type) type {
                 return error.ImageSurfacePutPixelOutOfRange;
             }
             self.buf[self.width * y + x] = try T.fromPixel(px);
+        }
+
+        /// Replaces the surface with the supplied pixel.
+        pub fn paintPixel(self: *ImageSurface(T), px: pixelpkg.Pixel) !void {
+            @memset(self.buf, try T.fromPixel(px));
         }
     };
 }
