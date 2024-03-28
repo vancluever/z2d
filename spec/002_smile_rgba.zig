@@ -7,7 +7,7 @@ const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "002_smile_rgba.png";
+pub const filename = "002_smile_rgba";
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const w = image.width * 2 + 10;

@@ -1,5 +1,6 @@
 const debug = @import("std").debug;
 const fs = @import("std").fs;
+const fmt = @import("std").fmt;
 const heap = @import("std").heap;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
@@ -37,407 +38,213 @@ pub fn main() !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
 
-    try gen_001_smile_rgb(alloc);
-    try gen_002_smile_rgba(alloc);
-    try gen_003_fill_triangle(alloc);
-    try gen_004_fill_square(alloc);
-    try gen_005_fill_trapezoid(alloc);
-    try gen_006_fill_star_even_odd(alloc);
-    try gen_007_fill_bezier(alloc);
-    try gen_008_stroke_triangle(alloc);
-    try gen_009_stroke_square(alloc);
-    try gen_010_stroke_trapezoid(alloc);
-    try gen_011_stroke_star(alloc);
-    try gen_012_stroke_bezier(alloc);
-    try gen_013_fill_combined(alloc);
-    try gen_014_stroke_lines(alloc);
-    try gen_015_stroke_miter(alloc);
-    try gen_016_fill_star_non_zero(alloc);
-    try gen_017_stroke_star_round(alloc);
-    try gen_018_stroke_square_spiral_round(alloc);
-    try gen_019_stroke_bevel_miterlimit(alloc);
-    try gen_020_stroke_lines_round_caps(alloc);
-    try gen_021_stroke_lines_square_caps(alloc);
-    try gen_022_stroke_lines_butt_caps(alloc);
-    try gen_023_smile_alpha_mask(alloc);
-}
-
-fn gen_001_smile_rgb(alloc: mem.Allocator) !void {
-    var surface = try _001_smile_rgb.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _001_smile_rgb.filename);
-}
-
-fn gen_002_smile_rgba(alloc: mem.Allocator) !void {
-    var surface = try _002_smile_rgba.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _002_smile_rgba.filename);
-}
-
-fn gen_003_fill_triangle(alloc: mem.Allocator) !void {
-    var surface = try _003_fill_triangle.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _003_fill_triangle.filename);
-}
-
-fn gen_004_fill_square(alloc: mem.Allocator) !void {
-    var surface = try _004_fill_square.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _004_fill_square.filename);
-}
-
-fn gen_005_fill_trapezoid(alloc: mem.Allocator) !void {
-    var surface = try _005_fill_trapezoid.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _005_fill_trapezoid.filename);
-}
-
-fn gen_006_fill_star_even_odd(alloc: mem.Allocator) !void {
-    var surface = try _006_fill_star_even_odd.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _006_fill_star_even_odd.filename);
-}
-
-fn gen_007_fill_bezier(alloc: mem.Allocator) !void {
-    var surface = try _007_fill_bezier.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _007_fill_bezier.filename);
-}
-
-fn gen_008_stroke_triangle(alloc: mem.Allocator) !void {
-    var surface = try _008_stroke_triangle.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _008_stroke_triangle.filename);
-}
-
-fn gen_009_stroke_square(alloc: mem.Allocator) !void {
-    var surface = try _009_stroke_square.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _009_stroke_square.filename);
-}
-
-fn gen_010_stroke_trapezoid(alloc: mem.Allocator) !void {
-    var surface = try _010_stroke_trapezoid.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _010_stroke_trapezoid.filename);
-}
-
-fn gen_011_stroke_star(alloc: mem.Allocator) !void {
-    var surface = try _011_stroke_star.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _011_stroke_star.filename);
-}
-
-fn gen_012_stroke_bezier(alloc: mem.Allocator) !void {
-    var surface = try _012_stroke_bezier.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _012_stroke_bezier.filename);
-}
-
-fn gen_013_fill_combined(alloc: mem.Allocator) !void {
-    var surface = try _013_fill_combined.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _013_fill_combined.filename);
-}
-
-fn gen_014_stroke_lines(alloc: mem.Allocator) !void {
-    var surface = try _014_stroke_lines.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _014_stroke_lines.filename);
-}
-
-fn gen_015_stroke_miter(alloc: mem.Allocator) !void {
-    var surface = try _015_stroke_miter.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _015_stroke_miter.filename);
-}
-
-fn gen_016_fill_star_non_zero(alloc: mem.Allocator) !void {
-    var surface = try _016_fill_star_non_zero.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _016_fill_star_non_zero.filename);
-}
-
-fn gen_017_stroke_star_round(alloc: mem.Allocator) !void {
-    var surface = try _017_stroke_star_round.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _017_stroke_star_round.filename);
-}
-
-fn gen_018_stroke_square_spiral_round(alloc: mem.Allocator) !void {
-    var surface = try _018_stroke_square_spiral_round.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _018_stroke_square_spiral_round.filename);
-}
-
-fn gen_019_stroke_bevel_miterlimit(alloc: mem.Allocator) !void {
-    var surface = try _019_stroke_bevel_miterlimit.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _019_stroke_bevel_miterlimit.filename);
-}
-
-fn gen_020_stroke_lines_round_caps(alloc: mem.Allocator) !void {
-    var surface = try _020_stroke_lines_round_caps.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _020_stroke_lines_round_caps.filename);
-}
-
-fn gen_021_stroke_lines_square_caps(alloc: mem.Allocator) !void {
-    var surface = try _021_stroke_lines_square_caps.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _021_stroke_lines_square_caps.filename);
-}
-
-fn gen_022_stroke_lines_butt_caps(alloc: mem.Allocator) !void {
-    var surface = try _022_stroke_lines_butt_caps.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _022_stroke_lines_butt_caps.filename);
-}
-
-fn gen_023_smile_alpha_mask(alloc: mem.Allocator) !void {
-    var surface = try _023_smile_alpha_mask.render(alloc);
-    defer surface.deinit();
-    try specExportPNG(alloc, surface, _023_smile_alpha_mask.filename);
+    try compositorExportRun(alloc, _001_smile_rgb);
+    try compositorExportRun(alloc, _002_smile_rgba);
+    try pathExportRun(alloc, _003_fill_triangle);
+    try pathExportRun(alloc, _004_fill_square);
+    try pathExportRun(alloc, _005_fill_trapezoid);
+    try pathExportRun(alloc, _006_fill_star_even_odd);
+    try pathExportRun(alloc, _007_fill_bezier);
+    try pathExportRun(alloc, _008_stroke_triangle);
+    try pathExportRun(alloc, _009_stroke_square);
+    try pathExportRun(alloc, _010_stroke_trapezoid);
+    try pathExportRun(alloc, _011_stroke_star);
+    try pathExportRun(alloc, _012_stroke_bezier);
+    try pathExportRun(alloc, _013_fill_combined);
+    try pathExportRun(alloc, _014_stroke_lines);
+    try pathExportRun(alloc, _015_stroke_miter);
+    try pathExportRun(alloc, _016_fill_star_non_zero);
+    try pathExportRun(alloc, _017_stroke_star_round);
+    try pathExportRun(alloc, _018_stroke_square_spiral_round);
+    try pathExportRun(alloc, _019_stroke_bevel_miterlimit);
+    try pathExportRun(alloc, _020_stroke_lines_round_caps);
+    try pathExportRun(alloc, _021_stroke_lines_square_caps);
+    try pathExportRun(alloc, _022_stroke_lines_butt_caps);
+    try compositorExportRun(alloc, _023_smile_alpha_mask);
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
 test "001_smile_rgb" {
-    var surface = try _001_smile_rgb.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _001_smile_rgb.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try compositorTestRun(testing.allocator, _001_smile_rgb);
 }
 
 test "002_smile_rgba" {
-    var surface = try _002_smile_rgba.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _002_smile_rgba.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try compositorTestRun(testing.allocator, _002_smile_rgba);
 }
 
 test "003_fill_triangle" {
-    var surface = try _003_fill_triangle.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _003_fill_triangle.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _003_fill_triangle);
 }
 
 test "004_fill_square" {
-    var surface = try _004_fill_square.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _004_fill_square.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _004_fill_square);
 }
 
 test "005_fill_trapezoid" {
-    var surface = try _005_fill_trapezoid.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _005_fill_trapezoid.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _005_fill_trapezoid);
 }
 
 test "006_fill_star_even_odd" {
-    var surface = try _006_fill_star_even_odd.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _006_fill_star_even_odd.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _006_fill_star_even_odd);
 }
 
 test "007_fill_bezier" {
-    var surface = try _007_fill_bezier.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _007_fill_bezier.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _007_fill_bezier);
 }
 
 test "008_stroke_triangle" {
-    var surface = try _008_stroke_triangle.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _008_stroke_triangle.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _008_stroke_triangle);
 }
 
 test "009_stroke_square" {
-    var surface = try _009_stroke_square.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _009_stroke_square.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _009_stroke_square);
 }
 
 test "010_stroke_trapezoid" {
-    var surface = try _010_stroke_trapezoid.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _010_stroke_trapezoid.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _010_stroke_trapezoid);
 }
 
 test "011_stroke_star" {
-    var surface = try _011_stroke_star.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _011_stroke_star.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _011_stroke_star);
 }
 
-// test "012_stroke_bezier" {
-//     var surface = try _012_stroke_bezier.render(testing.allocator);
-//     defer surface.deinit();
-//
-//     var exported_file = try testExportPNG(testing.allocator, surface, _012_stroke_bezier.filename);
-//     defer exported_file.cleanup();
-//
-//     try compareFiles(testing.allocator, exported_file.target_path);
-// }
+test "012_stroke_bezier" {
+    try pathTestRun(testing.allocator, _012_stroke_bezier);
+}
 
 test "013_fill_combined" {
-    var surface = try _013_fill_combined.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _013_fill_combined.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _013_fill_combined);
 }
 
 test "014_stroke_lines" {
-    var surface = try _014_stroke_lines.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _014_stroke_lines.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _014_stroke_lines);
 }
 
 test "015_stroke_miter" {
-    var surface = try _015_stroke_miter.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _015_stroke_miter.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _015_stroke_miter);
 }
 
 test "016_fill_star_non_zero" {
-    var surface = try _016_fill_star_non_zero.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _016_fill_star_non_zero.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _016_fill_star_non_zero);
 }
 
 test "017_stroke_star_round" {
-    var surface = try _017_stroke_star_round.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _017_stroke_star_round.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _017_stroke_star_round);
 }
 
 test "018_stroke_square_spiral_round" {
-    var surface = try _018_stroke_square_spiral_round.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _018_stroke_square_spiral_round.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _018_stroke_square_spiral_round);
 }
 
 test "019_stroke_bevel_miterlimit" {
-    var surface = try _019_stroke_bevel_miterlimit.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _019_stroke_bevel_miterlimit.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _019_stroke_bevel_miterlimit);
 }
 
 test "020_stroke_lines_round_caps" {
-    var surface = try _020_stroke_lines_round_caps.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _020_stroke_lines_round_caps.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _020_stroke_lines_round_caps);
 }
 
 test "021_stroke_lines_square_caps" {
-    var surface = try _021_stroke_lines_square_caps.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _021_stroke_lines_square_caps.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _021_stroke_lines_square_caps);
 }
 
 test "022_stroke_lines_butt_caps" {
-    var surface = try _022_stroke_lines_butt_caps.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _022_stroke_lines_butt_caps.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try pathTestRun(testing.allocator, _022_stroke_lines_butt_caps);
 }
 
 test "023_smile_alpha_mask" {
-    var surface = try _023_smile_alpha_mask.render(testing.allocator);
-    defer surface.deinit();
-
-    var exported_file = try testExportPNG(testing.allocator, surface, _023_smile_alpha_mask.filename);
-    defer exported_file.cleanup();
-
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try compositorTestRun(testing.allocator, _023_smile_alpha_mask);
 }
 
 //////////////////////////////////////////////////////////////////////////////
+
+fn compositorExportRun(alloc: mem.Allocator, subject: anytype) !void {
+    const filename = try fmt.allocPrint(
+        alloc,
+        "{s}{s}",
+        .{ subject.filename, ".png" },
+    );
+    defer alloc.free(filename);
+
+    var surface = try subject.render(alloc);
+    defer surface.deinit();
+
+    try specExportPNG(alloc, surface, filename);
+}
+
+fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
+    const filename_pixelated = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_pixelated", ".png" },
+    );
+    defer alloc.free(filename_pixelated);
+    const filename_smooth = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_smooth", ".png" },
+    );
+    defer alloc.free(filename_smooth);
+
+    var surface_pixelated = try subject.render(alloc, .none);
+    defer surface_pixelated.deinit();
+    var surface_smooth = try subject.render(alloc, .default);
+    defer surface_smooth.deinit();
+
+    try specExportPNG(alloc, surface_pixelated, filename_pixelated);
+    try specExportPNG(alloc, surface_smooth, filename_smooth);
+}
 
 fn specExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u8) !void {
     const target_path = try fs.path.join(alloc, &.{ "spec/files", filename });
     errdefer alloc.free(target_path);
     try z2d.writeToPNGFile(surface, target_path);
+}
+
+fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
+    const filename = try fmt.allocPrint(
+        alloc,
+        "{s}{s}",
+        .{ subject.filename, ".png" },
+    );
+    defer alloc.free(filename);
+
+    var surface = try subject.render(alloc);
+    defer surface.deinit();
+
+    var exported_file = try testExportPNG(alloc, surface, filename);
+    defer exported_file.cleanup();
+
+    try compareFiles(testing.allocator, exported_file.target_path);
+}
+
+fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
+    const filename_pixelated = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_pixelated", ".png" },
+    );
+    defer alloc.free(filename_pixelated);
+    const filename_smooth = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_smooth", ".png" },
+    );
+    defer alloc.free(filename_smooth);
+
+    var surface_pixelated = try subject.render(alloc, .none);
+    defer surface_pixelated.deinit();
+    var surface_smooth = try subject.render(alloc, .default);
+    defer surface_smooth.deinit();
+
+    var exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
+    defer exported_file_pixelated.cleanup();
+    var exported_file_smooth = try testExportPNG(alloc, surface_smooth, filename_smooth);
+    defer exported_file_smooth.cleanup();
+
+    try compareFiles(testing.allocator, exported_file_pixelated.target_path);
+    try compareFiles(testing.allocator, exported_file_smooth.target_path);
 }
 
 const testExportPNGDetails = struct {

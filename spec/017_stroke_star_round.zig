@@ -4,9 +4,9 @@ const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "017_stroke_star_round.png";
+pub const filename = "017_stroke_star_round";
 
-pub fn render(alloc: mem.Allocator) !z2d.Surface {
+pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -16,6 +16,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineWidth(10); // Minimum width to properly detect round joins (until we get AA)
     context.setLineJoin(.round);
+    context.setAntiAlias(aa_mode);
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();

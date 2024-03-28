@@ -4,6 +4,10 @@ const testing = @import("std").testing;
 
 const pixelpkg = @import("pixel.zig");
 
+// The scale factor used for super-sample anti-aliasing. Any functionality
+// using the downsample method in a surface should import this value.
+pub const supersample_scale = 4;
+
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
     image_surface_rgb,
@@ -333,19 +337,19 @@ fn ImageSurface(comptime T: type) type {
         /// called when finished with the surface, which invalidates it, after
         /// which it should not be used.
         pub fn downsample(self: *ImageSurface(T)) !ImageSurface(T) {
-            const factor = 4; // TODO: Allow parameterization
-            const height = self.height / factor;
-            const width = self.width / factor;
+            const scale = supersample_scale;
+            const height = self.height / scale;
+            const width = self.width / scale;
             const buf = try self.alloc.alloc(T, height * width);
             @memset(buf, mem.zeroes(T));
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels = [_]T{mem.zeroes(T)} ** (factor * factor);
-                    for (0..factor) |i| {
-                        for (0..factor) |j| {
-                            const idx = (y * factor + i) * self.width + (x * factor + j);
-                            pixels[i * factor + j] = self.buf[idx];
+                    var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
+                    for (0..scale) |i| {
+                        for (0..scale) |j| {
+                            const idx = (y * scale + i) * self.width + (x * scale + j);
+                            pixels[i * scale + j] = self.buf[idx];
                         }
                     }
                     buf[y * width + x] = T.average(&pixels);

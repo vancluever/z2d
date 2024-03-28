@@ -69,7 +69,7 @@ fn paintDirect(
                 edge_list.items[start_idx + 1],
             );
 
-            for (start_x..end_x + 1) |x| {
+            for (start_x..end_x) |x| {
                 // TODO: Add pixel-by-pixel compositing to this (src-over).
                 // This comes at a cost of course, but will be correct for the
                 // expectations of paint operations when working with the alpha
@@ -92,7 +92,7 @@ fn paintComposite(
     pattern: patternpkg.Pattern,
     fill_rule: options.FillRule,
 ) !void {
-    const scale: f64 = 4; // TODO: Parameterize this
+    const scale: f64 = surfacepkg.supersample_scale;
     var polygon_list = try plot(alloc, nodes, scale);
     defer polygon_list.deinit();
 

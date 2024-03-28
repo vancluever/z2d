@@ -1,4 +1,5 @@
 const std = @import("std");
+const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -75,6 +76,11 @@ pub const Polygon = struct {
         var edge_list = std.ArrayList(PolygonEdge).init(self.alloc);
         defer edge_list.deinit();
 
+        // We take our line measurements at the middle of the line; this helps
+        // "break the tie" with lines that fall exactly on point boundaries.
+        debug.assert(@floor(line_y) == line_y);
+        const line_y_middle = line_y + 0.5;
+
         // Get the corners
         const corners = self.corners.items;
         // Last index, to compare against current index
@@ -82,7 +88,9 @@ pub const Polygon = struct {
         for (0..corners.len) |cur_idx| {
             const last_y = corners[last_idx].y;
             const cur_y = corners[cur_idx].y;
-            if (cur_y < line_y and last_y >= line_y or cur_y >= line_y and last_y < line_y) {
+            if (cur_y < line_y_middle and last_y >= line_y_middle or
+                cur_y >= line_y_middle and last_y < line_y_middle)
+            {
                 const last_x = corners[last_idx].x;
                 const cur_x = corners[cur_idx].x;
                 try edge_list.append(edge: {
@@ -91,7 +99,9 @@ pub const Polygon = struct {
                     // or:
                     //
                     // x(y) = (y - y0) / (y1 - y0) * (x1 - x0) + x0
-                    const edge_x = (line_y - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x;
+                    const edge_x = @round(
+                        (line_y_middle - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x,
+                    );
                     break :edge .{
                         .x = @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(edge_x)))),
                         // Apply the edge direction to the winding number.

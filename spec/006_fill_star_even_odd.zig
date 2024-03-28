@@ -7,9 +7,9 @@ const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "006_fill_star_even_odd.png";
+pub const filename = "006_fill_star_even_odd";
 
-pub fn render(alloc: mem.Allocator) !z2d.Surface {
+pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -18,6 +18,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
     try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setFillRule(.even_odd);
+    context.setAntiAlias(aa_mode);
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
