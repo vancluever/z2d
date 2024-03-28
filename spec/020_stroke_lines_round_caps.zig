@@ -222,6 +222,10 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     pixel = .{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } }; // Red
     try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineWidth(1);
+    // TODO: this is currently needed for pixelated tests to ensure that the
+    // hairline shows up on certain angles (seemingly horizontal/vert). We need
+    // to catch degenerate cases like this and force a non-rounded cap.
+    context.setLineCap(.butt);
 
     try path.stroke();
 
