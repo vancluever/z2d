@@ -1,5 +1,6 @@
 const std = @import("std");
 const debug = @import("std").debug;
+const heap = @import("std").heap;
 const mem = @import("std").mem;
 
 const nodepkg = @import("nodes.zig");
@@ -92,8 +93,12 @@ fn paintComposite(
     pattern: patternpkg.Pattern,
     fill_rule: options.FillRule,
 ) !void {
+    var arena = heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
     const scale: f64 = surfacepkg.supersample_scale;
-    var polygon_list = try plot(alloc, nodes, scale);
+    var polygon_list = try plot(arena_alloc, nodes, scale);
     defer polygon_list.deinit();
 
     const mask_sfc = sfc_m: {
@@ -109,7 +114,7 @@ fn paintComposite(
 
         const scaled_sfc = try surfacepkg.Surface.init(
             .image_surface_alpha8,
-            alloc,
+            arena_alloc,
             mask_width,
             mask_height,
         );
@@ -169,7 +174,7 @@ fn paintComposite(
         // painted gradient).
         .opaque_pattern => try surfacepkg.Surface.initPixel(
             pixelpkg.RGBA.copySrc(try pattern.getPixel(1, 1)).asPixel(),
-            alloc,
+            arena_alloc,
             width,
             height,
         ),
