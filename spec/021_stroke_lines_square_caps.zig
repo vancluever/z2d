@@ -12,7 +12,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
     var context = z2d.DrawContext.init(sfc);
-    comptime var pixel: z2d.Pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
+    var pixel: z2d.Pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
     try context.setPattern(z2d.Pattern.initOpaque(pixel));
     context.setLineCap(.square);
     context.setLineWidth(20);
@@ -23,12 +23,12 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
 
     // sub-canvas dimensions
     const sub_canvas_width = width / 4;
-    comptime var sub_canvas_height = height / 3;
+    var sub_canvas_height: f64 = height / 3;
 
     // Down and to the right
     const margin = 30;
-    comptime var x_offset = 0;
-    comptime var y_offset = 0;
+    var x_offset: f64 = 0;
+    var y_offset: f64 = 0;
     try path.moveTo(.{
         .x = x_offset + margin,
         .y = y_offset + margin,

@@ -445,7 +445,7 @@ fn ImageSurface(comptime T: type) type {
 
 test "ImageSurface, init, deinit" {
     const sfc_T = ImageSurface(pixelpkg.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 10, 20);
+    var sfc = try sfc_T.init(testing.allocator, 10, 20, null);
     defer sfc.deinit();
 
     try testing.expectEqual(20, sfc.height);
@@ -461,7 +461,7 @@ test "ImageSurface, init, deinit" {
 
 test "ImageSurface, getPixel" {
     const sfc_T = ImageSurface(pixelpkg.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 20, 10);
+    var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
     defer sfc.deinit();
 
     {
@@ -483,7 +483,7 @@ test "ImageSurface, getPixel" {
 
 test "ImageSurface, putPixel" {
     const sfc_T = ImageSurface(pixelpkg.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 20, 10);
+    var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
     defer sfc.deinit();
 
     const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
