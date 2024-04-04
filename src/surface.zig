@@ -13,6 +13,14 @@ pub const SurfaceType = enum {
     image_surface_rgb,
     image_surface_rgba,
     image_surface_alpha8,
+
+    fn toPixelType(self: SurfaceType) !type {
+        return switch (self) {
+            .image_surface_rgb => pixelpkg.RGB,
+            .image_surface_rgba => pixelpkg.RGBA,
+            .image_surface_alpha8 => pixelpkg.Alpha8,
+        };
+    }
 };
 
 /// Represents an interface as a union of the pixel formats.
@@ -33,22 +41,11 @@ pub const Surface = union(SurfaceType) {
         height: u32,
     ) !Surface {
         switch (surface_type) {
-            .image_surface_rgb => {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+            inline else => |t| {
+                const pt = try t.toPixelType();
+                const sfc = try alloc.create(ImageSurface(pt));
                 errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height, null);
-                return sfc.asSurfaceInterface();
-            },
-            .image_surface_rgba => {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height, null);
-                return sfc.asSurfaceInterface();
-            },
-            .image_surface_alpha8 => {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.Alpha8));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.Alpha8).init(alloc, width, height, null);
+                sfc.* = try ImageSurface(pt).init(alloc, width, height, null);
                 return sfc.asSurfaceInterface();
             },
         }
@@ -65,22 +62,10 @@ pub const Surface = union(SurfaceType) {
         height: u32,
     ) !Surface {
         switch (initial_px) {
-            .rgb => |px| {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.RGB));
+            inline else => |px| {
+                const sfc = try alloc.create(ImageSurface(@TypeOf(px)));
                 errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGB).init(alloc, width, height, px);
-                return sfc.asSurfaceInterface();
-            },
-            .rgba => |px| {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.RGBA));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.RGBA).init(alloc, width, height, px);
-                return sfc.asSurfaceInterface();
-            },
-            .alpha8 => |px| {
-                const sfc = try alloc.create(ImageSurface(pixelpkg.Alpha8));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pixelpkg.Alpha8).init(alloc, width, height, px);
+                sfc.* = try ImageSurface(@TypeOf(px)).init(alloc, width, height, px);
                 return sfc.asSurfaceInterface();
             },
         }
@@ -96,15 +81,7 @@ pub const Surface = union(SurfaceType) {
         // this internally, but I think it's important to make the
         // distinction).
         switch (self) {
-            SurfaceType.image_surface_rgb => |s| {
-                s.deinit();
-                s.alloc.destroy(s);
-            },
-            SurfaceType.image_surface_rgba => |s| {
-                s.deinit();
-                s.alloc.destroy(s);
-            },
-            SurfaceType.image_surface_alpha8 => |s| {
+            inline else => |s| {
                 s.deinit();
                 s.alloc.destroy(s);
             },
@@ -121,20 +98,9 @@ pub const Surface = union(SurfaceType) {
         // Our initialization process is the same here as init, since we are
         // creating a new surface for the downsampled copy.
         switch (self) {
-            .image_surface_rgb => |s| {
-                const sfc = try s.alloc.create(ImageSurface(pixelpkg.RGB));
-                errdefer s.alloc.destroy(sfc);
-                sfc.* = try s.downsample();
-                return sfc.asSurfaceInterface();
-            },
-            .image_surface_rgba => |s| {
-                const sfc = try s.alloc.create(ImageSurface(pixelpkg.RGBA));
-                errdefer s.alloc.destroy(sfc);
-                sfc.* = try s.downsample();
-                return sfc.asSurfaceInterface();
-            },
-            .image_surface_alpha8 => |s| {
-                const sfc = try s.alloc.create(ImageSurface(pixelpkg.Alpha8));
+            inline else => |s, tag| {
+                const pt = try tag.toPixelType();
+                const sfc = try s.alloc.create(ImageSurface(pt));
                 errdefer s.alloc.destroy(sfc);
                 sfc.* = try s.downsample();
                 return sfc.asSurfaceInterface();
@@ -147,9 +113,7 @@ pub const Surface = union(SurfaceType) {
     /// of the destination are ignored.
     pub fn srcOver(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
         return switch (dst) {
-            SurfaceType.image_surface_rgb => |s| s.srcOver(src, dst_x, dst_y),
-            SurfaceType.image_surface_rgba => |s| s.srcOver(src, dst_x, dst_y),
-            SurfaceType.image_surface_alpha8 => |s| s.srcOver(src, dst_x, dst_y),
+            inline else => |s| s.srcOver(src, dst_x, dst_y),
         };
     }
 
@@ -158,63 +122,49 @@ pub const Surface = union(SurfaceType) {
     /// of the destination are ignored.
     pub fn dstIn(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
         return switch (dst) {
-            SurfaceType.image_surface_rgb => |s| s.dstIn(src, dst_x, dst_y),
-            SurfaceType.image_surface_rgba => |s| s.dstIn(src, dst_x, dst_y),
-            SurfaceType.image_surface_alpha8 => |s| s.dstIn(src, dst_x, dst_y),
+            inline else => |s| s.dstIn(src, dst_x, dst_y),
         };
     }
 
     /// Gets the width of the surface.
     pub fn getWidth(self: Surface) u32 {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| s.width,
-            SurfaceType.image_surface_rgba => |s| s.width,
-            SurfaceType.image_surface_alpha8 => |s| s.width,
+            inline else => |s| s.width,
         };
     }
 
     /// Gets the height of the surface.
     pub fn getHeight(self: Surface) u32 {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| s.height,
-            SurfaceType.image_surface_rgba => |s| s.height,
-            SurfaceType.image_surface_alpha8 => |s| s.height,
+            inline else => |s| s.height,
         };
     }
 
     /// Gets the pixel format of the surface.
     pub fn getFormat(self: Surface) pixelpkg.Format {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| @TypeOf(s.*).format,
-            SurfaceType.image_surface_rgba => |s| @TypeOf(s.*).format,
-            SurfaceType.image_surface_alpha8 => |s| @TypeOf(s.*).format,
+            inline else => |s| @TypeOf(s.*).format,
         };
     }
 
     /// Gets the pixel data at the co-ordinates specified.
     pub fn getPixel(self: Surface, x: u32, y: u32) !pixelpkg.Pixel {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| s.getPixel(x, y),
-            SurfaceType.image_surface_rgba => |s| s.getPixel(x, y),
-            SurfaceType.image_surface_alpha8 => |s| s.getPixel(x, y),
+            inline else => |s| s.getPixel(x, y),
         };
     }
 
     /// Puts a single pixel at the x and y co-ordinates.
     pub fn putPixel(self: Surface, x: u32, y: u32, px: pixelpkg.Pixel) !void {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| s.putPixel(x, y, px),
-            SurfaceType.image_surface_rgba => |s| s.putPixel(x, y, px),
-            SurfaceType.image_surface_alpha8 => |s| s.putPixel(x, y, px),
+            inline else => |s| s.putPixel(x, y, px),
         };
     }
 
     /// Replaces the surface with the supplied pixel.
     pub fn paintPixel(self: Surface, px: pixelpkg.Pixel) !void {
         return switch (self) {
-            SurfaceType.image_surface_rgb => |s| s.paintPixel(px),
-            SurfaceType.image_surface_rgba => |s| s.paintPixel(px),
-            SurfaceType.image_surface_alpha8 => |s| s.paintPixel(px),
+            inline else => |s| s.paintPixel(px),
         };
     }
 };
