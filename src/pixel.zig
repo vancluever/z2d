@@ -415,7 +415,7 @@ pub const Pixel = union(Format) {
     /// All pixel types with color channels are expected to be pre-multiplied.
     pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
         return switch (dst) {
-            inline else => |d| d.srcOver(src),
+            inline else => |d| d.srcOver(src).asPixel(),
         };
     }
 
@@ -425,7 +425,7 @@ pub const Pixel = union(Format) {
     /// All pixel types with color channels are expected to be pre-multiplied.
     pub fn dstIn(dst: Pixel, src: Pixel) Pixel {
         return switch (dst) {
-            inline else => |d| d.dstIn(src),
+            inline else => |d| d.dstIn(src).asPixel(),
         };
     }
 };

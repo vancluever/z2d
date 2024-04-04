@@ -31,6 +31,7 @@ const _020_stroke_lines_round_caps = @import("020_stroke_lines_round_caps.zig");
 const _021_stroke_lines_square_caps = @import("021_stroke_lines_square_caps.zig");
 const _022_stroke_lines_butt_caps = @import("022_stroke_lines_butt_caps.zig");
 const _023_smile_alpha_mask = @import("023_smile_alpha_mask.zig");
+const _024_fill_triangle_direct_cross_format = @import("024_fill_triangle_direct_cross_format.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -61,6 +62,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _021_stroke_lines_square_caps);
     try pathExportRun(alloc, _022_stroke_lines_butt_caps);
     try compositorExportRun(alloc, _023_smile_alpha_mask);
+    try pathExportRun(alloc, _024_fill_triangle_direct_cross_format);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -155,6 +157,10 @@ test "022_stroke_lines_butt_caps" {
 
 test "023_smile_alpha_mask" {
     try compositorTestRun(testing.allocator, _023_smile_alpha_mask);
+}
+
+test "024_fill_triangle_direct_cross_format" {
+    try pathTestRun(testing.allocator, _024_fill_triangle_direct_cross_format);
 }
 
 //////////////////////////////////////////////////////////////////////////////

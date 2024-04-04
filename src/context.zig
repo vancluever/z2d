@@ -92,17 +92,6 @@ pub const DrawContext = struct {
     /// Returns an error if the pattern would be incompatible for the context's
     /// underlying surface.
     pub fn setPattern(self: *DrawContext, pattern: patternpkg.Pattern) !void {
-        // Do a simple check for now on the underlying pattern interface to
-        // check for compatibility, with the surface's pixel format. This will
-        // eventually change so that we can do transformations, etc.
-        switch (pattern) {
-            .opaque_pattern => |p| {
-                if (p.pixel != self.surface.getFormat()) {
-                    return error.IncompatiblePatternForSurface;
-                }
-            },
-        }
-
         self.pattern = pattern;
     }
 

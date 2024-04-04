@@ -75,8 +75,9 @@ fn paintDirect(
                 // This comes at a cost of course, but will be correct for the
                 // expectations of paint operations when working with the alpha
                 // channel.
-                const pixel = try pattern.getPixel(@intCast(x), @intCast(y));
-                try surface.putPixel(@intCast(x), @intCast(y), pixel);
+                const src = try pattern.getPixel(@intCast(x), @intCast(y));
+                const dst = try surface.getPixel(@intCast(x), @intCast(y));
+                try surface.putPixel(@intCast(x), @intCast(y), dst.srcOver(src));
             }
 
             start_idx += 2;
