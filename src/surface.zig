@@ -220,18 +220,12 @@ test "Surface interface" {
 fn ImageSurface(comptime T: type) type {
     return struct {
         /// The underlying allocator, only needed for deinit.
-        ///
-        /// private: should not be edited directly.
         alloc: mem.Allocator,
 
         /// The width of the surface.
-        ///
-        /// read-only: should not be modified directly.
         width: u32,
 
         /// The height of the surface.
-        ///
-        /// read-only: should not be modified directly.
         height: u32,
 
         /// The underlying buffer. It's not advised to access this directly,
@@ -240,13 +234,9 @@ fn ImageSurface(comptime T: type) type {
         /// The buffer is initialized to height * width on initialization,
         /// de-allocated on deinit, and is invalid to use after the latter is
         /// called.
-        ///
-        /// private: should not be edited directly.
         buf: []T,
 
         /// The format for the surface.
-        ///
-        /// read-only: should not be modified directly.
         pub const format: pixelpkg.Format = T.format;
 
         /// Initializes a surface. deinit should be called when finished with

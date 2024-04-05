@@ -16,24 +16,16 @@ pub const PathOperation = struct {
     alloc: mem.Allocator,
 
     /// A reference back to the draw context.
-    ///
-    /// private: should not be edited directly.
     context: *contextpkg.DrawContext,
 
     /// The set of path nodes.
-    ///
-    /// private: should not be edited directly.
     nodes: std.ArrayList(nodepkg.PathNode),
 
     /// The start of the current subpath when working with drawing
     /// operations.
-    ///
-    /// private: should not be edited directly.
     last_move_point: ?units.Point = null,
 
     /// The current point when working with drawing operations.
-    ///
-    /// private: should not be edited directly.
     current_point: ?units.Point = null,
 
     /// Initializes the path operation. Call deinit to release the node

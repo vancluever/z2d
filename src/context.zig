@@ -9,13 +9,9 @@ const options = @import("options.zig");
 /// data, and is used to dispatch drawing operations.
 pub const DrawContext = struct {
     /// The underlying pattern.
-    ///
-    /// read-only: should not be modified directly.
     pattern: patternpkg.Pattern,
 
     /// The underlying surface.
-    ///
-    /// read-only: should not be modified directly.
     surface: surfacepkg.Surface,
 
     /// The current line width for drawing operations, in pixels. This value is
@@ -23,18 +19,12 @@ pub const DrawContext = struct {
     /// effect during path construction.
     ///
     /// The default line width is 2.0.
-    ///
-    /// read-write: can be set directly, but can also be set with setLineWidth.
     line_width: f64,
 
     /// The current fill rule. The default is non_zero.
-    ///
-    /// read-write: can be set directly, but can also be set with setFillRule.
     fill_rule: options.FillRule,
 
     /// The current line join style for stroking. The default is miter.
-    ///
-    /// read-write: can be set directly, but can also be set with setLineJoin.
     line_join_mode: options.JoinMode,
 
     /// The limit when line_join_mode is set to miter; in this mode, this value
@@ -50,19 +40,13 @@ pub const DrawContext = struct {
     /// The default limit is 10.0, which sets the cutoff at ~11 degrees. A
     /// miter limit of 2.0 translates to ~60 degrees, and a limit of 1.414
     /// translates to ~90 degrees.
-    ///
-    /// read-write: can be set directly, but can also be set with setMiterLimit.
     miter_limit: f64,
 
     /// The current line cap rule. The default is butt.
-    ///
-    /// read-write: can be set directly, but can also be set with setLineCap.
     line_cap_mode: options.CapMode,
 
     /// The current anti-aliasing mode. The default is the aptly-named
     /// "default" anti-aliasing mode.
-    ///
-    /// read-write: can be set directly, but can also be set with setAntiAlias.
     anti_aliasing_mode: options.AntiAliasMode,
 
     /// Creates a new context with the underlying surface.

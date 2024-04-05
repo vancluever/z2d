@@ -17,13 +17,9 @@ const Polygon = @import("path.zig").Polygon;
 /// "spline").
 pub const Spline = struct {
     /// The polygon that we add points to.
-    ///
-    /// private: should not be edited directly.
     polygon: *Polygon,
 
     /// The spline knots.
-    ///
-    /// private: should not be edited directly.
     knots: Knots,
 
     /// Given a set of four points, initialize a Spline with the four knots at
