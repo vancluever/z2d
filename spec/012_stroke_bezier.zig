@@ -14,10 +14,15 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const height = 300;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.DrawContext.init(sfc);
-    const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(z2d.Pattern.initOpaque(pixel));
-    context.setAntiAlias(aa_mode);
+    var context: z2d.DrawContext = .{
+        .surface = sfc,
+        .pattern = .{
+            .opaque_pattern = .{
+                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
+            },
+        },
+        .anti_aliasing_mode = aa_mode,
+    };
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
@@ -30,7 +35,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.curveTo(p1, p2, p3);
     try path.stroke();
 
-    context.setLineWidth(6);
+    context.line_width = 6;
     path.reset();
     p0 = .{ .x = 19, .y = 199 };
     p1 = .{ .x = 89, .y = 24 };
@@ -40,7 +45,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.curveTo(p1, p2, p3);
     try path.stroke();
 
-    context.setLineWidth(10);
+    context.line_width = 10;
     path.reset();
     p0 = .{ .x = 19, .y = 249 };
     p1 = .{ .x = 89, .y = 49 };

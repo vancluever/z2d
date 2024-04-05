@@ -12,11 +12,17 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const height = 560;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.DrawContext.init(sfc);
-    const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(z2d.Pattern.initOpaque(pixel));
-    context.setLineWidth(5);
-    context.setAntiAlias(aa_mode);
+    var context: z2d.DrawContext = .{
+        .surface = sfc,
+        .pattern = .{
+            .opaque_pattern = .{
+                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
+            },
+        },
+        .line_width = 5,
+        .line_join_mode = .bevel,
+        .anti_aliasing_mode = aa_mode,
+    };
 
     // We render 5 different paths with increasingly smaller angles to help
     // detect the miter threshold. Our base case (the first), however, uses all
@@ -27,7 +33,6 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     // NOTE: This does not test the default miter limit as it's very high (11
     // degrees, and you can see how tight even 18 degrees is here). We probably
     // should test the default limit via unit testing.
-    context.setLineJoin(.bevel);
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
 
@@ -105,8 +110,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
 
     // First miter case, rendered with a miter limit of 4. Note that this is
     // the SVG default (see the MDN page quoted higher up).
-    context.setLineJoin(.miter);
-    context.setMiterLimit(4);
+    context.line_join_mode = .miter;
+    context.miter_limit = 4;
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
@@ -182,8 +187,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.stroke();
 
     // Second miter case, rendered with a miter limit of 1
-    context.setLineJoin(.miter);
-    context.setMiterLimit(1);
+    context.miter_limit = 1;
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
@@ -259,8 +263,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.stroke();
 
     // Third miter case, rendered with a miter limit of 6
-    context.setLineJoin(.miter);
-    context.setMiterLimit(6);
+    context.miter_limit = 6;
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
@@ -336,8 +339,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.stroke();
 
     // Fourth miter case, rendered with a miter limit of 10 (default)
-    context.setLineJoin(.miter);
-    context.setMiterLimit(10);
+    context.miter_limit = 10;
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)

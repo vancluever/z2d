@@ -12,10 +12,15 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const height = 400;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.DrawContext.init(sfc);
-    const pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(z2d.Pattern.initOpaque(pixel));
-    context.setAntiAlias(aa_mode);
+    var context: z2d.DrawContext = .{
+        .surface = sfc,
+        .pattern = .{
+            .opaque_pattern = .{
+                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
+            },
+        },
+        .anti_aliasing_mode = aa_mode,
+    };
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();

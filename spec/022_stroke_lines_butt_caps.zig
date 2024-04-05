@@ -11,12 +11,17 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const height = 600;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.DrawContext.init(sfc);
-    var pixel: z2d.Pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }; // White on black
-    try context.setPattern(z2d.Pattern.initOpaque(pixel));
-    context.setLineCap(.butt); // Default but it's explicit here
-    context.setLineWidth(20);
-    context.setAntiAlias(aa_mode);
+    var context: z2d.DrawContext = .{
+        .surface = sfc,
+        .pattern = .{
+            .opaque_pattern = .{
+                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
+            },
+        },
+        .line_cap_mode = .butt,
+        .line_width = 20,
+        .anti_aliasing_mode = aa_mode,
+    };
 
     var path = z2d.PathOperation.init(alloc, &context);
     defer path.deinit();
@@ -218,9 +223,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
 
     // We draw a hairline in the same path in red - this validates how the caps
     // and joins are aligned.
-    pixel = .{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } }; // Red
-    try context.setPattern(z2d.Pattern.initOpaque(pixel));
-    context.setLineWidth(1);
+    context.pattern.opaque_pattern.pixel = .{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } }; // Red
+    context.line_width = 1;
 
     try path.stroke();
 
