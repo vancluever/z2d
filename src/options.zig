@@ -31,8 +31,8 @@ pub const FillRule = enum {
 pub const JoinMode = enum {
     /// Lines are joined with a miter (pointed end).
     ///
-    /// See the miter_limit setting in DrawContext for details on how to
-    /// control the miter limit.
+    /// See the miter_limit setting in Context for details on how to control
+    /// the miter limit.
     miter,
 
     /// Lines are joined with a circle centered around the middle point of the
