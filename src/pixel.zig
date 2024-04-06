@@ -1,6 +1,44 @@
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+/// Format descriptors for the pixel formats supported by the library:
+///
+/// * .rgba is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
+/// * .rgb is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
+/// * .alpha8 is an 8-bit alpha channel.
+pub const Format = enum {
+    rgb,
+    rgba,
+    alpha8,
+};
+
+/// Represents an interface as a union of the pixel formats.
+pub const Pixel = union(Format) {
+    rgb: RGB,
+    rgba: RGBA,
+    alpha8: Alpha8,
+
+    /// Returns the result of compositing the supplied pixel over this one (the
+    /// Porter-Duff src-over operation).
+    ///
+    /// All pixel types with color channels are expected to be pre-multiplied.
+    pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
+        return switch (dst) {
+            inline else => |d| d.srcOver(src).asPixel(),
+        };
+    }
+
+    /// Returns the result of compositing the supplied pixel in this one (the
+    /// Porter-Duff dst-in operation).
+    ///
+    /// All pixel types with color channels are expected to be pre-multiplied.
+    pub fn dstIn(dst: Pixel, src: Pixel) Pixel {
+        return switch (dst) {
+            inline else => |d| d.dstIn(src).asPixel(),
+        };
+    }
+};
+
 /// Describes a 24-bit RGB format.
 pub const RGB = packed struct(u32) {
     r: u8,
@@ -388,44 +426,6 @@ pub const Alpha8 = packed struct(u8) {
             .alpha8 => |s| .{
                 .a = @intCast(d.a * s.a / 255),
             },
-        };
-    }
-};
-
-/// Format descriptors for the pixel formats supported by the library:
-///
-/// * .rgba is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
-/// * .rgb is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
-/// * .alpha8 is an 8-bit alpha channel.
-pub const Format = enum {
-    rgb,
-    rgba,
-    alpha8,
-};
-
-/// Represents an interface as a union of the pixel formats.
-pub const Pixel = union(Format) {
-    rgb: RGB,
-    rgba: RGBA,
-    alpha8: Alpha8,
-
-    /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
-    pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
-        return switch (dst) {
-            inline else => |d| d.srcOver(src).asPixel(),
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
-    pub fn dstIn(dst: Pixel, src: Pixel) Pixel {
-        return switch (dst) {
-            inline else => |d| d.dstIn(src).asPixel(),
         };
     }
 };
