@@ -11,13 +11,6 @@ const units = @import("../units.zig");
 /// A path drawing operation, resulting in a rendered complex set of one or
 /// more polygons.
 pub const PathOperation = struct {
-    // The allocator used for various tasks over the lifetime of the operation
-    // (filling, stroking, etc).
-    alloc: mem.Allocator,
-
-    /// A reference back to the draw context.
-    context: *contextpkg.DrawContext,
-
     /// The set of path nodes.
     nodes: std.ArrayList(nodepkg.PathNode),
 
@@ -30,10 +23,8 @@ pub const PathOperation = struct {
 
     /// Initializes the path operation. Call deinit to release the node
     /// list when complete.
-    pub fn init(alloc: mem.Allocator, context: *contextpkg.DrawContext) PathOperation {
+    pub fn init(alloc: mem.Allocator) PathOperation {
         return .{
-            .alloc = alloc,
-            .context = context,
             .nodes = std.ArrayList(nodepkg.PathNode).init(alloc),
         };
     }
@@ -66,7 +57,6 @@ pub const PathOperation = struct {
             }
         }
 
-        try self.checkBounds(point);
         try self.nodes.append(.{ .move_to = .{ .point = point } });
         self.last_move_point = point;
         self.current_point = point;
@@ -77,7 +67,6 @@ pub const PathOperation = struct {
     ///
     /// Acts as a moveTo instead if there is no current point.
     pub fn lineTo(self: *PathOperation, point: units.Point) !void {
-        try self.checkBounds(point);
         if (self.current_point == null) return self.moveTo(point);
         try self.nodes.append(.{ .line_to = .{ .point = point } });
         self.current_point = point;
@@ -88,9 +77,6 @@ pub const PathOperation = struct {
     ///
     /// It is an error to call this without a current point.
     pub fn curveTo(self: *PathOperation, p1: units.Point, p2: units.Point, p3: units.Point) !void {
-        try self.checkBounds(p1);
-        try self.checkBounds(p2);
-        try self.checkBounds(p3);
         if (self.current_point == null) return error.PathOperationCurveToNoCurrentPoint;
         try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
         self.current_point = p3;
@@ -110,57 +96,15 @@ pub const PathOperation = struct {
         } else return error.PathOperationClosePathNoLastMovePoint;
     }
 
-    /// Runs a fill operation on this current path and any subpaths. If the
-    /// current path is not closed, closes it first.
+    /// Returns true if the path set is currently closed, meaning that the last
+    /// operation called on the path set was closePath.
     ///
-    /// This is a no-op if there are no nodes.
-    pub fn fill(self: *PathOperation) !void {
-        if (self.nodes.items.len == 0) return;
-        if (unclosed: {
-            if (self.nodes.items.len < 2) break :unclosed true;
-            if (self.nodes.items[self.nodes.items.len - 2] != .close_path or
-                self.nodes.items[self.nodes.items.len - 1] != .move_to)
-            {
-                break :unclosed true;
-            }
-            break :unclosed false;
-        }) try self.closePath();
-        try fillerpkg.fill(
-            self.alloc,
-            &self.nodes,
-            self.context.surface,
-            self.context.pattern,
-            self.context.anti_aliasing_mode,
-            self.context.fill_rule,
-        );
-    }
-
-    /// Strokes a line.
-    ///
-    /// This is a no-op if there are no nodes.
-    pub fn stroke(self: *PathOperation) !void {
-        if (self.nodes.items.len == 0) return;
-        // TODO: make thickness configurable
-        try strokerpkg.stroke(
-            self.alloc,
-            &self.nodes,
-            self.context.surface,
-            self.context.pattern,
-            self.context.anti_aliasing_mode,
-            self.context.line_width,
-            self.context.line_join_mode,
-            self.context.miter_limit,
-            self.context.line_cap_mode,
-        );
-    }
-
-    fn checkBounds(self: *PathOperation, point: units.Point) !void {
-        if (point.x < 0 or
-            point.y < 0 or
-            point.x >= @as(f64, @floatFromInt(self.context.surface.getWidth())) or
-            point.y >= @as(f64, @floatFromInt(self.context.surface.getHeight())))
-        {
-            return error.PointOutOfRange;
-        }
+    /// This is used to check if a path is closed for filling, so it does not
+    /// guarantee that any sub-paths that may be part of the set that precede
+    /// the current path are closed as well.
+    pub fn closed(self: *const PathOperation) bool {
+        const len = self.nodes.items.len;
+        if (len < 2) return false;
+        return self.nodes.items[len - 2] == .close_path and self.nodes.items[len - 1] == .move_to;
     }
 };

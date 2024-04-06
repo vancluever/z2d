@@ -24,7 +24,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc, &context);
+    var path = z2d.PathOperation.init(alloc);
     defer path.deinit();
 
     // sub-canvas dimensions
@@ -220,14 +220,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .y = y_offset + margin,
     });
 
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     // We draw a hairline in the same path in red - this validates how the caps
     // and joins are aligned.
     context.pattern.opaque_pattern.pixel = .{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } }; // Red
     context.line_width = 1;
 
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     return sfc;
 }
