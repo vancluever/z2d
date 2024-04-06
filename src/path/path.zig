@@ -1,11 +1,7 @@
 const std = @import("std");
 const mem = @import("std").mem;
 
-const contextpkg = @import("../context.zig");
-const fillerpkg = @import("filler.zig");
-const strokerpkg = @import("stroker.zig");
 const nodepkg = @import("nodes.zig");
-const polypkg = @import("polygon.zig");
 const units = @import("../units.zig");
 
 /// A path drawing operation, resulting in a rendered complex set of one or
