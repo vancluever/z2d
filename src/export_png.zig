@@ -5,7 +5,7 @@ const io = @import("std").io;
 const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
-const surfacepkg = @import("surface.zig");
+const surface = @import("surface.zig");
 
 const native_endian = builtin.cpu.arch.endian();
 
@@ -14,10 +14,10 @@ const native_endian = builtin.cpu.arch.endian();
 /// This is currently a very rudimentary export with default zlib
 /// compression and no pixel filtering.
 pub fn writeToPNGFile(
-    surface: surfacepkg.Surface,
+    sfc: surface.Surface,
     filename: []const u8,
 ) !void {
-    switch (surface.getFormat()) {
+    switch (sfc.getFormat()) {
         .rgba, .rgb => {},
         else => {
             return error.UnsupportedSurfaceFormat;
@@ -30,8 +30,8 @@ pub fn writeToPNGFile(
 
     // Write out magic header, and various chunks.
     try writePNGMagic(file);
-    try writePNGIHDR(file, surface);
-    try writePNGIDATStream(file, surface);
+    try writePNGIHDR(file, sfc);
+    try writePNGIDATStream(file, sfc);
     try writePNGIEND(file);
 }
 
@@ -42,18 +42,18 @@ fn writePNGMagic(file: fs.File) !void {
 }
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: fs.File, surface: surfacepkg.Surface) !void {
+fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
-    mem.writeInt(u32, &width, surface.getWidth(), .big);
-    mem.writeInt(u32, &height, surface.getHeight(), .big);
-    const depth: u8 = switch (surface.getFormat()) {
+    mem.writeInt(u32, &width, sfc.getWidth(), .big);
+    mem.writeInt(u32, &height, sfc.getHeight(), .big);
+    const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
         else => unreachable,
     };
-    const color_type: u8 = switch (surface.getFormat()) {
+    const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
         else => unreachable,
@@ -81,7 +81,7 @@ fn writePNGIHDR(file: fs.File, surface: surfacepkg.Surface) !void {
 /// compression and no pixel filtering.
 fn writePNGIDATStream(
     file: fs.File,
-    surface: surfacepkg.Surface,
+    sfc: surface.Surface,
 ) !void {
     // Set a minimum remaining buffer size here that is reasonably
     // sized. This may not be 100% scientific, but should account for
@@ -118,7 +118,7 @@ fn writePNGIDATStream(
     // add scanline filtering headers were appropriate.
     //
     // Iterate through each line to encode as scanlines.
-    for (0..surface.getHeight()) |y| {
+    for (0..sfc.getHeight()) |y| {
         // Initialize a buffer for pixels. TODO: This will need to
         // increase/change when/if we add additional pixel filtering
         // algorithms.
@@ -128,9 +128,9 @@ fn writePNGIDATStream(
         var pixel_buffer = [_]u8{0} ** 5;
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
-        for (0..surface.getWidth()) |x| {
+        for (0..sfc.getWidth()) |x| {
             nbytes += written: {
-                switch (try surface.getPixel(@intCast(x), @intCast(y))) {
+                switch (try sfc.getPixel(@intCast(x), @intCast(y))) {
                     // PNG writes out numbers big-endian, but *only numbers larger
                     // than a byte*. This means we need to handle each pixel format
                     // slightly differently with how we swap around bytes, etc.

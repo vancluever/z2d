@@ -1,14 +1,16 @@
-//! Path is the "path builder" type; it holds a single path or a set of sub-paths. The difference between the two mainly has to do with the layout of move_to nodes within the node set
+//! Path is the "path builder" type, and contains a set of sub-paths used for
+//! filling or stroking operations.
 const std = @import("std");
 const mem = @import("std").mem;
 
-const nodepkg = @import("nodes.zig");
 const units = @import("../units.zig");
+
+const PathNode = @import("nodes.zig").PathNode;
 
 const Path = @This();
 
 /// The underlying node set.
-nodes: std.ArrayList(nodepkg.PathNode),
+nodes: std.ArrayList(PathNode),
 
 /// The start of the current subpath when working with drawing operations.
 initial_point: ?units.Point = null,
@@ -20,7 +22,7 @@ current_point: ?units.Point = null,
 /// complete.
 pub fn init(alloc: mem.Allocator) Path {
     return .{
-        .nodes = std.ArrayList(nodepkg.PathNode).init(alloc),
+        .nodes = std.ArrayList(PathNode).init(alloc),
     };
 }
 

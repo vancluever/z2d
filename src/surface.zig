@@ -2,7 +2,7 @@ const mem = @import("std").mem;
 const meta = @import("std").meta;
 const testing = @import("std").testing;
 
-const pixelpkg = @import("pixel.zig");
+const pixel = @import("pixel.zig");
 
 // The scale factor used for super-sample anti-aliasing. Any functionality
 // using the downsample method in a surface should import this value.
@@ -16,18 +16,18 @@ pub const SurfaceType = enum {
 
     fn toPixelType(self: SurfaceType) !type {
         return switch (self) {
-            .image_surface_rgb => pixelpkg.RGB,
-            .image_surface_rgba => pixelpkg.RGBA,
-            .image_surface_alpha8 => pixelpkg.Alpha8,
+            .image_surface_rgb => pixel.RGB,
+            .image_surface_rgba => pixel.RGBA,
+            .image_surface_alpha8 => pixel.Alpha8,
         };
     }
 };
 
 /// Represents an interface as a union of the pixel formats.
 pub const Surface = union(SurfaceType) {
-    image_surface_rgb: *ImageSurface(pixelpkg.RGB),
-    image_surface_rgba: *ImageSurface(pixelpkg.RGBA),
-    image_surface_alpha8: *ImageSurface(pixelpkg.Alpha8),
+    image_surface_rgb: *ImageSurface(pixel.RGB),
+    image_surface_rgba: *ImageSurface(pixel.RGBA),
+    image_surface_alpha8: *ImageSurface(pixel.Alpha8),
 
     /// Initializes a surface of the specific type. The surface buffer is
     /// initialized with the zero value for the pixel type (typically black or
@@ -56,7 +56,7 @@ pub const Surface = union(SurfaceType) {
     ///
     /// The caller owns the memory, so make sure to call deinit to release it.
     pub fn initPixel(
-        initial_px: pixelpkg.Pixel,
+        initial_px: pixel.Pixel,
         alloc: mem.Allocator,
         width: u32,
         height: u32,
@@ -141,28 +141,28 @@ pub const Surface = union(SurfaceType) {
     }
 
     /// Gets the pixel format of the surface.
-    pub fn getFormat(self: Surface) pixelpkg.Format {
+    pub fn getFormat(self: Surface) pixel.Format {
         return switch (self) {
             inline else => |s| @TypeOf(s.*).format,
         };
     }
 
     /// Gets the pixel data at the co-ordinates specified.
-    pub fn getPixel(self: Surface, x: u32, y: u32) !pixelpkg.Pixel {
+    pub fn getPixel(self: Surface, x: u32, y: u32) !pixel.Pixel {
         return switch (self) {
             inline else => |s| s.getPixel(x, y),
         };
     }
 
     /// Puts a single pixel at the x and y co-ordinates.
-    pub fn putPixel(self: Surface, x: u32, y: u32, px: pixelpkg.Pixel) !void {
+    pub fn putPixel(self: Surface, x: u32, y: u32, px: pixel.Pixel) !void {
         return switch (self) {
             inline else => |s| s.putPixel(x, y, px),
         };
     }
 
     /// Replaces the surface with the supplied pixel.
-    pub fn paintPixel(self: Surface, px: pixelpkg.Pixel) !void {
+    pub fn paintPixel(self: Surface, px: pixel.Pixel) !void {
         return switch (self) {
             inline else => |s| s.paintPixel(px),
         };
@@ -181,7 +181,7 @@ test "Surface interface" {
         try testing.expectEqual(.rgb, sfc_if.getFormat());
 
         // putPixel
-        const rgb: pixelpkg.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
+        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
         const x: u32 = 7;
         const y: u32 = 5;
@@ -203,7 +203,7 @@ test "Surface interface" {
         try testing.expectEqual(.rgba, sfc_if.getFormat());
 
         // putPixel
-        const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         const pix_rgba = rgba.asPixel();
         const x: u32 = 7;
         const y: u32 = 5;
@@ -237,7 +237,7 @@ fn ImageSurface(comptime T: type) type {
         buf: []T,
 
         /// The format for the surface.
-        pub const format: pixelpkg.Format = T.format;
+        pub const format: pixel.Format = T.format;
 
         /// Initializes a surface. deinit should be called when finished with
         /// the surface, which invalidates it, after which it should not be
@@ -321,7 +321,7 @@ fn ImageSurface(comptime T: type) type {
         fn composite(
             dst: *ImageSurface(T),
             src: Surface,
-            op: fn (T, pixelpkg.Pixel) T,
+            op: fn (T, pixel.Pixel) T,
             dst_x: u32,
             dst_y: u32,
         ) !void {
@@ -358,7 +358,7 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Gets the pixel data at the co-ordinates specified.
-        pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixelpkg.Pixel {
+        pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixel.Pixel {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
                 return error.OutOfRange;
@@ -368,7 +368,7 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Puts a single pixel at the x and y co-ordinates.
-        pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixelpkg.Pixel) !void {
+        pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixel.Pixel) !void {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
                 return error.OutOfRange;
@@ -377,30 +377,30 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Replaces the surface with the supplied pixel.
-        pub fn paintPixel(self: *ImageSurface(T), px: pixelpkg.Pixel) !void {
+        pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) !void {
             @memset(self.buf, try T.fromPixel(px));
         }
     };
 }
 
 test "ImageSurface, init, deinit" {
-    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 10, 20, null);
     defer sfc.deinit();
 
     try testing.expectEqual(20, sfc.height);
     try testing.expectEqual(10, sfc.width);
     try testing.expectEqual(200, sfc.buf.len);
-    try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixelpkg.RGBA);
+    try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
     try testing.expectEqualSlices(
-        pixelpkg.RGBA,
+        pixel.RGBA,
         sfc.buf,
-        &[_]pixelpkg.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
+        &[_]pixel.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
     );
 }
 
 test "ImageSurface, getPixel" {
-    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
     defer sfc.deinit();
 
@@ -408,9 +408,9 @@ test "ImageSurface, getPixel" {
         // OK
         const x: u32 = 7;
         const y: u32 = 5;
-        const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         sfc.buf[y * 20 + x] = rgba;
-        const expected_px: pixelpkg.Pixel = .{ .rgba = rgba };
+        const expected_px: pixel.Pixel = .{ .rgba = rgba };
         try testing.expectEqual(expected_px, sfc.getPixel(x, y));
     }
 
@@ -422,11 +422,11 @@ test "ImageSurface, getPixel" {
 }
 
 test "ImageSurface, putPixel" {
-    const sfc_T = ImageSurface(pixelpkg.RGBA);
+    const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
     defer sfc.deinit();
 
-    const rgba: pixelpkg.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+    const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
     const pix_rgba = rgba.asPixel();
 
     {
@@ -446,7 +446,7 @@ test "ImageSurface, putPixel" {
 
     {
         // Error, incorrect pixel type
-        const rgb: pixelpkg.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
+        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
         try testing.expectError(error.InvalidPixelFormat, sfc.putPixel(1, 1, pix_rgb));
     }
