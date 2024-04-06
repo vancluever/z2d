@@ -20,7 +20,7 @@ pub fn writeToPNGFile(
     switch (surface.getFormat()) {
         .rgba, .rgb => {},
         else => {
-            return error.WriteToPNGFileUnsupportedSurfaceFormat;
+            return error.UnsupportedSurfaceFormat;
         },
     }
 
@@ -158,7 +158,7 @@ fn writePNGIDATStream(
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
                 // If we didn't actually write everything, it's an error.
-                return error.WritePNGIDATBytesWrittenMismatch;
+                return error.BytesWrittenMismatch;
             }
 
             // New remaining at this point is current_remaining - what was

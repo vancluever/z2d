@@ -33,7 +33,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     // NOTE: This does not test the default miter limit as it's very high (11
     // degrees, and you can see how tight even 18 degrees is here). We probably
     // should test the default limit via unit testing.
-    var path = z2d.PathOperation.init(alloc);
+    var path = z2d.Path.init(alloc);
     defer path.deinit();
 
     // Line 1, ~130 degrees (dx = 70)

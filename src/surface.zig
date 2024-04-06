@@ -361,7 +361,7 @@ fn ImageSurface(comptime T: type) type {
         pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixelpkg.Pixel {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
-                return error.ImageSurfaceGetPixelOutOfRange;
+                return error.OutOfRange;
             }
 
             return self.buf[self.width * y + x].asPixel();
@@ -371,7 +371,7 @@ fn ImageSurface(comptime T: type) type {
         pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixelpkg.Pixel) !void {
             // Check that data is in the surface range. If not, return an error.
             if (x >= self.width or y >= self.height) {
-                return error.ImageSurfacePutPixelOutOfRange;
+                return error.OutOfRange;
             }
             self.buf[self.width * y + x] = try T.fromPixel(px);
         }
@@ -416,8 +416,8 @@ test "ImageSurface, getPixel" {
 
     {
         // Error, out of bounds
-        try testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(20, 9));
-        try testing.expectError(error.ImageSurfaceGetPixelOutOfRange, sfc.getPixel(19, 10));
+        try testing.expectError(error.OutOfRange, sfc.getPixel(20, 9));
+        try testing.expectError(error.OutOfRange, sfc.getPixel(19, 10));
     }
 }
 
@@ -440,8 +440,8 @@ test "ImageSurface, putPixel" {
 
     {
         // Error, out of bounds
-        try testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(20, 9, pix_rgba));
-        try testing.expectError(error.ImageSurfacePutPixelOutOfRange, sfc.putPixel(19, 10, pix_rgba));
+        try testing.expectError(error.OutOfRange, sfc.putPixel(20, 9, pix_rgba));
+        try testing.expectError(error.OutOfRange, sfc.putPixel(19, 10, pix_rgba));
     }
 
     {

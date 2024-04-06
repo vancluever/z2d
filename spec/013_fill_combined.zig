@@ -22,7 +22,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc);
+    var path = z2d.Path.init(alloc);
     defer path.deinit();
 
     // sub-canvas dimensions
@@ -34,7 +34,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.moveTo(.{ .x = 0 + margin, .y = 0 + margin });
     try path.lineTo(.{ .x = sub_canvas_width - margin - 1, .y = 0 + margin });
     try path.lineTo(.{ .x = sub_canvas_width / 2 - 1, .y = sub_canvas_height - margin - 1 });
-    try path.closePath();
+    try path.close();
 
     // Square
     margin = 50;
@@ -43,7 +43,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = 0 + margin });
     try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = sub_canvas_height - margin - 1 });
     try path.lineTo(.{ .x = x_offset + margin, .y = sub_canvas_height - margin - 1 });
-    try path.closePath();
+    try path.close();
 
     // Trapezoid
     const trapezoid_margin_top = 59;
@@ -54,7 +54,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.lineTo(.{ .x = x_offset + sub_canvas_width - trapezoid_margin_top - 1, .y = 0 + trapezoid_margin_y });
     try path.lineTo(.{ .x = x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, .y = sub_canvas_height - trapezoid_margin_y - 1 });
     try path.lineTo(.{ .x = x_offset + trapezoid_margin_bottom, .y = sub_canvas_height - trapezoid_margin_y - 1 });
-    try path.closePath();
+    try path.close();
 
     // Star
     margin = 13;
@@ -69,7 +69,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.lineTo(.{ .x = x_offset + margin, .y = y_offset + margin * y_scale }); // 5
     try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = y_offset + margin * y_scale }); // 2
     try path.lineTo(.{ .x = x_offset + margin * x_scale, .y = y_offset + sub_canvas_height - margin - 1 }); // 4
-    try path.closePath();
+    try path.close();
 
     // Bezier
     x_offset += sub_canvas_width;
@@ -79,7 +79,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const p3: z2d.Point = .{ .x = x_offset + 186, .y = y_offset + 166 };
     try path.moveTo(p0);
     try path.curveTo(p1, p2, p3);
-    try path.closePath();
+    try path.close();
 
     try context.fill(alloc, path);
 

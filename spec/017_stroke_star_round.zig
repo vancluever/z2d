@@ -23,7 +23,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc);
+    var path = z2d.Path.init(alloc);
     defer path.deinit();
 
     const margin = 20;
@@ -36,7 +36,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     try path.lineTo(.{ .x = 0 + margin, .y = 0 + margin * y_scale }); // 5
     try path.lineTo(.{ .x = width - margin - 1, .y = 0 + margin * y_scale }); // 2
     try path.lineTo(.{ .x = 0 + margin * x_scale, .y = height - margin - 1 }); // 4
-    try path.closePath();
+    try path.close();
 
     try context.stroke(alloc, path);
 

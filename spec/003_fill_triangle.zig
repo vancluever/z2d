@@ -21,14 +21,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc);
+    var path = z2d.Path.init(alloc);
     defer path.deinit();
 
     const margin = 10;
     try path.moveTo(.{ .x = 0 + margin, .y = 0 + margin });
     try path.lineTo(.{ .x = width - margin - 1, .y = 0 + margin });
     try path.lineTo(.{ .x = width / 2 - 1, .y = height - margin - 1 });
-    try path.closePath();
+    try path.close();
 
     try context.fill(alloc, path);
 

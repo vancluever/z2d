@@ -7,6 +7,7 @@ pub usingnamespace @import("pattern.zig");
 pub usingnamespace @import("units.zig");
 
 pub const Context = @import("context.zig");
+pub const Path = @import("path/path.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

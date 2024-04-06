@@ -22,7 +22,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc);
+    var path = z2d.Path.init(alloc);
     defer path.deinit();
 
     // sub-canvas dimensions

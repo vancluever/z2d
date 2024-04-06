@@ -6,7 +6,7 @@ const patternpkg = @import("pattern.zig");
 const strokerpkg = @import("path/stroker.zig");
 const surfacepkg = @import("surface.zig");
 
-const PathOperation = @import("path/path.zig").PathOperation;
+const Path = @import("path/path.zig");
 
 /// The draw context, which connects patterns to surfaces, holds other state
 /// data, and is used to dispatch drawing operations.
@@ -63,9 +63,9 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 /// the set must be closed.
 ///
 /// This is a no-op if there are no nodes.
-pub fn fill(self: *Context, alloc: mem.Allocator, path: PathOperation) !void {
+pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
     if (path.nodes.items.len == 0) return;
-    if (!path.closed()) return error.PathNotClosed;
+    if (!path.isClosed()) return error.PathNotClosed;
 
     try fillerpkg.fill(
         alloc,
@@ -80,15 +80,15 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: PathOperation) !void {
 /// Strokes a line for the path(s) in the supplied set.
 ///
 /// The behavior of open and closed paths are different for stroking. For
-/// open paths (not explicitly closed with closePath), the start and the
+/// open paths (not explicitly closed with close), the start and the
 /// end of the line are capped using the style set in line_cap_mode (e.g.,
 /// butt, round, or square). For closed paths (ones that *are* explicitly
-/// closed with closePath), the intersection joint of the start and end are
+/// closed with close), the intersection joint of the start and end are
 /// instead joined, along with all other joints along the way, with the
 /// style set in line_join_mode (e.g., miter, round, or bevel).
 ///
 /// This is a no-op if there are no nodes.
-pub fn stroke(self: *Context, alloc: mem.Allocator, path: PathOperation) !void {
+pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
     if (path.nodes.items.len == 0) return;
     try strokerpkg.stroke(
         alloc,
