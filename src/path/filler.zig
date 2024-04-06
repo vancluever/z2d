@@ -15,7 +15,7 @@ const options = @import("../options.zig");
 /// Runs a fill operation on this current path and any subpaths.
 pub fn fill(
     alloc: mem.Allocator,
-    nodes: *std.ArrayList(nodepkg.PathNode),
+    nodes: std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
     anti_aliasing_mode: options.AntiAliasMode,
@@ -46,7 +46,7 @@ pub fn fill(
 /// use AA.
 fn paintDirect(
     alloc: mem.Allocator,
-    nodes: *std.ArrayList(nodepkg.PathNode),
+    nodes: std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
     fill_rule: options.FillRule,
@@ -89,7 +89,7 @@ fn paintDirect(
 /// implemented).
 fn paintComposite(
     alloc: mem.Allocator,
-    nodes: *std.ArrayList(nodepkg.PathNode),
+    nodes: std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
     fill_rule: options.FillRule,
@@ -189,7 +189,7 @@ fn paintComposite(
 /// list suitable for filling.
 ///
 /// The caller owns the polygon list and needs to call deinit on it.
-fn plot(alloc: mem.Allocator, nodes: *std.ArrayList(nodepkg.PathNode), scale: f64) !polypkg.PolygonList {
+fn plot(alloc: mem.Allocator, nodes: std.ArrayList(nodepkg.PathNode), scale: f64) !polypkg.PolygonList {
     var polygon_list = polypkg.PolygonList.init(alloc, scale);
     errdefer polygon_list.deinit();
 

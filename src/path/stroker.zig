@@ -14,7 +14,7 @@ const options = @import("../options.zig");
 /// then filled.
 pub fn stroke(
     alloc: mem.Allocator,
-    nodes: *std.ArrayList(nodepkg.PathNode),
+    nodes: std.ArrayList(nodepkg.PathNode),
     surface: surfacepkg.Surface,
     pattern: patternpkg.Pattern,
     anti_aliasing_mode: options.AntiAliasMode,
@@ -45,5 +45,5 @@ pub fn stroke(
         if (thickness >= 2) cap_mode else .butt,
     );
     defer stroke_nodes.deinit();
-    try fillerpkg.fill(alloc, &stroke_nodes, surface, pattern, anti_aliasing_mode, .non_zero);
+    try fillerpkg.fill(alloc, stroke_nodes, surface, pattern, anti_aliasing_mode, .non_zero);
 }

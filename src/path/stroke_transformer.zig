@@ -22,7 +22,7 @@ const default_tolerance: f64 = 0.1;
 /// called on it.
 pub fn transform(
     alloc: mem.Allocator,
-    nodes: *std.ArrayList(nodepkg.PathNode),
+    nodes: std.ArrayList(nodepkg.PathNode),
     thickness: f64,
     join_mode: options.JoinMode,
     miter_limit: f64,
@@ -52,7 +52,7 @@ pub fn transform(
 const StrokeNodeIterator = struct {
     alloc: mem.Allocator,
     thickness: f64,
-    items: *const std.ArrayList(nodepkg.PathNode),
+    items: std.ArrayList(nodepkg.PathNode),
     index: usize = 0,
     join_mode: options.JoinMode,
     miter_limit: f64,

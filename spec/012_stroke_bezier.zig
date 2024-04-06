@@ -24,7 +24,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc, &context);
+    var path = z2d.PathOperation.init(alloc);
     defer path.deinit();
 
     var p0: z2d.Point = .{ .x = 19, .y = 149 };
@@ -33,7 +33,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     var p3: z2d.Point = .{ .x = 279, .y = 149 };
     try path.moveTo(p0);
     try path.curveTo(p1, p2, p3);
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     context.line_width = 6;
     path.reset();
@@ -43,7 +43,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     p3 = .{ .x = 279, .y = 199 };
     try path.moveTo(p0);
     try path.curveTo(p1, p2, p3);
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     context.line_width = 10;
     path.reset();
@@ -53,7 +53,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     p3 = .{ .x = 279, .y = 249 };
     try path.moveTo(p0);
     try path.curveTo(p1, p2, p3);
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     return sfc;
 }

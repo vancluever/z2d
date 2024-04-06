@@ -22,7 +22,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.PathOperation.init(alloc, &context);
+    var path = z2d.PathOperation.init(alloc);
     defer path.deinit();
 
     try path.moveTo(.{
@@ -261,7 +261,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
         .y = y_offset + 60,
     });
 
-    try path.stroke();
+    try context.stroke(alloc, path);
 
     return sfc;
 }
