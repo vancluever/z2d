@@ -5,7 +5,7 @@ const mem = @import("std").mem;
 
 const units = @import("units.zig");
 
-const PathNode = @import("path/nodes.zig").PathNode;
+const PathNode = @import("internal/nodes.zig").PathNode;
 
 const Path = @This();
 

@@ -4,8 +4,8 @@ const mem = @import("std").mem;
 
 const options = @import("options.zig");
 
-const fillerpkg = @import("path/filler.zig");
-const strokerpkg = @import("path/stroker.zig");
+const fillerpkg = @import("internal/filler.zig");
+const strokerpkg = @import("internal/stroker.zig");
 
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
