@@ -1,24 +1,25 @@
+//! Context is the draw context, which connects patterns to surfaces, holds
+//! other state data, and is used to dispatch drawing operations.
 const mem = @import("std").mem;
 
-const fillerpkg = @import("path/filler.zig");
 const options = @import("options.zig");
-const patternpkg = @import("pattern.zig");
+
+const fillerpkg = @import("path/filler.zig");
 const strokerpkg = @import("path/stroker.zig");
-const surfacepkg = @import("surface.zig");
 
-const Path = @import("path/path.zig");
+const Path = @import("Path.zig");
+const Pattern = @import("pattern.zig").Pattern;
+const Surface = @import("surface.zig").Surface;
 
-/// The draw context, which connects patterns to surfaces, holds other state
-/// data, and is used to dispatch drawing operations.
 pub const Context = @This();
 
 /// The underlying surface.
-surface: surfacepkg.Surface,
+surface: Surface,
 
 /// The underlying pattern.
 ///
 /// The default pattern is RGBA opaque black.
-pattern: patternpkg.Pattern = .{
+pattern: Pattern = .{
     .opaque_pattern = .{
         .pixel = .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
     },
