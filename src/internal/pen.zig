@@ -6,14 +6,14 @@ const std = @import("std");
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-const units = @import("../units.zig");
-
 const Face = @import("face.zig");
+const Point = @import("../units.zig").Point;
+const Slope = @import("Slope.zig");
 
 const PenVertex = struct {
-    point: units.Point,
-    slope_cw: units.Slope,
-    slope_ccw: units.Slope,
+    point: Point,
+    slope_cw: Slope,
+    slope_ccw: Slope,
 };
 
 alloc: mem.Allocator,
@@ -97,11 +97,11 @@ pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
     for (0..num_vertices) |i| {
         const next = if (i >= num_vertices - 1) 0 else i + 1;
         const prev = if (i == 0) num_vertices - 1 else i - 1;
-        vertices.items[i].slope_cw = units.Slope.init(
+        vertices.items[i].slope_cw = Slope.init(
             vertices.items[prev].point,
             vertices.items[i].point,
         );
-        vertices.items[i].slope_ccw = units.Slope.init(
+        vertices.items[i].slope_ccw = Slope.init(
             vertices.items[i].point,
             vertices.items[next].point,
         );
@@ -123,8 +123,8 @@ pub fn deinit(self: *Pen) void {
 /// The caller owns the ArrayList and must call deinit on it.
 pub fn verticesForJoin(
     self: *Pen,
-    from_slope: units.Slope,
-    to_slope: units.Slope,
+    from_slope: Slope,
+    to_slope: Slope,
     clockwise: bool,
 ) !std.ArrayList(PenVertex) {
     var result = std.ArrayList(PenVertex).init(self.alloc);

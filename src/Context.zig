@@ -1,5 +1,7 @@
 //! Context is the draw context, which connects patterns to surfaces, holds
 //! other state data, and is used to dispatch drawing operations.
+const Context = @This();
+
 const mem = @import("std").mem;
 
 const options = @import("options.zig");
@@ -8,8 +10,6 @@ const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Painter = @import("internal/Painter.zig");
 const Surface = @import("surface.zig").Surface;
-
-pub const Context = @This();
 
 /// The underlying surface.
 surface: Surface,

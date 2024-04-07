@@ -1,10 +1,10 @@
 //! Painter represents the internal code related to painting (fill/stroke/etc).
+const Painter = @This();
+
 const std = @import("std");
 const debug = @import("std").debug;
 const heap = @import("std").heap;
 const mem = @import("std").mem;
-
-const Painter = @This();
 
 // TODO: remove these after cleanup
 const stroke_transformer = @import("stroke_transformer.zig");

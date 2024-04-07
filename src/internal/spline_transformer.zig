@@ -11,7 +11,6 @@
 const std = @import("std");
 const mem = @import("std").mem;
 
-const polypkg = @import("polygon.zig");
 const nodepkg = @import("nodes.zig");
 const units = @import("../units.zig");
 

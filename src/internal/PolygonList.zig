@@ -1,5 +1,7 @@
 //! Represents a list of Polygons, intended for multiple subpath operations.
 //! Passes most operations down to Polygon.
+const PolygonList = @This();
+
 const std = @import("std");
 const debug = @import("std").debug;
 const math = @import("std").math;
@@ -9,8 +11,6 @@ const FillRule = @import("../options.zig").FillRule;
 const PathNode = @import("nodes.zig").PathNode;
 const Point = @import("../units.zig").Point;
 const spline = @import("spline_transformer.zig");
-
-const PolygonList = @This();
 
 alloc: mem.Allocator,
 items: std.ArrayList(*Polygon),
@@ -199,7 +199,7 @@ const Edge = struct {
     x: u32,
     dir: i2,
 
-    fn sort_asc(_: void, a: @This(), b: @This()) bool {
+    fn sort_asc(_: void, a: Edge, b: Edge) bool {
         return a.x < b.x;
     }
 };

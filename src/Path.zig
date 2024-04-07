@@ -1,13 +1,13 @@
 //! Path is the "path builder" type, and contains a set of sub-paths used for
 //! filling or stroking operations.
+const Path = @This();
+
 const std = @import("std");
 const mem = @import("std").mem;
 
 const units = @import("units.zig");
 
 const PathNode = @import("internal/nodes.zig").PathNode;
-
-const Path = @This();
 
 /// The underlying node set.
 nodes: std.ArrayList(PathNode),

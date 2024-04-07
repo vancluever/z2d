@@ -17,9 +17,10 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 const options = @import("../options.zig");
-const units = @import("../units.zig");
 
 const Pen = @import("pen.zig");
+const Point = @import("../units.zig").Point;
+const Slope = @import("Slope.zig");
 
 const FaceType = enum {
     horizontal,
@@ -28,20 +29,20 @@ const FaceType = enum {
 };
 
 type: FaceType,
-p0: units.Point,
-p1: units.Point,
+p0: Point,
+p1: Point,
 width: f64,
-slope: units.Slope,
+slope: Slope,
 offset_x: f64,
 offset_y: f64,
-p0_cw: units.Point,
-p0_ccw: units.Point,
-p1_cw: units.Point,
-p1_ccw: units.Point,
+p0_cw: Point,
+p0_ccw: Point,
+p1_cw: Point,
+p1_ccw: Point,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-pub fn init(p0: units.Point, p1: units.Point, thickness: f64) Face {
-    const slope = units.Slope.init(p0, p1);
+pub fn init(p0: Point, p1: Point, thickness: f64) Face {
+    const slope = Slope.init(p0, p1);
     const half_width = thickness / 2;
     if (slope.dy == 0) {
         return .{
@@ -92,7 +93,7 @@ pub fn init(p0: units.Point, p1: units.Point, thickness: f64) Face {
     };
 }
 
-pub fn intersectOuter(in: Face, out: Face) units.Point {
+pub fn intersectOuter(in: Face, out: Face) Point {
     return switch (in.type) {
         .horizontal => intersectHorizontal(in, out, true),
         .vertical => intersectVertical(in, out, true),
@@ -100,7 +101,7 @@ pub fn intersectOuter(in: Face, out: Face) units.Point {
     };
 }
 
-pub fn intersectInner(in: Face, out: Face) units.Point {
+pub fn intersectInner(in: Face, out: Face) Point {
     return switch (in.type) {
         .horizontal => intersectHorizontal(in, out, false),
         .vertical => intersectVertical(in, out, false),
@@ -108,11 +109,11 @@ pub fn intersectInner(in: Face, out: Face) units.Point {
     };
 }
 
-fn intersectHorizontal(in: Face, out: Face, outer: bool) units.Point {
+fn intersectHorizontal(in: Face, out: Face, outer: bool) Point {
     const points: struct {
-        in_p1: units.Point,
-        out_p1: units.Point,
-        in_p0: units.Point,
+        in_p1: Point,
+        out_p1: Point,
+        in_p0: Point,
     } = if (outer) .{
         .in_p1 = in.p1_ccw,
         .out_p1 = out.p1_ccw,
@@ -146,11 +147,11 @@ fn intersectHorizontal(in: Face, out: Face, outer: bool) units.Point {
     }
 }
 
-fn intersectVertical(in: Face, out: Face, outer: bool) units.Point {
+fn intersectVertical(in: Face, out: Face, outer: bool) Point {
     const points: struct {
-        in_p0: units.Point,
-        out_p1: units.Point,
-        in_p1: units.Point,
+        in_p0: Point,
+        out_p1: Point,
+        in_p1: Point,
     } = if (outer) .{
         .in_p0 = in.p0_ccw,
         .out_p1 = out.p1_ccw,
@@ -184,11 +185,11 @@ fn intersectVertical(in: Face, out: Face, outer: bool) units.Point {
     }
 }
 
-fn intersectDiagonal(in: Face, out: Face, outer: bool) units.Point {
+fn intersectDiagonal(in: Face, out: Face, outer: bool) Point {
     const points: struct {
-        in_p0: units.Point,
-        out_p1: units.Point,
-        in_p1: units.Point,
+        in_p0: Point,
+        out_p1: Point,
+        in_p1: Point,
     } = if (outer) .{
         .in_p0 = in.p0_ccw,
         .out_p1 = out.p1_ccw,
@@ -222,7 +223,7 @@ fn intersectDiagonal(in: Face, out: Face, outer: bool) units.Point {
     }
 }
 
-fn intersect(p0: units.Point, p1: units.Point, m0: f64, m1: f64) units.Point {
+fn intersect(p0: Point, p1: Point, m0: f64, m1: f64) Point {
     // We do line-line intersection, based on the following equation:
     //
     // self.dy/self.dx + self.p0.y == other.dy/other.dx + other.p0.y
@@ -254,7 +255,7 @@ pub fn cap_p0(
     cap_mode: options.CapMode,
     clockwise: bool,
     tolerance: f64,
-) !std.ArrayList(units.Point) {
+) !std.ArrayList(Point) {
     const reversed = init(self.p1, self.p0, self.width);
     return reversed.cap(
         alloc,
@@ -270,7 +271,7 @@ pub fn cap_p1(
     cap_mode: options.CapMode,
     clockwise: bool,
     tolerance: f64,
-) !std.ArrayList(units.Point) {
+) !std.ArrayList(Point) {
     return self.cap(
         alloc,
         cap_mode,
@@ -285,8 +286,8 @@ fn cap(
     cap_mode: options.CapMode,
     clockwise: bool,
     tolerance: f64,
-) !std.ArrayList(units.Point) {
-    var result = std.ArrayList(units.Point).init(alloc);
+) !std.ArrayList(Point) {
+    var result = std.ArrayList(Point).init(alloc);
     errdefer result.deinit();
 
     switch (cap_mode) {
@@ -306,7 +307,7 @@ fn cap(
 
 fn capButt(
     self: Face,
-    result: *std.ArrayList(units.Point),
+    result: *std.ArrayList(Point),
     clockwise: bool,
 ) !void {
     if (clockwise) {
@@ -320,7 +321,7 @@ fn capButt(
 
 fn capSquare(
     self: Face,
-    result: *std.ArrayList(units.Point),
+    result: *std.ArrayList(Point),
     clockwise: bool,
 ) !void {
     if (clockwise) {
@@ -351,7 +352,7 @@ fn capSquare(
 fn capRound(
     self: Face,
     alloc: mem.Allocator,
-    result: *std.ArrayList(units.Point),
+    result: *std.ArrayList(Point),
     clockwise: bool,
     tolerance: f64,
 ) !void {
