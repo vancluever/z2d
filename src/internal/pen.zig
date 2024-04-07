@@ -7,7 +7,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 const Face = @import("face.zig");
-const Point = @import("../units.zig").Point;
+const Point = @import("../Point.zig");
 const Slope = @import("Slope.zig");
 
 const PenVertex = struct {

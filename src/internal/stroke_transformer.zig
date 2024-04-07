@@ -5,11 +5,11 @@ const mem = @import("std").mem;
 
 const options = @import("../options.zig");
 const spline = @import("spline_transformer.zig");
-const units = @import("../units.zig");
 const nodepkg = @import("nodes.zig");
 
 const Face = @import("face.zig");
 const Pen = @import("pen.zig");
+const Point = @import("../Point.zig");
 
 // TODO: remove this when we make tolerance configurable
 const default_tolerance: f64 = 0.1;
@@ -280,10 +280,10 @@ const StrokeNodeIteratorState = struct {
 
     joins: JoinSet,
     closed: bool = false,
-    initial_point_: ?units.Point = null,
-    first_line_point_: ?units.Point = null,
-    current_point_: ?units.Point = null,
-    last_point_: ?units.Point = null,
+    initial_point_: ?Point = null,
+    first_line_point_: ?Point = null,
+    current_point_: ?Point = null,
+    last_point_: ?Point = null,
 
     fn init(
         alloc: mem.Allocator,
@@ -489,8 +489,8 @@ const JoinSet = struct {
 };
 
 const Join = struct {
-    outer: std.ArrayList(units.Point),
-    inner: units.Point,
+    outer: std.ArrayList(Point),
+    inner: Point,
     clockwise: bool,
 
     fn deinit(self: *const Join) void {
@@ -503,14 +503,14 @@ const Join = struct {
 /// (e.g., p0 -> p1, p1 -> p2).
 fn join(
     alloc: mem.Allocator,
-    p0: units.Point,
-    p1: units.Point,
-    p2: units.Point,
+    p0: Point,
+    p1: Point,
+    p2: Point,
     thickness: f64,
     mode: options.JoinMode,
     miter_limit: f64,
 ) !Join {
-    var outer_joins = std.ArrayList(units.Point).init(alloc);
+    var outer_joins = std.ArrayList(Point).init(alloc);
     errdefer outer_joins.deinit();
 
     const in = Face.init(p0, p1, thickness);

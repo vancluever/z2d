@@ -9,7 +9,7 @@ const mem = @import("std").mem;
 
 const FillRule = @import("../options.zig").FillRule;
 const PathNode = @import("nodes.zig").PathNode;
-const Point = @import("../units.zig").Point;
+const Point = @import("../Point.zig");
 const spline = @import("spline_transformer.zig");
 
 alloc: mem.Allocator,

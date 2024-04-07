@@ -5,18 +5,17 @@ const Path = @This();
 const std = @import("std");
 const mem = @import("std").mem;
 
-const units = @import("units.zig");
-
 const PathNode = @import("internal/nodes.zig").PathNode;
+const Point = @import("Point.zig");
 
 /// The underlying node set.
 nodes: std.ArrayList(PathNode),
 
 /// The start of the current subpath when working with drawing operations.
-initial_point: ?units.Point = null,
+initial_point: ?Point = null,
 
 /// The current point when working with drawing operations.
-current_point: ?units.Point = null,
+current_point: ?Point = null,
 
 /// Initializes the path operation. Call deinit to release the node list when
 /// complete.
@@ -40,7 +39,7 @@ pub fn reset(self: *Path) void {
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Path, point: units.Point) !void {
+pub fn moveTo(self: *Path, point: Point) !void {
     // If our last operation is a move_to to this point, this is a no-op.
     // This ensures that there's no duplicates on things like explicit
     // definitions on close_path -> move_to (versus the implicit add in the
@@ -63,7 +62,7 @@ pub fn moveTo(self: *Path, point: units.Point) !void {
 /// the current point.
 ///
 /// Acts as a moveTo instead if there is no current point.
-pub fn lineTo(self: *Path, point: units.Point) !void {
+pub fn lineTo(self: *Path, point: Point) !void {
     if (self.current_point == null) return self.moveTo(point);
     try self.nodes.append(.{ .line_to = .{ .point = point } });
     self.current_point = point;
@@ -73,7 +72,7 @@ pub fn lineTo(self: *Path, point: units.Point) !void {
 /// the current point. The new current point is set to p3.
 ///
 /// It is an error to call this without a current point.
-pub fn curveTo(self: *Path, p1: units.Point, p2: units.Point, p3: units.Point) !void {
+pub fn curveTo(self: *Path, p1: Point, p2: Point, p3: Point) !void {
     if (self.current_point == null) return error.NoCurrentPoint;
     try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
     self.current_point = p3;

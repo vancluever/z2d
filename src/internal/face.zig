@@ -19,7 +19,7 @@ const mem = @import("std").mem;
 const options = @import("../options.zig");
 
 const Pen = @import("pen.zig");
-const Point = @import("../units.zig").Point;
+const Point = @import("../Point.zig");
 const Slope = @import("Slope.zig");
 
 const FaceType = enum {

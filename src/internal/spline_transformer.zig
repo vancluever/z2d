@@ -12,7 +12,7 @@ const std = @import("std");
 const mem = @import("std").mem;
 
 const nodepkg = @import("nodes.zig");
-const units = @import("../units.zig");
+const Point = @import("../Point.zig");
 
 /// Given a set of four points representing a bezier curve ("spline"),
 /// subdivide the curve into a series of line_to nodes.
@@ -25,10 +25,10 @@ const units = @import("../units.zig");
 /// called on it.
 pub fn transform(
     alloc: mem.Allocator,
-    a: units.Point,
-    b: units.Point,
-    c: units.Point,
-    d: units.Point,
+    a: Point,
+    b: Point,
+    c: Point,
+    d: Point,
     tolerance: f64,
 ) !std.ArrayList(nodepkg.PathNode) {
     var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
@@ -57,7 +57,7 @@ pub fn transform(
 fn decomposeInto(
     nodes: *std.ArrayList(nodepkg.PathNode),
     s1: *Knots,
-    start: units.Point,
+    start: Point,
     tolerance: f64,
 ) !void {
     if (s1.errorSq() < tolerance) {
@@ -84,10 +84,10 @@ fn decomposeInto(
 
 /// Represents knots on a spline.
 const Knots = struct {
-    a: units.Point,
-    b: units.Point,
-    c: units.Point,
-    d: units.Point,
+    a: Point,
+    b: Point,
+    c: Point,
+    d: Point,
 
     /// Returns an upper bound on the error (squared) that could result from
     /// approximating the spline as a line segment connecting the two
@@ -138,12 +138,12 @@ const Knots = struct {
     /// Casteljau labeling. Sets the current knot to the first half (A ->
     /// middle of BC), and returns the second half (middle of BC -> D).
     fn deCasteljau(self: *Knots) Knots {
-        const ab: units.Point = lerpHalf(self.a, self.b);
-        const bc: units.Point = lerpHalf(self.b, self.c);
-        const cd: units.Point = lerpHalf(self.c, self.d);
-        const abbc: units.Point = lerpHalf(ab, bc);
-        const bccd: units.Point = lerpHalf(bc, cd);
-        const final: units.Point = lerpHalf(abbc, bccd);
+        const ab: Point = lerpHalf(self.a, self.b);
+        const bc: Point = lerpHalf(self.b, self.c);
+        const cd: Point = lerpHalf(self.c, self.d);
+        const abbc: Point = lerpHalf(ab, bc);
+        const bccd: Point = lerpHalf(bc, cd);
+        const final: Point = lerpHalf(abbc, bccd);
 
         // Build the result first since we're swapping stuff in the original
         const result: Knots = .{
@@ -167,7 +167,7 @@ fn dotSq(comptime T: type, x: T, y: T) T {
     return x * x + y * y;
 }
 
-fn lerpHalf(a: units.Point, b: units.Point) units.Point {
+fn lerpHalf(a: Point, b: Point) Point {
     // The lerp is basically a + ((b - a) / 2), aka the middle of AB is half of
     // the difference between A and B.
     return .{
