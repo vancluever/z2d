@@ -1,8 +1,6 @@
 //! Represents a point in 2D space.
 const Point = @This();
 
-const math = @import("std").math;
-
 x: f64,
 y: f64,
 
