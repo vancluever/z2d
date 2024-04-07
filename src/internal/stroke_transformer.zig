@@ -7,8 +7,8 @@ const options = @import("../options.zig");
 const spline = @import("spline_transformer.zig");
 const nodepkg = @import("nodes.zig");
 
-const Face = @import("face.zig");
-const Pen = @import("pen.zig");
+const Face = @import("Face.zig");
+const Pen = @import("Pen.zig");
 const Point = @import("../Point.zig");
 
 // TODO: remove this when we make tolerance configurable

@@ -6,7 +6,7 @@ const std = @import("std");
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-const Face = @import("face.zig");
+const Face = @import("Face.zig");
 const Point = @import("../Point.zig");
 const Slope = @import("Slope.zig");
 

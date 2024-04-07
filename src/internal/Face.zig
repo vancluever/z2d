@@ -18,7 +18,7 @@ const mem = @import("std").mem;
 
 const options = @import("../options.zig");
 
-const Pen = @import("pen.zig");
+const Pen = @import("Pen.zig");
 const Point = @import("../Point.zig");
 const Slope = @import("Slope.zig");
 
