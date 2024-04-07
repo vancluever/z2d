@@ -4,11 +4,9 @@ const mem = @import("std").mem;
 
 const options = @import("options.zig");
 
-const fillerpkg = @import("internal/filler.zig");
-const strokerpkg = @import("internal/stroker.zig");
-
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
+const Painter = @import("internal/Painter.zig");
 const Surface = @import("surface.zig").Surface;
 
 pub const Context = @This();
@@ -67,15 +65,7 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
     if (path.nodes.items.len == 0) return;
     if (!path.isClosed()) return error.PathNotClosed;
-
-    try fillerpkg.fill(
-        alloc,
-        path.nodes,
-        self.surface,
-        self.pattern,
-        self.anti_aliasing_mode,
-        self.fill_rule,
-    );
+    try (Painter{ .context = self }).fill(alloc, path.nodes);
 }
 
 /// Strokes a line for the path(s) in the supplied set.
@@ -91,15 +81,5 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
     if (path.nodes.items.len == 0) return;
-    try strokerpkg.stroke(
-        alloc,
-        path.nodes,
-        self.surface,
-        self.pattern,
-        self.anti_aliasing_mode,
-        self.line_width,
-        self.line_join_mode,
-        self.miter_limit,
-        self.line_cap_mode,
-    );
+    try (Painter{ .context = self }).stroke(alloc, path.nodes);
 }
