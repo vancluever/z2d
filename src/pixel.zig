@@ -1,4 +1,3 @@
-const mem = @import("std").mem;
 const testing = @import("std").testing;
 
 /// Format descriptors for the pixel formats supported by the library:
@@ -78,7 +77,7 @@ pub const RGB = packed struct(u32) {
     ///
     /// The average of a zero-length slice is pure black.
     pub fn average(ps: []const RGB) RGB {
-        if (ps.len == 0) return mem.zeroes(RGB);
+        if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0 };
 
         var r: u32 = 0;
         var g: u32 = 0;
@@ -213,7 +212,7 @@ pub const RGBA = packed struct(u32) {
     ///
     /// The average of a zero-length slice is transparent black.
     pub fn average(ps: []const RGBA) RGBA {
-        if (ps.len == 0) return mem.zeroes(RGBA);
+        if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
         var r: u32 = 0;
         var g: u32 = 0;
@@ -369,7 +368,7 @@ pub const Alpha8 = packed struct(u8) {
     ///
     /// The average of a zero-length slice is transparent black.
     pub fn average(ps: []const Alpha8) Alpha8 {
-        if (ps.len == 0) return mem.zeroes(Alpha8);
+        if (ps.len == 0) return .{ .a = 0 };
 
         var a: u32 = 0;
 
