@@ -1,5 +1,5 @@
-/// A Pen represents a circular area designed for specific stroking operations,
-/// such as round joins and caps.
+//! A Pen represents a circular area designed for specific stroking operations,
+//! such as round joins and caps.
 const Pen = @This();
 
 const std = @import("std");
@@ -122,7 +122,7 @@ pub fn deinit(self: *Pen) void {
 ///
 /// The caller owns the ArrayList and must call deinit on it.
 pub fn verticesForJoin(
-    self: *Pen,
+    self: *const Pen,
     from_slope: Slope,
     to_slope: Slope,
     clockwise: bool,

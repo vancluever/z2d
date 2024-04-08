@@ -31,6 +31,9 @@ pub fn transform(
     var result = std.ArrayList(nodepkg.PathNode).init(alloc);
     errdefer result.deinit();
 
+    var pen = try Pen.init(alloc, thickness, default_tolerance);
+    defer pen.deinit();
+
     var it: StrokeNodeIterator = .{
         .alloc = alloc,
         .thickness = thickness,
@@ -38,6 +41,7 @@ pub fn transform(
         .join_mode = join_mode,
         .miter_limit = miter_limit,
         .cap_mode = cap_mode,
+        .pen = pen,
     };
 
     while (try it.next()) |x| {
@@ -57,6 +61,7 @@ const StrokeNodeIterator = struct {
     join_mode: options.JoinMode,
     miter_limit: f64,
     cap_mode: options.CapMode,
+    pen: Pen,
 
     pub fn next(it: *StrokeNodeIterator) !?std.ArrayList(nodepkg.PathNode) {
         debug.assert(it.index <= it.items.items.len);
@@ -70,6 +75,7 @@ const StrokeNodeIterator = struct {
             it.thickness,
             it.join_mode,
             it.miter_limit,
+            it.pen,
         );
         defer state.deinit();
 
@@ -132,6 +138,7 @@ const StrokeNodeIterator = struct {
                                 it.thickness,
                                 it.join_mode,
                                 it.miter_limit,
+                                it.pen,
                             );
                             defer start_join.deinit();
                             try result.append(.{ .move_to = .{ .point = start_join.outer.items[0] } });
@@ -170,11 +177,13 @@ const StrokeNodeIterator = struct {
                                 initial_point,
                                 first_line_point,
                                 it.thickness,
+                                it.pen,
                             );
                             const cap_points_end = Face.init(
                                 last_point,
                                 current_point,
                                 it.thickness,
+                                it.pen,
                             );
 
                             // Check our join directions so we know how to plot our cap points
@@ -186,7 +195,6 @@ const StrokeNodeIterator = struct {
                                 it.alloc,
                                 it.cap_mode,
                                 start_clockwise,
-                                default_tolerance,
                             );
                             defer start_caps.deinit();
                             try result.append(.{ .move_to = .{ .point = start_caps.items[0] } });
@@ -206,7 +214,6 @@ const StrokeNodeIterator = struct {
                                 it.alloc,
                                 it.cap_mode,
                                 end_clockwise,
-                                default_tolerance,
                             );
                             defer end_caps.deinit();
                             for (end_caps.items) |p| {
@@ -231,19 +238,22 @@ const StrokeNodeIterator = struct {
                         } else {
                             // Single-segment line. This can be drawn off of
                             // our start line caps.
-                            const cap_points = Face.init(initial_point, current_point, it.thickness);
+                            const cap_points = Face.init(
+                                initial_point,
+                                current_point,
+                                it.thickness,
+                                it.pen,
+                            );
                             const start_caps = try cap_points.cap_p0(
                                 it.alloc,
                                 it.cap_mode,
                                 true,
-                                default_tolerance,
                             );
                             defer start_caps.deinit();
                             const end_caps = try cap_points.cap_p1(
                                 it.alloc,
                                 it.cap_mode,
                                 true,
-                                default_tolerance,
                             );
                             defer end_caps.deinit();
 
@@ -277,6 +287,7 @@ const StrokeNodeIteratorState = struct {
     thickness: f64,
     join_mode: options.JoinMode,
     miter_limit: f64,
+    pen: Pen,
 
     joins: JoinSet,
     closed: bool = false,
@@ -290,12 +301,14 @@ const StrokeNodeIteratorState = struct {
         thickness: f64,
         join_mode: options.JoinMode,
         miter_limit: f64,
+        pen: Pen,
     ) StrokeNodeIteratorState {
         return .{
             .alloc = alloc,
             .thickness = thickness,
             .join_mode = join_mode,
             .miter_limit = miter_limit,
+            .pen = pen,
 
             .joins = JoinSet.init(alloc),
         };
@@ -349,6 +362,7 @@ const StrokeNodeIteratorState = struct {
                         self.thickness,
                         self.join_mode,
                         self.miter_limit,
+                        self.pen,
                     );
                     try self.joins.items.append(current_join);
                 }
@@ -436,6 +450,7 @@ const StrokeNodeIteratorState = struct {
                             self.thickness,
                             self.join_mode,
                             self.miter_limit,
+                            self.pen,
                         );
                         try self.joins.items.append(current_join);
 
@@ -509,12 +524,13 @@ fn join(
     thickness: f64,
     mode: options.JoinMode,
     miter_limit: f64,
+    pen: Pen,
 ) !Join {
     var outer_joins = std.ArrayList(Point).init(alloc);
     errdefer outer_joins.deinit();
 
-    const in = Face.init(p0, p1, thickness);
-    const out = Face.init(p1, p2, thickness);
+    const in = Face.init(p0, p1, thickness, pen);
+    const out = Face.init(p1, p2, thickness, pen);
     const clockwise = in.slope.compare(out.slope) < 0;
 
     // Calculate our inner join ahead of time as we may need it for miter limit
@@ -565,8 +581,6 @@ fn join(
         },
 
         .round => {
-            var pen = try Pen.init(alloc, thickness, default_tolerance);
-            defer pen.deinit();
             var verts = try pen.verticesForJoin(in.slope, out.slope, clockwise);
             defer verts.deinit();
             if (verts.items.len == 0) {
