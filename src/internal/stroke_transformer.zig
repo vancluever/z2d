@@ -581,7 +581,7 @@ fn join(
         },
 
         .round => {
-            var verts = try pen.verticesForJoin(in.slope, out.slope, clockwise);
+            var verts = try pen.verticesFor(in.slope, out.slope, clockwise);
             defer verts.deinit();
             if (verts.items.len == 0) {
                 // In the case where we could not find appropriate vertices for

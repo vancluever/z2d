@@ -357,7 +357,7 @@ fn capRound(
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
-    var verts = try self.pen.verticesForJoin(
+    var verts = try self.pen.verticesFor(
         self.slope,
         .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
         clockwise,

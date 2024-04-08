@@ -117,11 +117,11 @@ pub fn deinit(self: *Pen) void {
     self.vertices.deinit();
 }
 
-/// Gets the vertices for the join range from one face to the other,
-/// depending on the line direction.
+/// Gets the vertices for the range from one face to the other, depending on
+/// the line direction.
 ///
 /// The caller owns the ArrayList and must call deinit on it.
-pub fn verticesForJoin(
+pub fn verticesFor(
     self: *const Pen,
     from_slope: Slope,
     to_slope: Slope,
