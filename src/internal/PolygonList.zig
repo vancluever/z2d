@@ -8,7 +8,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 const FillRule = @import("../options.zig").FillRule;
-const PathNode = @import("nodes.zig").PathNode;
+const PathNode = @import("path_nodes.zig").PathNode;
 const Point = @import("../Point.zig");
 const spline = @import("spline_transformer.zig");
 

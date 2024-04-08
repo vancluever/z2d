@@ -10,7 +10,7 @@ const mem = @import("std").mem;
 const stroke_transformer = @import("stroke_transformer.zig");
 
 const Context = @import("../Context.zig");
-const PathNode = @import("nodes.zig").PathNode;
+const PathNode = @import("path_nodes.zig").PathNode;
 const PolygonList = @import("PolygonList.zig");
 const RGBA = @import("../pixel.zig").RGBA;
 const Surface = @import("../surface.zig").Surface;

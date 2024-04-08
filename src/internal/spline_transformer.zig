@@ -11,7 +11,7 @@
 const std = @import("std");
 const mem = @import("std").mem;
 
-const nodepkg = @import("nodes.zig");
+const nodepkg = @import("path_nodes.zig");
 const Point = @import("../Point.zig");
 
 /// Given a set of four points representing a bezier curve ("spline"),

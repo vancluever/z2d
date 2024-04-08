@@ -5,7 +5,7 @@ const Path = @This();
 const std = @import("std");
 const mem = @import("std").mem;
 
-const PathNode = @import("internal/nodes.zig").PathNode;
+const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("Point.zig");
 
 /// The underlying node set.

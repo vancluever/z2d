@@ -5,7 +5,7 @@ const mem = @import("std").mem;
 
 const options = @import("../options.zig");
 const spline = @import("spline_transformer.zig");
-const nodepkg = @import("nodes.zig");
+const nodepkg = @import("path_nodes.zig");
 
 const Face = @import("Face.zig");
 const Pen = @import("Pen.zig");
