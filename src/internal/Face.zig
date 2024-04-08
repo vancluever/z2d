@@ -39,9 +39,10 @@ p0_cw: Point,
 p0_ccw: Point,
 p1_cw: Point,
 p1_ccw: Point,
+pen: Pen,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-pub fn init(p0: Point, p1: Point, thickness: f64) Face {
+pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
     const slope = Slope.init(p0, p1);
     const half_width = thickness / 2;
     if (slope.dy == 0) {
@@ -57,6 +58,7 @@ pub fn init(p0: Point, p1: Point, thickness: f64) Face {
             .p0_ccw = .{ .x = p0.x, .y = p0.y - math.copysign(half_width, slope.dx) },
             .p1_cw = .{ .x = p1.x, .y = p1.y + math.copysign(half_width, slope.dx) },
             .p1_ccw = .{ .x = p1.x, .y = p1.y - math.copysign(half_width, slope.dx) },
+            .pen = pen,
         };
     }
     if (slope.dx == 0) {
@@ -72,6 +74,7 @@ pub fn init(p0: Point, p1: Point, thickness: f64) Face {
             .p0_ccw = .{ .x = p0.x + math.copysign(half_width, slope.dy), .y = p0.y },
             .p1_cw = .{ .x = p1.x - math.copysign(half_width, slope.dy), .y = p1.y },
             .p1_ccw = .{ .x = p1.x + math.copysign(half_width, slope.dy), .y = p1.y },
+            .pen = pen,
         };
     }
 
@@ -90,6 +93,7 @@ pub fn init(p0: Point, p1: Point, thickness: f64) Face {
         .p0_ccw = .{ .x = p0.x + offset_x, .y = p0.y - offset_y },
         .p1_cw = .{ .x = p1.x - offset_x, .y = p1.y + offset_y },
         .p1_ccw = .{ .x = p1.x + offset_x, .y = p1.y - offset_y },
+        .pen = pen,
     };
 }
 
@@ -254,14 +258,12 @@ pub fn cap_p0(
     alloc: mem.Allocator,
     cap_mode: options.CapMode,
     clockwise: bool,
-    tolerance: f64,
 ) !std.ArrayList(Point) {
-    const reversed = init(self.p1, self.p0, self.width);
+    const reversed = init(self.p1, self.p0, self.width, self.pen);
     return reversed.cap(
         alloc,
         cap_mode,
         clockwise,
-        tolerance,
     );
 }
 
@@ -270,13 +272,11 @@ pub fn cap_p1(
     alloc: mem.Allocator,
     cap_mode: options.CapMode,
     clockwise: bool,
-    tolerance: f64,
 ) !std.ArrayList(Point) {
     return self.cap(
         alloc,
         cap_mode,
         clockwise,
-        tolerance,
     );
 }
 
@@ -285,7 +285,6 @@ fn cap(
     alloc: mem.Allocator,
     cap_mode: options.CapMode,
     clockwise: bool,
-    tolerance: f64,
 ) !std.ArrayList(Point) {
     var result = std.ArrayList(Point).init(alloc);
     errdefer result.deinit();
@@ -298,7 +297,7 @@ fn cap(
             try self.capSquare(&result, clockwise);
         },
         .round => {
-            try self.capRound(alloc, &result, clockwise, tolerance);
+            try self.capRound(&result, clockwise);
         },
     }
 
@@ -351,19 +350,14 @@ fn capSquare(
 
 fn capRound(
     self: Face,
-    alloc: mem.Allocator,
     result: *std.ArrayList(Point),
     clockwise: bool,
-    tolerance: f64,
 ) !void {
-    var pen = try Pen.init(alloc, self.width, tolerance);
-    defer pen.deinit();
-
     // We need to calculate our fan along the end as if we were
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
-    var verts = try pen.verticesForJoin(
+    var verts = try self.pen.verticesForJoin(
         self.slope,
         .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
         clockwise,
