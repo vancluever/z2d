@@ -1,26 +1,28 @@
-/// A Face represents a hypothetically-computed polygon edge for a stroked
-/// line.
-///
-/// The face is computed from p0 -> p1 (see init). Interactions, such as
-/// intersections, are specifically dictated by the orientation of any two
-/// faces in relation to each other, when the faces are treated as segments
-/// along the path, traveling in the same direction (e.g., p0 -> p1, p1 -> p2).
-///
-/// For each face, its stroked endpoints, denoted by cw (clockwise) and ccw
-/// (counter-clockwise) are taken by rotating a point 90 degrees in that
-/// direction along the line, starting from p0 (or p1), to half of the line
-/// thickness, in the same direction of the line (e.g., p0 -> p1).
+//! A Face represents a hypothetically-computed polygon edge for a stroked
+//! line.
+//!
+//! The face is computed from p0 -> p1 (see init). Interactions, such as
+//! intersections, are specifically dictated by the orientation of any two
+//! faces in relation to each other, when the faces are treated as segments
+//! along the path, traveling in the same direction (e.g., p0 -> p1, p1 -> p2).
+//!
+//! For each face, its stroked endpoints, denoted by cw (clockwise) and ccw
+//! (counter-clockwise) are taken by rotating a point 90 degrees in that
+//! direction along the line, starting from p0 (or p1), to half of the line
+//! thickness, in the same direction of the line (e.g., p0 -> p1).
 const Face = @This();
 
 const std = @import("std");
 const math = @import("std").math;
 const mem = @import("std").mem;
 
+const nodepkg = @import("path_nodes.zig");
 const options = @import("../options.zig");
 
 const Pen = @import("Pen.zig");
 const Point = @import("../Point.zig");
 const Slope = @import("Slope.zig");
+const PlotterVTable = @import("PlotterVTable.zig");
 
 const FaceType = enum {
     horizontal,
@@ -255,13 +257,13 @@ fn intersect(p0: Point, p1: Point, m0: f64, m1: f64) Point {
 
 pub fn cap_p0(
     self: Face,
-    alloc: mem.Allocator,
+    plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !std.ArrayList(Point) {
+) !void {
     const reversed = init(self.p1, self.p0, self.width, self.pen);
     return reversed.cap(
-        alloc,
+        plotter_impl,
         cap_mode,
         clockwise,
     );
@@ -269,12 +271,12 @@ pub fn cap_p0(
 
 pub fn cap_p1(
     self: Face,
-    alloc: mem.Allocator,
+    plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !std.ArrayList(Point) {
+) !void {
     return self.cap(
-        alloc,
+        plotter_impl,
         cap_mode,
         clockwise,
     );
@@ -282,97 +284,91 @@ pub fn cap_p1(
 
 fn cap(
     self: Face,
-    alloc: mem.Allocator,
+    plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !std.ArrayList(Point) {
-    var result = std.ArrayList(Point).init(alloc);
-    errdefer result.deinit();
-
+) !void {
     switch (cap_mode) {
         .butt => {
-            try self.capButt(&result, clockwise);
+            try self.capButt(plotter_impl, clockwise);
         },
         .square => {
-            try self.capSquare(&result, clockwise);
+            try self.capSquare(plotter_impl, clockwise);
         },
         .round => {
-            try self.capRound(&result, clockwise);
+            try self.capRound(plotter_impl, clockwise);
         },
     }
-
-    return result;
 }
 
 fn capButt(
     self: Face,
-    result: *std.ArrayList(Point),
+    plotter_impl: *const PlotterVTable,
     clockwise: bool,
 ) !void {
     if (clockwise) {
-        try result.append(self.p1_ccw);
-        try result.append(self.p1_cw);
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
     } else {
-        try result.append(self.p1_cw);
-        try result.append(self.p1_ccw);
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
     }
 }
 
 fn capSquare(
     self: Face,
-    result: *std.ArrayList(Point),
+    plotter_impl: *const PlotterVTable,
     clockwise: bool,
 ) !void {
     if (clockwise) {
-        try result.append(self.p1_ccw);
-        try result.append(.{
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
+        try plotter_impl.lineTo(.{ .point = .{
             .x = self.p1_ccw.x + self.offset_y,
             .y = self.p1_ccw.y + self.offset_x,
-        });
-        try result.append(.{
+        } });
+        try plotter_impl.lineTo(.{ .point = .{
             .x = self.p1_cw.x + self.offset_y,
             .y = self.p1_cw.y + self.offset_x,
-        });
-        try result.append(self.p1_cw);
+        } });
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
     } else {
-        try result.append(self.p1_cw);
-        try result.append(.{
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
+        try plotter_impl.lineTo(.{ .point = .{
             .x = self.p1_cw.x + self.offset_y,
             .y = self.p1_cw.y + self.offset_x,
-        });
-        try result.append(.{
+        } });
+        try plotter_impl.lineTo(.{ .point = .{
             .x = self.p1_ccw.x + self.offset_y,
             .y = self.p1_ccw.y + self.offset_x,
-        });
-        try result.append(self.p1_ccw);
+        } });
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
     }
 }
 
 fn capRound(
     self: Face,
-    result: *std.ArrayList(Point),
+    plotter_impl: *const PlotterVTable,
     clockwise: bool,
 ) !void {
     // We need to calculate our fan along the end as if we were
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
-    var verts = try self.pen.verticesFor(
+    var vit = self.pen.vertexIteratorFor(
         self.slope,
         .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
         clockwise,
     );
-    defer verts.deinit();
-    if (verts.items.len == 0) {
-        try self.capButt(result, clockwise);
-    } else {
-        for (verts.items) |v| {
-            try result.append(
-                .{
-                    .x = self.p1.x + v.point.x,
-                    .y = self.p1.y + v.point.y,
-                },
-            );
-        }
+    var hasVerts = false;
+    while (vit.next()) |v| {
+        hasVerts = true;
+        try plotter_impl.lineTo(.{ .point = .{
+            .x = self.p1.x + v.point.x,
+            .y = self.p1.y + v.point.y,
+        } });
+    }
+    if (!hasVerts) {
+        // We didn't plot any vertices, do a butt cap instead.
+        try self.capButt(plotter_impl, clockwise);
     }
 }

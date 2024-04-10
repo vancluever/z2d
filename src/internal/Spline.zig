@@ -8,58 +8,55 @@
 // TODO: There's a lot of matrix operations in this code; it would be neat to
 // see how much of this could be implemented as vectors.
 
+//! Given a set of four points representing a bezier curve ("spline"),
+//! subdivide the curve into a series of line_to nodes.
+//!
+//! The supplied tolerance is in pixels (fractions are supported). Higher
+//! tolerance will give better performance, while a smaller tolerance will give
+//! better quality.
+const Spline = @This();
+
 const std = @import("std");
 const mem = @import("std").mem;
 
 const nodepkg = @import("path_nodes.zig");
 const Point = @import("../Point.zig");
+const PlotterVTable = @import("PlotterVTable.zig");
 
-/// Given a set of four points representing a bezier curve ("spline"),
-/// subdivide the curve into a series of line_to nodes.
-///
-/// The supplied tolerance is in pixels (fractions are supported). Higher
-/// tolerance will give better performance, while a smaller tolerance will give
-/// better quality.
-///
-/// The returned node list is owned by the caller and deinit should be
-/// called on it.
-pub fn transform(
-    alloc: mem.Allocator,
-    a: Point,
-    b: Point,
-    c: Point,
-    d: Point,
-    tolerance: f64,
-) !std.ArrayList(nodepkg.PathNode) {
-    var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
-    errdefer nodes.deinit();
+// Initial points.
+a: Point,
+b: Point,
+c: Point,
+d: Point,
 
+// Error tolerance
+tolerance: f64,
+
+// Plotter implementation.
+plotter_impl: *const PlotterVTable,
+
+/// Run decomposition on the spline to break it down to its individual lines,
+/// plotting each line along the way.
+pub fn decompose(self: *Spline) !void {
     // Both tangents being zero means that this is just a straight line.
-    if (a.equal(b) and c.equal(d)) {
-        try nodes.append(.{ .line_to = .{ .point = d } });
-        return nodes;
+    if (self.a.equal(self.b) and self.c.equal(self.d)) {
+        try self.plotter_impl.lineTo(.{ .point = self.d });
+        return;
     }
 
     // Our initial knot set
-    var s1: Knots = .{ .a = a, .b = b, .c = c, .d = d };
+    var s1: Knots = .{ .a = self.a, .b = self.b, .c = self.c, .d = self.d };
 
     // Decompose the curve into its individual points, plotting them along
     // the way.
-    try decomposeInto(&nodes, &s1, a, tolerance * tolerance);
+    try self.decomposeInto(&s1, self.a, self.tolerance * self.tolerance);
 
     // Plot our last point in the curve before finishing
-    try nodes.append(.{ .line_to = .{ .point = d } });
-
-    return nodes;
+    try self.plotter_impl.lineTo(.{ .point = self.d });
 }
 
 /// Inner and recursive decomposition into the specified knot set.
-fn decomposeInto(
-    nodes: *std.ArrayList(nodepkg.PathNode),
-    s1: *Knots,
-    start: Point,
-    tolerance: f64,
-) !void {
+fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: f64) !void {
     if (s1.errorSq() < tolerance) {
         // Add the point if we're not the actual initial point itself in the
         // larger curve (our implementations will always plot the initial
@@ -67,7 +64,7 @@ fn decomposeInto(
         // point, and it also throws out current stroke state machine in an
         // unreachable state).
         if (!s1.a.equal(start)) {
-            try nodes.append(.{ .line_to = .{ .point = s1.a } });
+            try self.plotter_impl.lineTo(.{ .point = s1.a });
         }
 
         // Return in all cases since we're done recursion.
@@ -78,8 +75,8 @@ fn decomposeInto(
     var s2 = s1.deCasteljau();
 
     // Recurse into each half
-    try decomposeInto(nodes, s1, start, tolerance);
-    return try decomposeInto(nodes, &s2, start, tolerance);
+    try self.decomposeInto(s1, start, tolerance);
+    try self.decomposeInto(&s2, start, tolerance);
 }
 
 /// Represents knots on a spline.
