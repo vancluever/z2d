@@ -6,15 +6,15 @@ const debug = @import("std").debug;
 const heap = @import("std").heap;
 const mem = @import("std").mem;
 
-// TODO: remove these after cleanup
-const stroke_transformer = @import("stroke_transformer.zig");
+const fill_plotter = @import("FillPlotter.zig");
 
 const Context = @import("../Context.zig");
 const PathNode = @import("path_nodes.zig").PathNode;
-const PolygonList = @import("PolygonList.zig");
 const RGBA = @import("../pixel.zig").RGBA;
 const Surface = @import("../surface.zig").Surface;
 const FillRule = @import("../options.zig").FillRule;
+const StrokePlotter = @import("StrokePlotter.zig");
+const PolygonList = @import("PolygonList.zig");
 const supersample_scale = @import("../surface.zig").supersample_scale;
 
 /// The reference to the context that we use for painting operations.
@@ -37,12 +37,20 @@ pub fn fill(
     debug.assert(nodes.items[nodes.items.len - 2] == .close_path);
     debug.assert(nodes.getLast() == .move_to);
 
+    const scale: f64 = switch (self.context.anti_aliasing_mode) {
+        .none => 1,
+        .default => supersample_scale,
+    };
+
+    var polygons = try fill_plotter.plot(alloc, nodes, scale);
+    defer polygons.deinit();
+
     switch (self.context.anti_aliasing_mode) {
         .none => {
-            try self.paintDirect(alloc, nodes, self.context.fill_rule);
+            try self.paintDirect(alloc, polygons, self.context.fill_rule);
         },
         .default => {
-            try self.paintComposite(alloc, nodes, self.context.fill_rule);
+            try self.paintComposite(alloc, polygons, self.context.fill_rule, scale);
         },
     }
 }
@@ -56,6 +64,10 @@ pub fn stroke(
     nodes: std.ArrayList(PathNode),
 ) !void {
     debug.assert(nodes.items.len != 0); // Should not be called with zero nodes
+    const scale: f64 = switch (self.context.anti_aliasing_mode) {
+        .none => 1,
+        .default => supersample_scale,
+    };
 
     // NOTE: for now, we set a minimum thickness for the following options:
     // join_mode, miter_limit, and cap_mode. Any thickness lower than 2 will
@@ -68,25 +80,25 @@ pub fn stroke(
     // stroking, I'm expecting that some of these restrictions will be lifted
     // and/or moved to specific places where they can be used to address the
     // artifacts related to particular edge cases.
-    var stroke_nodes = try stroke_transformer.transform(
+    var plotter = try StrokePlotter.init(
         alloc,
-        nodes,
         self.context.line_width,
         if (self.context.line_width >= 2) self.context.line_join_mode else .miter,
         if (self.context.line_width >= 2) self.context.miter_limit else 10.0,
         if (self.context.line_width >= 2) self.context.line_cap_mode else .butt,
+        scale,
     );
-    defer stroke_nodes.deinit();
-    debug.assert(stroke_nodes.items.len >= 2);
-    debug.assert(stroke_nodes.items[stroke_nodes.items.len - 2] == .close_path);
-    debug.assert(stroke_nodes.getLast() == .move_to);
+    defer plotter.deinit();
+
+    var polygons = try plotter.plot(alloc, nodes);
+    defer polygons.deinit();
 
     switch (self.context.anti_aliasing_mode) {
         .none => {
-            try self.paintDirect(alloc, stroke_nodes, .non_zero);
+            try self.paintDirect(alloc, polygons, .non_zero);
         },
         .default => {
-            try self.paintComposite(alloc, stroke_nodes, .non_zero);
+            try self.paintComposite(alloc, polygons, .non_zero, scale);
         },
     }
 }
@@ -96,15 +108,17 @@ pub fn stroke(
 fn paintDirect(
     self: *const Painter,
     alloc: mem.Allocator,
-    nodes: std.ArrayList(PathNode),
+    polygons: PolygonList,
     fill_rule: FillRule,
 ) !void {
-    var polygon_list = try PolygonList.initNodes(alloc, nodes, 1);
-    defer polygon_list.deinit();
-    const poly_start_y: usize = @intFromFloat(polygon_list.start.y);
-    const poly_end_y: usize = @intFromFloat(polygon_list.end.y);
+    var arena = heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    const poly_start_y: usize = @intFromFloat(polygons.start.y);
+    const poly_end_y: usize = @intFromFloat(polygons.end.y);
     for (poly_start_y..poly_end_y + 1) |y| {
-        var edge_list = try polygon_list.edgesForY(@floatFromInt(y), fill_rule);
+        var edge_list = try polygons.edgesForY(arena_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit();
 
         var start_idx: usize = 0;
@@ -138,26 +152,23 @@ fn paintDirect(
 fn paintComposite(
     self: *const Painter,
     alloc: mem.Allocator,
-    nodes: std.ArrayList(PathNode),
+    polygons: PolygonList,
     fill_rule: FillRule,
+    scale: f64,
 ) !void {
     var arena = heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    const scale: f64 = supersample_scale;
-    var polygon_list = try PolygonList.initNodes(arena_alloc, nodes, scale);
-    defer polygon_list.deinit();
-
     const mask_sfc = sfc_m: {
-        const offset_x: u32 = @intFromFloat(polygon_list.start.x);
-        const offset_y: u32 = @intFromFloat(polygon_list.start.y);
+        const offset_x: u32 = @intFromFloat(polygons.start.x);
+        const offset_y: u32 = @intFromFloat(polygons.start.y);
         // Add scale to our relative dimensions here, as our polygon extent
         // figures stop at the end pixel, instead of what would technically be
         // one over. Using scale instead of 1 here ensures that we downscale
         // evenly to our original extent dimensions.
-        const mask_width: u32 = @intFromFloat(polygon_list.end.x - polygon_list.start.x + scale);
-        const mask_height: u32 = @intFromFloat(polygon_list.end.y - polygon_list.start.y + scale);
+        const mask_width: u32 = @intFromFloat(polygons.end.x - polygons.start.x + scale);
+        const mask_height: u32 = @intFromFloat(polygons.end.y - polygons.start.y + scale);
         const surface_width: u32 = self.context.surface.getWidth() * @as(u32, @intFromFloat(scale));
 
         const scaled_sfc = try Surface.init(
@@ -168,10 +179,10 @@ fn paintComposite(
         );
         defer scaled_sfc.deinit();
 
-        const poly_start_y: usize = @intFromFloat(polygon_list.start.y);
-        const poly_end_y: usize = @intFromFloat(polygon_list.end.y);
+        const poly_start_y: usize = @intFromFloat(polygons.start.y);
+        const poly_end_y: usize = @intFromFloat(polygons.end.y);
         for (poly_start_y..poly_end_y + 1) |y| {
-            var edge_list = try polygon_list.edgesForY(@floatFromInt(y), fill_rule);
+            var edge_list = try polygons.edgesForY(arena_alloc, @floatFromInt(y), fill_rule);
             defer edge_list.deinit();
 
             var start_idx: usize = 0;
@@ -202,12 +213,12 @@ fn paintComposite(
     defer mask_sfc.deinit();
 
     // Downscaled offsets
-    const offset_x: u32 = @intFromFloat(polygon_list.start.x / scale);
-    const offset_y: u32 = @intFromFloat(polygon_list.start.y / scale);
+    const offset_x: u32 = @intFromFloat(polygons.start.x / scale);
+    const offset_y: u32 = @intFromFloat(polygons.start.y / scale);
     // Add a 1 to our relative dimensions here, as our polygon extent figures
     // stop at the end pixel, instead of what would technically be one over.
-    const width: u32 = @intFromFloat(polygon_list.end.x / scale - polygon_list.start.x / scale + 1);
-    const height: u32 = @intFromFloat(polygon_list.end.y / scale - polygon_list.start.y / scale + 1);
+    const width: u32 = @intFromFloat(polygons.end.x / scale - polygons.start.x / scale + 1);
+    const height: u32 = @intFromFloat(polygons.end.y / scale - polygons.start.y / scale + 1);
 
     const foreground_sfc = switch (self.context.pattern) {
         // This is the surface that we composite our mask on to get the final

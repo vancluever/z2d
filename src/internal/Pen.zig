@@ -234,3 +234,128 @@ pub fn verticesFor(
 
     return result;
 }
+
+/// Returns an iterator for the vertex range from one face to the other,
+/// depending on the line direction.
+pub fn vertexIteratorFor(
+    self: *const Pen,
+    from_slope: Slope,
+    to_slope: Slope,
+    clockwise: bool,
+) VertexIterator {
+    // Some of this logic was transcribed from cairo-slope.c in the Cairo
+    // project (https://www.cairographics.org, MPL 1.1).
+    //
+    // The algorithm is basically a binary search back from the middle of
+    // the vertex set. We search backwards for the vertex right after the
+    // outer point of the end of the inbound face (i.e., the unjoined
+    // stroke). This process is then repeated for the other direction to
+    // locate the vertex right before the outer point of the start of the
+    // outbound face.
+
+    // Check the direction of the join so that we can return the
+    // appropriate vertices in the correct order.
+    var start: usize = 0;
+    var end: usize = 0;
+    const vertices_len: i32 = @intCast(self.vertices.items.len);
+    if (clockwise) {
+        // Clockwise join
+        var low: i32 = 0;
+        var high: i32 = vertices_len;
+        var i: i32 = (low + high) >> 1;
+        while (high - low > 1) : (i = (low + high) >> 1) {
+            if (self.vertices.items[@intCast(i)].slope_cw.compare(from_slope) < 0)
+                low = i
+            else
+                high = i;
+        }
+
+        if (self.vertices.items[@intCast(i)].slope_cw.compare(from_slope) < 0) {
+            i += 1;
+            if (i == vertices_len) i = 0;
+        }
+        start = @intCast(i);
+
+        if (to_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) >= 0) {
+            low = i;
+            high = i + vertices_len;
+            i = (low + high) >> 1;
+            while (high - low > 1) : (i = (low + high) >> 1) {
+                const j: i32 = if (i >= vertices_len) i - vertices_len else i;
+                if (self.vertices.items[@intCast(j)].slope_cw.compare(to_slope) > 0)
+                    high = i
+                else
+                    low = i;
+            }
+
+            if (i >= vertices_len) i -= vertices_len;
+        }
+
+        end = @intCast(i);
+    } else {
+        // Counter-clockwise join
+        var low: i32 = 0;
+        var high: i32 = vertices_len;
+        var i: i32 = (low + high) >> 1;
+        while (high - low > 1) : (i = (low + high) >> 1) {
+            if (from_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0)
+                low = i
+            else
+                high = i;
+        }
+
+        if (from_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0) {
+            i += 1;
+            if (i == vertices_len) i = 0;
+        }
+        start = @intCast(i);
+
+        if (self.vertices.items[@intCast(i)].slope_cw.compare(to_slope) <= 0) {
+            low = i;
+            high = i + vertices_len;
+            i = (low + high) >> 1;
+            while (high - low > 1) : (i = (low + high) >> 1) {
+                const j: i32 = if (i >= vertices_len) i - vertices_len else i;
+                if (to_slope.compare(self.vertices.items[@intCast(j)].slope_ccw) > 0)
+                    high = i
+                else
+                    low = i;
+            }
+
+            if (i >= vertices_len) i -= vertices_len;
+        }
+
+        end = @intCast(i);
+    }
+
+    return .{
+        .pen = self,
+        .start = start,
+        .end = end,
+        .idx = start,
+        .clockwise = clockwise,
+    };
+}
+
+const VertexIterator = struct {
+    pen: *const Pen,
+    start: usize,
+    end: usize,
+    idx: usize,
+    clockwise: bool,
+
+    pub fn next(self: *VertexIterator) ?PenVertex {
+        if (self.idx == self.end) return null;
+        if (self.clockwise) {
+            const result = self.pen.vertices.items[self.idx];
+            self.idx += 1;
+            if (self.idx == self.pen.vertices.items.len) self.idx = 0;
+            return result;
+        } else {
+            const result = self.pen.vertices.items[self.idx];
+            if (self.idx == 0) self.idx = self.pen.vertices.items.len;
+            self.idx -= 1;
+            return result;
+        }
+    }
+};
