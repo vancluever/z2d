@@ -6,7 +6,7 @@ const std = @import("std");
 const mem = @import("std").mem;
 
 const PathNode = @import("internal/path_nodes.zig").PathNode;
-const Point = @import("Point.zig");
+const Point = @import("internal/Point.zig");
 
 /// The underlying node set.
 nodes: std.ArrayList(PathNode),
@@ -39,7 +39,8 @@ pub fn reset(self: *Path) void {
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Path, point: Point) !void {
+pub fn moveTo(self: *Path, x: f64, y: f64) !void {
+    const point: Point = .{ .x = x, .y = y };
     // If our last operation is a move_to to this point, this is a no-op.
     // This ensures that there's no duplicates on things like explicit
     // definitions on close_path -> move_to (versus the implicit add in the
@@ -62,8 +63,9 @@ pub fn moveTo(self: *Path, point: Point) !void {
 /// the current point.
 ///
 /// Acts as a moveTo instead if there is no current point.
-pub fn lineTo(self: *Path, point: Point) !void {
-    if (self.current_point == null) return self.moveTo(point);
+pub fn lineTo(self: *Path, x: f64, y: f64) !void {
+    const point: Point = .{ .x = x, .y = y };
+    if (self.current_point == null) return self.moveTo(x, y);
     try self.nodes.append(.{ .line_to = .{ .point = point } });
     self.current_point = point;
 }
@@ -72,7 +74,18 @@ pub fn lineTo(self: *Path, point: Point) !void {
 /// the current point. The new current point is set to p3.
 ///
 /// It is an error to call this without a current point.
-pub fn curveTo(self: *Path, p1: Point, p2: Point, p3: Point) !void {
+pub fn curveTo(
+    self: *Path,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+) !void {
+    const p1: Point = .{ .x = x1, .y = y1 };
+    const p2: Point = .{ .x = x2, .y = y2 };
+    const p3: Point = .{ .x = x3, .y = y3 };
     if (self.current_point == null) return error.NoCurrentPoint;
     try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
     self.current_point = p3;
@@ -88,7 +101,7 @@ pub fn close(self: *Path) !void {
         // Add a move_to immediately after the close_path node. This is
         // explicit, to ensure that the state machine for draw operations
         // (fill, stroke) do not get put into an unreachable state.
-        try self.moveTo(initial_point);
+        try self.moveTo(initial_point.x, initial_point.y);
     } else return error.NoInitialPoint;
 }
 

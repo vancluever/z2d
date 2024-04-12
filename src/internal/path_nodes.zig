@@ -1,4 +1,4 @@
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 
 /// A tagged union of all path node types.
 pub const PathNodeTag = enum {

@@ -24,12 +24,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     var path = z2d.Path.init(alloc);
     defer path.deinit();
 
-    const p0: z2d.Point = .{ .x = 19, .y = 249 };
-    const p1: z2d.Point = .{ .x = 89, .y = 49 };
-    const p2: z2d.Point = .{ .x = 209, .y = 49 };
-    const p3: z2d.Point = .{ .x = 279, .y = 249 };
-    try path.moveTo(p0);
-    try path.curveTo(p1, p2, p3);
+    try path.moveTo(19, 249);
+    try path.curveTo(89, 49, 209, 49, 279, 249);
     try path.close();
 
     try context.fill(alloc, path);

@@ -25,10 +25,10 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     defer path.deinit();
 
     const margin = 50;
-    try path.moveTo(.{ .x = 0 + margin, .y = 0 + margin });
-    try path.lineTo(.{ .x = width - margin - 1, .y = 0 + margin });
-    try path.lineTo(.{ .x = width - margin - 1, .y = height - margin - 1 });
-    try path.lineTo(.{ .x = 0 + margin, .y = height - margin - 1 });
+    try path.moveTo(0 + margin, 0 + margin);
+    try path.lineTo(width - margin - 1, 0 + margin);
+    try path.lineTo(width - margin - 1, height - margin - 1);
+    try path.lineTo(0 + margin, height - margin - 1);
     try path.close();
 
     try context.fill(alloc, path);

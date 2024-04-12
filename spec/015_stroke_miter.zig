@@ -25,241 +25,73 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     var path = z2d.Path.init(alloc);
     defer path.deinit();
 
-    try path.moveTo(.{
-        .x = 10,
-        .y = 10,
-    });
-    try path.lineTo(.{
-        .x = 100,
-        .y = 20,
-    });
-    try path.lineTo(.{
-        .x = 110,
-        .y = 120,
-    });
-    try path.lineTo(.{
-        .x = 10,
-        .y = 110,
-    });
-    try path.lineTo(.{
-        .x = 20,
-        .y = 30,
-    });
-    try path.lineTo(.{
-        .x = 90,
-        .y = 40,
-    });
-    try path.lineTo(.{
-        .x = 95,
-        .y = 100,
-    });
-    try path.lineTo(.{
-        .x = 30,
-        .y = 95,
-    });
-    try path.lineTo(.{
-        .x = 30,
-        .y = 50,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 50,
-    });
-    try path.lineTo(.{
-        .x = 75,
-        .y = 85,
-    });
-    try path.lineTo(.{
-        .x = 45,
-        .y = 80,
-    });
-    try path.lineTo(.{
-        .x = 50,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 65,
-        .y = 70,
-    });
+    try path.moveTo(10, 10);
+    try path.lineTo(100, 20);
+    try path.lineTo(110, 120);
+    try path.lineTo(10, 110);
+    try path.lineTo(20, 30);
+    try path.lineTo(90, 40);
+    try path.lineTo(95, 100);
+    try path.lineTo(30, 95);
+    try path.lineTo(30, 50);
+    try path.lineTo(80, 50);
+    try path.lineTo(75, 85);
+    try path.lineTo(45, 80);
+    try path.lineTo(50, 60);
+    try path.lineTo(65, 70);
 
     ////////////////////
     const x_offset = 120;
 
-    try path.moveTo(.{
-        .x = x_offset + 110,
-        .y = 10,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 20,
-        .y = 20,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 10,
-        .y = 120,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 110,
-        .y = 110,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 100,
-        .y = 30,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 30,
-        .y = 40,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 25,
-        .y = 100,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 90,
-        .y = 95,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 90,
-        .y = 50,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 40,
-        .y = 50,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 45,
-        .y = 85,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 75,
-        .y = 80,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 70,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 55,
-        .y = 70,
-    });
+    try path.moveTo(x_offset + 110, 10);
+    try path.lineTo(x_offset + 20, 20);
+    try path.lineTo(x_offset + 10, 120);
+    try path.lineTo(x_offset + 110, 110);
+    try path.lineTo(x_offset + 100, 30);
+    try path.lineTo(x_offset + 30, 40);
+    try path.lineTo(x_offset + 25, 100);
+    try path.lineTo(x_offset + 90, 95);
+    try path.lineTo(x_offset + 90, 50);
+    try path.lineTo(x_offset + 40, 50);
+    try path.lineTo(x_offset + 45, 85);
+    try path.lineTo(x_offset + 75, 80);
+    try path.lineTo(x_offset + 70, 60);
+    try path.lineTo(x_offset + 55, 70);
 
     ////////////////////
     const y_offset = 130;
 
-    try path.moveTo(.{
-        .x = 10,
-        .y = y_offset + 120,
-    });
-    try path.lineTo(.{
-        .x = 100,
-        .y = y_offset + 110,
-    });
-    try path.lineTo(.{
-        .x = 110,
-        .y = y_offset + 10,
-    });
-    try path.lineTo(.{
-        .x = 10,
-        .y = y_offset + 20,
-    });
-    try path.lineTo(.{
-        .x = 20,
-        .y = y_offset + 100,
-    });
-    try path.lineTo(.{
-        .x = 90,
-        .y = y_offset + 90,
-    });
-    try path.lineTo(.{
-        .x = 95,
-        .y = y_offset + 30,
-    });
-    try path.lineTo(.{
-        .x = 30,
-        .y = y_offset + 35,
-    });
-    try path.lineTo(.{
-        .x = 30,
-        .y = y_offset + 80,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = y_offset + 80,
-    });
-    try path.lineTo(.{
-        .x = 75,
-        .y = y_offset + 45,
-    });
-    try path.lineTo(.{
-        .x = 45,
-        .y = y_offset + 50,
-    });
-    try path.lineTo(.{
-        .x = 50,
-        .y = y_offset + 70,
-    });
-    try path.lineTo(.{
-        .x = 65,
-        .y = y_offset + 60,
-    });
+    try path.moveTo(10, y_offset + 120);
+    try path.lineTo(100, y_offset + 110);
+    try path.lineTo(110, y_offset + 10);
+    try path.lineTo(10, y_offset + 20);
+    try path.lineTo(20, y_offset + 100);
+    try path.lineTo(90, y_offset + 90);
+    try path.lineTo(95, y_offset + 30);
+    try path.lineTo(30, y_offset + 35);
+    try path.lineTo(30, y_offset + 80);
+    try path.lineTo(80, y_offset + 80);
+    try path.lineTo(75, y_offset + 45);
+    try path.lineTo(45, y_offset + 50);
+    try path.lineTo(50, y_offset + 70);
+    try path.lineTo(65, y_offset + 60);
 
     ////////////////////
 
-    try path.moveTo(.{
-        .x = x_offset + 110,
-        .y = y_offset + 120,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 20,
-        .y = y_offset + 110,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 10,
-        .y = y_offset + 10,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 110,
-        .y = y_offset + 20,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 100,
-        .y = y_offset + 100,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 30,
-        .y = y_offset + 90,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 25,
-        .y = y_offset + 30,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 90,
-        .y = y_offset + 35,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 90,
-        .y = y_offset + 80,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 40,
-        .y = y_offset + 80,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 45,
-        .y = y_offset + 45,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 75,
-        .y = y_offset + 50,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 70,
-        .y = y_offset + 70,
-    });
-    try path.lineTo(.{
-        .x = x_offset + 55,
-        .y = y_offset + 60,
-    });
+    try path.moveTo(x_offset + 110, y_offset + 120);
+    try path.lineTo(x_offset + 20, y_offset + 110);
+    try path.lineTo(x_offset + 10, y_offset + 10);
+    try path.lineTo(x_offset + 110, y_offset + 20);
+    try path.lineTo(x_offset + 100, y_offset + 100);
+    try path.lineTo(x_offset + 30, y_offset + 90);
+    try path.lineTo(x_offset + 25, y_offset + 30);
+    try path.lineTo(x_offset + 90, y_offset + 35);
+    try path.lineTo(x_offset + 90, y_offset + 80);
+    try path.lineTo(x_offset + 40, y_offset + 80);
+    try path.lineTo(x_offset + 45, y_offset + 45);
+    try path.lineTo(x_offset + 75, y_offset + 50);
+    try path.lineTo(x_offset + 70, y_offset + 70);
+    try path.lineTo(x_offset + 55, y_offset + 60);
 
     try context.stroke(alloc, path);
 

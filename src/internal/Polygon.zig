@@ -8,7 +8,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 
 pub const CornerList = std.DoublyLinkedList(Point);
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 
 arena_alloc: heap.ArenaAllocator,
 concatenated_polygons: std.ArrayList(Polygon),

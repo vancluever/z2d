@@ -8,7 +8,7 @@ const nodepkg = @import("path_nodes.zig");
 
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
 
 // TODO: remove this when we make tolerance configurable

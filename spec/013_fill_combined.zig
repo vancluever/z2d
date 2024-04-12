@@ -31,18 +31,18 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
 
     // Triangle
     comptime var margin = 10;
-    try path.moveTo(.{ .x = 0 + margin, .y = 0 + margin });
-    try path.lineTo(.{ .x = sub_canvas_width - margin - 1, .y = 0 + margin });
-    try path.lineTo(.{ .x = sub_canvas_width / 2 - 1, .y = sub_canvas_height - margin - 1 });
+    try path.moveTo(0 + margin, 0 + margin);
+    try path.lineTo(sub_canvas_width - margin - 1, 0 + margin);
+    try path.lineTo(sub_canvas_width / 2 - 1, sub_canvas_height - margin - 1);
     try path.close();
 
     // Square
     margin = 50;
     comptime var x_offset = sub_canvas_width;
-    try path.moveTo(.{ .x = x_offset + margin, .y = 0 + margin });
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = 0 + margin });
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = sub_canvas_height - margin - 1 });
-    try path.lineTo(.{ .x = x_offset + margin, .y = sub_canvas_height - margin - 1 });
+    try path.moveTo(x_offset + margin, 0 + margin);
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin);
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, sub_canvas_height - margin - 1);
+    try path.lineTo(x_offset + margin, sub_canvas_height - margin - 1);
     try path.close();
 
     // Trapezoid
@@ -50,10 +50,10 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const trapezoid_margin_bottom = 33;
     const trapezoid_margin_y = 66;
     x_offset = sub_canvas_width * 2;
-    try path.moveTo(.{ .x = x_offset + trapezoid_margin_top, .y = 0 + trapezoid_margin_y });
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - trapezoid_margin_top - 1, .y = 0 + trapezoid_margin_y });
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, .y = sub_canvas_height - trapezoid_margin_y - 1 });
-    try path.lineTo(.{ .x = x_offset + trapezoid_margin_bottom, .y = sub_canvas_height - trapezoid_margin_y - 1 });
+    try path.moveTo(x_offset + trapezoid_margin_top, 0 + trapezoid_margin_y);
+    try path.lineTo(x_offset + sub_canvas_width - trapezoid_margin_top - 1, 0 + trapezoid_margin_y);
+    try path.lineTo(x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, sub_canvas_height - trapezoid_margin_y - 1);
+    try path.lineTo(x_offset + trapezoid_margin_bottom, sub_canvas_height - trapezoid_margin_y - 1);
     try path.close();
 
     // Star
@@ -64,21 +64,17 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const y_offset = sub_canvas_height;
     // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
     // then evens (4, 2), with the close connecting 4 and 1.
-    try path.moveTo(.{ .x = x_offset + sub_canvas_width / 2, .y = y_offset + margin }); // 1
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin * x_scale - 1, .y = y_offset + sub_canvas_height - margin - 1 }); // 3
-    try path.lineTo(.{ .x = x_offset + margin, .y = y_offset + margin * y_scale }); // 5
-    try path.lineTo(.{ .x = x_offset + sub_canvas_width - margin - 1, .y = y_offset + margin * y_scale }); // 2
-    try path.lineTo(.{ .x = x_offset + margin * x_scale, .y = y_offset + sub_canvas_height - margin - 1 }); // 4
+    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin); // 1
+    try path.lineTo(x_offset + sub_canvas_width - margin * x_scale - 1, y_offset + sub_canvas_height - margin - 1); // 3
+    try path.lineTo(x_offset + margin, y_offset + margin * y_scale); // 5
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin * y_scale); // 2
+    try path.lineTo(x_offset + margin * x_scale, y_offset + sub_canvas_height - margin - 1); // 4
     try path.close();
 
     // Bezier
     x_offset += sub_canvas_width;
-    const p0: z2d.Point = .{ .x = x_offset + 12, .y = y_offset + 166 };
-    const p1: z2d.Point = .{ .x = x_offset + 59, .y = y_offset + 32 };
-    const p2: z2d.Point = .{ .x = x_offset + 139, .y = y_offset + 32 };
-    const p3: z2d.Point = .{ .x = x_offset + 186, .y = y_offset + 166 };
-    try path.moveTo(p0);
-    try path.curveTo(p1, p2, p3);
+    try path.moveTo(x_offset + 12, y_offset + 166);
+    try path.curveTo(x_offset + 59, y_offset + 32, x_offset + 139, y_offset + 32, x_offset + 186, y_offset + 166);
     try path.close();
 
     try context.fill(alloc, path);

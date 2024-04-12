@@ -20,7 +20,7 @@ const nodepkg = @import("path_nodes.zig");
 const options = @import("../options.zig");
 
 const Pen = @import("Pen.zig");
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 

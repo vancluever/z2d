@@ -10,7 +10,7 @@ const nodepkg = @import("path_nodes.zig");
 
 const Face = @import("Face.zig");
 const Pen = @import("Pen.zig");
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");

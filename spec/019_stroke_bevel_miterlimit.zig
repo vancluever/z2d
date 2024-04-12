@@ -37,74 +37,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     defer path.deinit();
 
     // Line 1, ~130 degrees (dx = 70)
-    try path.moveTo(.{
-        .x = 10,
-        .y = 90,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 150,
-        .y = 90,
-    });
+    try path.moveTo(10, 90);
+    try path.lineTo(80, 60);
+    try path.lineTo(150, 90);
 
     // Line 2, ~99 degrees (dx = 35)
-    try path.moveTo(.{
-        .x = 170,
-        .y = 90,
-    });
-    try path.lineTo(.{
-        .x = 205,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 240,
-        .y = 90,
-    });
+    try path.moveTo(170, 90);
+    try path.lineTo(205, 60);
+    try path.lineTo(240, 90);
 
     // Line 3, ~67 degrees (dx = 20)
-    try path.moveTo(.{
-        .x = 260,
-        .y = 90,
-    });
-    try path.lineTo(.{
-        .x = 280,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 300,
-        .y = 90,
-    });
+    try path.moveTo(260, 90);
+    try path.lineTo(280, 60);
+    try path.lineTo(300, 90);
 
     // Line 4, ~28 degrees (dx = 7.5)
-    try path.moveTo(.{
-        .x = 320,
-        .y = 90,
-    });
-    try path.lineTo(.{
-        .x = 327.5,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 335,
-        .y = 90,
-    });
+    try path.moveTo(320, 90);
+    try path.lineTo(327.5, 60);
+    try path.lineTo(335, 90);
 
     // Line 5, ~18 degrees (dx = 5)
-    try path.moveTo(.{
-        .x = 355,
-        .y = 90,
-    });
-    try path.lineTo(.{
-        .x = 360,
-        .y = 60,
-    });
-    try path.lineTo(.{
-        .x = 365,
-        .y = 90,
-    });
+    try path.moveTo(355, 90);
+    try path.lineTo(360, 60);
+    try path.lineTo(365, 90);
 
     try context.stroke(alloc, path);
 
@@ -115,74 +70,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
-    try path.moveTo(.{
-        .x = 10,
-        .y = 190,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 160,
-    });
-    try path.lineTo(.{
-        .x = 150,
-        .y = 190,
-    });
+    try path.moveTo(10, 190);
+    try path.lineTo(80, 160);
+    try path.lineTo(150, 190);
 
     // Line 2, ~99 degrees (dx = 35)
-    try path.moveTo(.{
-        .x = 170,
-        .y = 190,
-    });
-    try path.lineTo(.{
-        .x = 205,
-        .y = 160,
-    });
-    try path.lineTo(.{
-        .x = 240,
-        .y = 190,
-    });
+    try path.moveTo(170, 190);
+    try path.lineTo(205, 160);
+    try path.lineTo(240, 190);
 
     // Line 3, ~67 degrees (dx = 20)
-    try path.moveTo(.{
-        .x = 260,
-        .y = 190,
-    });
-    try path.lineTo(.{
-        .x = 280,
-        .y = 160,
-    });
-    try path.lineTo(.{
-        .x = 300,
-        .y = 190,
-    });
+    try path.moveTo(260, 190);
+    try path.lineTo(280, 160);
+    try path.lineTo(300, 190);
 
     // Line 4, ~28 degrees (dx = 7.5)
-    try path.moveTo(.{
-        .x = 320,
-        .y = 190,
-    });
-    try path.lineTo(.{
-        .x = 327.5,
-        .y = 160,
-    });
-    try path.lineTo(.{
-        .x = 335,
-        .y = 190,
-    });
+    try path.moveTo(320, 190);
+    try path.lineTo(327.5, 160);
+    try path.lineTo(335, 190);
 
     // Line 5, ~18 degrees (dx = 5)
-    try path.moveTo(.{
-        .x = 355,
-        .y = 190,
-    });
-    try path.lineTo(.{
-        .x = 360,
-        .y = 160,
-    });
-    try path.lineTo(.{
-        .x = 365,
-        .y = 190,
-    });
+    try path.moveTo(355, 190);
+    try path.lineTo(360, 160);
+    try path.lineTo(365, 190);
 
     try context.stroke(alloc, path);
 
@@ -191,74 +101,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
-    try path.moveTo(.{
-        .x = 10,
-        .y = 290,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 260,
-    });
-    try path.lineTo(.{
-        .x = 150,
-        .y = 290,
-    });
+    try path.moveTo(10, 290);
+    try path.lineTo(80, 260);
+    try path.lineTo(150, 290);
 
     // Line 2, ~99 degrees (dx = 35)
-    try path.moveTo(.{
-        .x = 170,
-        .y = 290,
-    });
-    try path.lineTo(.{
-        .x = 205,
-        .y = 260,
-    });
-    try path.lineTo(.{
-        .x = 240,
-        .y = 290,
-    });
+    try path.moveTo(170, 290);
+    try path.lineTo(205, 260);
+    try path.lineTo(240, 290);
 
     // Line 3, ~67 degrees (dx = 20)
-    try path.moveTo(.{
-        .x = 260,
-        .y = 290,
-    });
-    try path.lineTo(.{
-        .x = 280,
-        .y = 260,
-    });
-    try path.lineTo(.{
-        .x = 300,
-        .y = 290,
-    });
+    try path.moveTo(260, 290);
+    try path.lineTo(280, 260);
+    try path.lineTo(300, 290);
 
     // Line 4, ~28 degrees (dx = 7.5)
-    try path.moveTo(.{
-        .x = 320,
-        .y = 290,
-    });
-    try path.lineTo(.{
-        .x = 327.5,
-        .y = 260,
-    });
-    try path.lineTo(.{
-        .x = 335,
-        .y = 290,
-    });
+    try path.moveTo(320, 290);
+    try path.lineTo(327.5, 260);
+    try path.lineTo(335, 290);
 
     // Line 5, ~18 degrees (dx = 5)
-    try path.moveTo(.{
-        .x = 355,
-        .y = 290,
-    });
-    try path.lineTo(.{
-        .x = 360,
-        .y = 260,
-    });
-    try path.lineTo(.{
-        .x = 365,
-        .y = 290,
-    });
+    try path.moveTo(355, 290);
+    try path.lineTo(360, 260);
+    try path.lineTo(365, 290);
 
     try context.stroke(alloc, path);
 
@@ -267,74 +132,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
-    try path.moveTo(.{
-        .x = 10,
-        .y = 390,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 360,
-    });
-    try path.lineTo(.{
-        .x = 150,
-        .y = 390,
-    });
+    try path.moveTo(10, 390);
+    try path.lineTo(80, 360);
+    try path.lineTo(150, 390);
 
     // Line 2, ~99 degrees (dx = 35)
-    try path.moveTo(.{
-        .x = 170,
-        .y = 390,
-    });
-    try path.lineTo(.{
-        .x = 205,
-        .y = 360,
-    });
-    try path.lineTo(.{
-        .x = 240,
-        .y = 390,
-    });
+    try path.moveTo(170, 390);
+    try path.lineTo(205, 360);
+    try path.lineTo(240, 390);
 
     // Line 3, ~67 degrees (dx = 20)
-    try path.moveTo(.{
-        .x = 260,
-        .y = 390,
-    });
-    try path.lineTo(.{
-        .x = 280,
-        .y = 360,
-    });
-    try path.lineTo(.{
-        .x = 300,
-        .y = 390,
-    });
+    try path.moveTo(260, 390);
+    try path.lineTo(280, 360);
+    try path.lineTo(300, 390);
 
     // Line 4, ~28 degrees (dx = 7.5)
-    try path.moveTo(.{
-        .x = 320,
-        .y = 390,
-    });
-    try path.lineTo(.{
-        .x = 327.5,
-        .y = 360,
-    });
-    try path.lineTo(.{
-        .x = 335,
-        .y = 390,
-    });
+    try path.moveTo(320, 390);
+    try path.lineTo(327.5, 360);
+    try path.lineTo(335, 390);
 
     // Line 5, ~18 degrees (dx = 5)
-    try path.moveTo(.{
-        .x = 355,
-        .y = 390,
-    });
-    try path.lineTo(.{
-        .x = 360,
-        .y = 360,
-    });
-    try path.lineTo(.{
-        .x = 365,
-        .y = 390,
-    });
+    try path.moveTo(355, 390);
+    try path.lineTo(360, 360);
+    try path.lineTo(365, 390);
 
     try context.stroke(alloc, path);
 
@@ -343,74 +163,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     path.reset();
 
     // Line 1, ~130 degrees (dx = 70)
-    try path.moveTo(.{
-        .x = 10,
-        .y = 490,
-    });
-    try path.lineTo(.{
-        .x = 80,
-        .y = 460,
-    });
-    try path.lineTo(.{
-        .x = 150,
-        .y = 490,
-    });
+    try path.moveTo(10, 490);
+    try path.lineTo(80, 460);
+    try path.lineTo(150, 490);
 
     // Line 2, ~99 degrees (dx = 35)
-    try path.moveTo(.{
-        .x = 170,
-        .y = 490,
-    });
-    try path.lineTo(.{
-        .x = 205,
-        .y = 460,
-    });
-    try path.lineTo(.{
-        .x = 240,
-        .y = 490,
-    });
+    try path.moveTo(170, 490);
+    try path.lineTo(205, 460);
+    try path.lineTo(240, 490);
 
     // Line 3, ~67 degrees (dx = 20)
-    try path.moveTo(.{
-        .x = 260,
-        .y = 490,
-    });
-    try path.lineTo(.{
-        .x = 280,
-        .y = 460,
-    });
-    try path.lineTo(.{
-        .x = 300,
-        .y = 490,
-    });
+    try path.moveTo(260, 490);
+    try path.lineTo(280, 460);
+    try path.lineTo(300, 490);
 
     // Line 4, ~28 degrees (dx = 7.5)
-    try path.moveTo(.{
-        .x = 320,
-        .y = 490,
-    });
-    try path.lineTo(.{
-        .x = 327.5,
-        .y = 460,
-    });
-    try path.lineTo(.{
-        .x = 335,
-        .y = 490,
-    });
+    try path.moveTo(320, 490);
+    try path.lineTo(327.5, 460);
+    try path.lineTo(335, 490);
 
     // Line 5, ~18 degrees (dx = 5)
-    try path.moveTo(.{
-        .x = 355,
-        .y = 490,
-    });
-    try path.lineTo(.{
-        .x = 360,
-        .y = 460,
-    });
-    try path.lineTo(.{
-        .x = 365,
-        .y = 490,
-    });
+    try path.moveTo(355, 490);
+    try path.lineTo(360, 460);
+    try path.lineTo(365, 490);
 
     try context.stroke(alloc, path);
 

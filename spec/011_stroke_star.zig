@@ -34,11 +34,11 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const y_scale = 5;
     // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
     // then evens (4, 2), with the close connecting 4 and 1.
-    try path.moveTo(.{ .x = width / 2, .y = 0 + margin }); // 1
-    try path.lineTo(.{ .x = width - margin * x_scale - 1, .y = height - margin - 1 }); // 3
-    try path.lineTo(.{ .x = 0 + margin, .y = 0 + margin * y_scale }); // 5
-    try path.lineTo(.{ .x = width - margin - 1, .y = 0 + margin * y_scale }); // 2
-    try path.lineTo(.{ .x = 0 + margin * x_scale, .y = height - margin - 1 }); // 4
+    try path.moveTo(width / 2, 0 + margin); // 1
+    try path.lineTo(width - margin * x_scale - 1, height - margin - 1); // 3
+    try path.lineTo(0 + margin, 0 + margin * y_scale); // 5
+    try path.lineTo(width - margin - 1, 0 + margin * y_scale); // 2
+    try path.lineTo(0 + margin * x_scale, height - margin - 1); // 4
     try path.close();
 
     try context.stroke(alloc, path);

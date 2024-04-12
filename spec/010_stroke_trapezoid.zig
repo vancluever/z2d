@@ -27,10 +27,10 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const margin_top = 89;
     const margin_bottom = 50;
     const margin_y = 100;
-    try path.moveTo(.{ .x = 0 + margin_top, .y = 0 + margin_y });
-    try path.lineTo(.{ .x = width - margin_top - 1, .y = 0 + margin_y });
-    try path.lineTo(.{ .x = width - margin_bottom - 1, .y = height - margin_y - 1 });
-    try path.lineTo(.{ .x = 0 + margin_bottom, .y = height - margin_y - 1 });
+    try path.moveTo(0 + margin_top, 0 + margin_y);
+    try path.lineTo(width - margin_top - 1, 0 + margin_y);
+    try path.lineTo(width - margin_bottom - 1, height - margin_y - 1);
+    try path.lineTo(0 + margin_bottom, height - margin_y - 1);
     try path.close();
 
     try context.stroke(alloc, path);

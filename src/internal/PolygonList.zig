@@ -9,7 +9,7 @@ const mem = @import("std").mem;
 
 const FillRule = @import("../options.zig").FillRule;
 const Polygon = @import("Polygon.zig");
-const Point = @import("../Point.zig");
+const Point = @import("Point.zig");
 
 polygons: std.ArrayList(Polygon),
 start: Point = .{ .x = 0, .y = 0 },

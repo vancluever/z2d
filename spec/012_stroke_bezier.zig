@@ -27,32 +27,20 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     var path = z2d.Path.init(alloc);
     defer path.deinit();
 
-    var p0: z2d.Point = .{ .x = 19, .y = 149 };
-    var p1: z2d.Point = .{ .x = 89, .y = 0 };
-    var p2: z2d.Point = .{ .x = 209, .y = 0 };
-    var p3: z2d.Point = .{ .x = 279, .y = 149 };
-    try path.moveTo(p0);
-    try path.curveTo(p1, p2, p3);
+    try path.moveTo(19, 149);
+    try path.curveTo(89, 0, 209, 0, 279, 149);
     try context.stroke(alloc, path);
 
     context.line_width = 6;
     path.reset();
-    p0 = .{ .x = 19, .y = 199 };
-    p1 = .{ .x = 89, .y = 24 };
-    p2 = .{ .x = 209, .y = 24 };
-    p3 = .{ .x = 279, .y = 199 };
-    try path.moveTo(p0);
-    try path.curveTo(p1, p2, p3);
+    try path.moveTo(19, 199);
+    try path.curveTo(89, 24, 209, 24, 279, 199);
     try context.stroke(alloc, path);
 
     context.line_width = 10;
     path.reset();
-    p0 = .{ .x = 19, .y = 249 };
-    p1 = .{ .x = 89, .y = 49 };
-    p2 = .{ .x = 209, .y = 49 };
-    p3 = .{ .x = 279, .y = 249 };
-    try path.moveTo(p0);
-    try path.curveTo(p1, p2, p3);
+    try path.moveTo(19, 249);
+    try path.curveTo(89, 49, 209, 49, 279, 249);
     try context.stroke(alloc, path);
 
     return sfc;

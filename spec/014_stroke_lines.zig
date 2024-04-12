@@ -33,97 +33,49 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.AntiAliasMode) !z2d.Surface {
     const margin = 10;
     comptime var x_offset = 0;
     comptime var y_offset = 0;
-    try path.moveTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + margin,
-    });
-    try path.lineTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
+    try path.moveTo(x_offset + margin, y_offset + margin);
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the right
     x_offset = sub_canvas_width;
-    try path.moveTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
-    try path.lineTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + margin,
-    });
+    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
 
     // Down and to the left
     x_offset = 0;
     y_offset = sub_canvas_height;
-    try path.moveTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + margin,
-    });
-    try path.lineTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
+    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the left
     x_offset = sub_canvas_width;
     y_offset = sub_canvas_height;
-    try path.moveTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
-    try path.lineTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + margin,
-    });
+    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(x_offset + margin, y_offset + margin);
 
     // Horizontal (left -> right)
     x_offset = sub_canvas_width * 2;
     y_offset = 0;
-    try path.moveTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + sub_canvas_height / 2,
-    });
-    try path.lineTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + sub_canvas_height / 2,
-    });
+    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height / 2);
+    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
 
     // Vertical (up -> down)
     x_offset = sub_canvas_width * 2;
     y_offset = sub_canvas_height;
-    try path.moveTo(.{
-        .x = x_offset + sub_canvas_width / 2,
-        .y = y_offset + margin,
-    });
-    try path.lineTo(.{
-        .x = x_offset + sub_canvas_width / 2,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
+    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin);
+    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
 
     // Vertical (down -> up)
     x_offset = sub_canvas_width * 3;
     y_offset = 0;
-    try path.moveTo(.{
-        .x = x_offset + sub_canvas_width / 2,
-        .y = y_offset + sub_canvas_height - margin - 1,
-    });
-    try path.lineTo(.{
-        .x = x_offset + sub_canvas_width / 2,
-        .y = y_offset + margin,
-    });
+    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + margin);
 
     // Horizontal (right -> left)
     x_offset = sub_canvas_width * 3;
     y_offset = sub_canvas_height;
-    try path.moveTo(.{
-        .x = x_offset + sub_canvas_width - margin - 1,
-        .y = y_offset + sub_canvas_height / 2,
-    });
-    try path.lineTo(.{
-        .x = x_offset + margin,
-        .y = y_offset + sub_canvas_height / 2,
-    });
+    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
+    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height / 2);
 
     try context.stroke(alloc, path);
 
