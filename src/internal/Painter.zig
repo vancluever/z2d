@@ -133,10 +133,6 @@ fn paintDirect(
             );
 
             for (start_x..end_x) |x| {
-                // TODO: Add pixel-by-pixel compositing to this (src-over).
-                // This comes at a cost of course, but will be correct for the
-                // expectations of paint operations when working with the alpha
-                // channel.
                 const src = try self.context.pattern.getPixel(@intCast(x), @intCast(y));
                 const dst = try self.context.surface.getPixel(@intCast(x), @intCast(y));
                 try self.context.surface.putPixel(@intCast(x), @intCast(y), dst.srcOver(src));
