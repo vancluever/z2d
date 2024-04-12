@@ -70,8 +70,8 @@ pub fn lineTo(self: *Path, x: f64, y: f64) !void {
     self.current_point = point;
 }
 
-/// Draws a cubic bezier with the three supplied control points from
-/// the current point. The new current point is set to p3.
+/// Draws a cubic bezier with the three supplied control points from the
+/// current point. The new current point is set to (x3, y3).
 ///
 /// It is an error to call this without a current point.
 pub fn curveTo(
