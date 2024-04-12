@@ -1,3 +1,4 @@
+const math = @import("std").math;
 const testing = @import("std").testing;
 
 /// Format descriptors for the pixel formats supported by the library:
@@ -47,6 +48,15 @@ pub const RGB = packed struct(u32) {
 
     /// The format descriptor for this pixel format.
     pub const format: Format = .rgb;
+
+    /// Returns a pixel from a clamped 0-1 value.
+    pub fn fromClamped(r: f64, g: f64, b: f64) RGB {
+        return .{
+            .r = @intFromFloat(255 * math.clamp(r, 0, 1)),
+            .g = @intFromFloat(255 * math.clamp(g, 0, 1)),
+            .b = @intFromFloat(255 * math.clamp(b, 0, 1)),
+        };
+    }
 
     /// Returns this pixel as an interface.
     pub fn fromPixel(p: Pixel) !RGB {
@@ -179,6 +189,23 @@ pub const RGBA = packed struct(u32) {
 
     /// The format descriptor for this pixel format.
     pub const format: Format = .rgba;
+
+    /// Returns a pixel from a clamped 0-1 value.
+    ///
+    /// The helper expects the values as straight alpha and will pre-multiply
+    /// the values for you.
+    pub fn fromClamped(r: f64, g: f64, b: f64, a: f64) RGBA {
+        const rc = math.clamp(r, 0, 1);
+        const gc = math.clamp(g, 0, 1);
+        const bc = math.clamp(b, 0, 1);
+        const ac = math.clamp(a, 0, 1);
+        return .{
+            .r = @intFromFloat(255 * rc * ac),
+            .g = @intFromFloat(255 * gc * ac),
+            .b = @intFromFloat(255 * bc * ac),
+            .a = @intFromFloat(255 * ac),
+        };
+    }
 
     /// Returns this pixel as an interface.
     pub fn fromPixel(p: Pixel) !RGBA {
@@ -505,4 +532,33 @@ test "RGBA, multiply/demultiply" {
         try testing.expectEqual(expected_multiplied, rgba.multiply());
         try testing.expectEqual(expected_multiplied, expected_multiplied.demultiply());
     }
+}
+
+test "RGB, fromClamped" {
+    try testing.expectEqual(RGB{ .r = 76, .g = 153, .b = 229 }, RGB.fromClamped(0.3, 0.6, 0.9));
+    try testing.expectEqual(RGB{ .r = 0, .g = 0, .b = 0 }, RGB.fromClamped(-1, -1, -1));
+    try testing.expectEqual(RGB{ .r = 255, .g = 255, .b = 255 }, RGB.fromClamped(2, 2, 2));
+}
+
+test "RGBA, fromClamped" {
+    try testing.expectEqual(
+        RGBA{ .r = 76, .g = 153, .b = 229, .a = 255 },
+        RGBA.fromClamped(0.3, 0.6, 0.9, 1),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 38, .g = 76, .b = 114, .a = 127 },
+        RGBA.fromClamped(0.3, 0.6, 0.9, 0.5),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 0, .g = 0, .b = 0, .a = 0 },
+        RGBA.fromClamped(-1, -1, -1, -1),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 255, .g = 255, .b = 255, .a = 255 },
+        RGBA.fromClamped(2, 2, 2, 2),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 127, .g = 127, .b = 127, .a = 127 },
+        RGBA.fromClamped(2, 2, 2, 0.5),
+    );
 }
