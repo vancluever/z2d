@@ -4,6 +4,7 @@ const Painter = @This();
 const std = @import("std");
 const debug = @import("std").debug;
 const heap = @import("std").heap;
+const math = @import("std").math;
 const mem = @import("std").mem;
 
 const fill_plotter = @import("FillPlotter.zig");
@@ -115,30 +116,40 @@ fn paintDirect(
     defer arena.deinit();
     const arena_alloc = arena.allocator();
 
-    const poly_start_y: usize = @intFromFloat(polygons.start.y);
-    const poly_end_y: usize = @intFromFloat(polygons.end.y);
-    for (poly_start_y..poly_end_y + 1) |y| {
+    const poly_start_y: i32 = math.clamp(
+        @as(i32, @intFromFloat(polygons.start.y)),
+        0,
+        self.context.surface.getHeight() - 1,
+    );
+    const poly_end_y: i32 = math.clamp(
+        @as(i32, @intFromFloat(polygons.end.y)),
+        0,
+        self.context.surface.getHeight() - 1,
+    );
+    var y = poly_start_y;
+    while (y <= poly_end_y) : (y += 1) {
         var edge_list = try polygons.edgesForY(arena_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit();
 
         var start_idx: usize = 0;
-        while (start_idx + 1 < edge_list.items.len) {
-            const start_x = @min(
-                self.context.surface.getWidth(),
+        while (start_idx + 1 < edge_list.items.len) : (start_idx += 2) {
+            const start_x = math.clamp(
                 edge_list.items[start_idx],
+                0,
+                self.context.surface.getWidth() - 1,
             );
-            const end_x = @min(
-                self.context.surface.getWidth(),
+            const end_x = math.clamp(
                 edge_list.items[start_idx + 1],
+                0,
+                self.context.surface.getWidth() - 1,
             );
 
-            for (@intCast(start_x)..@intCast(end_x)) |x| {
-                const src = try self.context.pattern.getPixel(@intCast(x), @intCast(y));
-                const dst = try self.context.surface.getPixel(@intCast(x), @intCast(y));
-                try self.context.surface.putPixel(@intCast(x), @intCast(y), dst.srcOver(src));
+            var x = start_x;
+            while (x < end_x) : (x += 1) {
+                const src = try self.context.pattern.getPixel(x, y);
+                const dst = try self.context.surface.getPixel(x, y);
+                try self.context.surface.putPixel(x, y, dst.srcOver(src));
             }
-
-            start_idx += 2;
         }
     }
 }

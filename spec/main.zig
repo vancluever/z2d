@@ -32,6 +32,8 @@ const _021_stroke_lines_square_caps = @import("021_stroke_lines_square_caps.zig"
 const _022_stroke_lines_butt_caps = @import("022_stroke_lines_butt_caps.zig");
 const _023_smile_alpha_mask = @import("023_smile_alpha_mask.zig");
 const _024_fill_triangle_direct_cross_format = @import("024_fill_triangle_direct_cross_format.zig");
+const _025_fill_diamond_clipped = @import("025_fill_diamond_clipped.zig");
+const _026_fill_triangle_full = @import("026_fill_triangle_full.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -63,6 +65,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _022_stroke_lines_butt_caps);
     try compositorExportRun(alloc, _023_smile_alpha_mask);
     try pathExportRun(alloc, _024_fill_triangle_direct_cross_format);
+    try pathExportRun(alloc, _025_fill_diamond_clipped);
+    try pathExportRun(alloc, _026_fill_triangle_full);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -161,6 +165,14 @@ test "023_smile_alpha_mask" {
 
 test "024_fill_triangle_direct_cross_format" {
     try pathTestRun(testing.allocator, _024_fill_triangle_direct_cross_format);
+}
+
+test "025_fill_diamond_clipped" {
+    try pathTestRun(testing.allocator, _025_fill_diamond_clipped);
+}
+
+test "026_fill_triangle_full" {
+    try pathTestRun(testing.allocator, _026_fill_triangle_full);
 }
 
 //////////////////////////////////////////////////////////////////////////////
