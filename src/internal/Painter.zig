@@ -138,14 +138,16 @@ fn paintDirect(
                 0,
                 self.context.surface.getWidth() - 1,
             );
+            // Subtract 1 from the end edge as this is our pixel boundary
+            // (end_x = 100 actually means we should only fill to x=99).
             const end_x = math.clamp(
-                edge_list.items[start_idx + 1],
+                edge_list.items[start_idx + 1] - 1,
                 0,
                 self.context.surface.getWidth() - 1,
             );
 
             var x = start_x;
-            while (x < end_x) : (x += 1) {
+            while (x <= end_x) : (x += 1) {
                 const src = try self.context.pattern.getPixel(x, y);
                 const dst = try self.context.surface.getPixel(x, y);
                 try self.context.surface.putPixel(x, y, dst.srcOver(src));
@@ -199,13 +201,15 @@ fn paintComposite(
                     surface_width,
                     edge_list.items[start_idx],
                 );
+                // Subtract 1 from the end edge as this is our pixel boundary
+                // (end_x = 100 actually means we should only fill to x=99).
                 const end_x = @min(
                     surface_width,
-                    edge_list.items[start_idx + 1],
+                    edge_list.items[start_idx + 1] - 1,
                 );
 
                 var x = start_x;
-                while (x < end_x) : (x += 1) {
+                while (x <= end_x) : (x += 1) {
                     try scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
