@@ -3,7 +3,9 @@
 const Path = @This();
 
 const std = @import("std");
+const math = @import("std").math;
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("internal/Point.zig");
@@ -40,7 +42,7 @@ pub fn reset(self: *Path) void {
 
 /// Starts a new path, and moves the current point to it.
 pub fn moveTo(self: *Path, x: f64, y: f64) !void {
-    const point: Point = .{ .x = x, .y = y };
+    const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
     // If our last operation is a move_to to this point, this is a no-op.
     // This ensures that there's no duplicates on things like explicit
     // definitions on close_path -> move_to (versus the implicit add in the
@@ -64,8 +66,8 @@ pub fn moveTo(self: *Path, x: f64, y: f64) !void {
 ///
 /// Acts as a moveTo instead if there is no current point.
 pub fn lineTo(self: *Path, x: f64, y: f64) !void {
-    const point: Point = .{ .x = x, .y = y };
     if (self.current_point == null) return self.moveTo(x, y);
+    const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
     try self.nodes.append(.{ .line_to = .{ .point = point } });
     self.current_point = point;
 }
@@ -83,10 +85,10 @@ pub fn curveTo(
     x3: f64,
     y3: f64,
 ) !void {
-    const p1: Point = .{ .x = x1, .y = y1 };
-    const p2: Point = .{ .x = x2, .y = y2 };
-    const p3: Point = .{ .x = x3, .y = y3 };
     if (self.current_point == null) return error.NoCurrentPoint;
+    const p1: Point = .{ .x = clampI32(x1), .y = clampI32(y1) };
+    const p2: Point = .{ .x = clampI32(x2), .y = clampI32(y2) };
+    const p3: Point = .{ .x = clampI32(x3), .y = clampI32(y3) };
     try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
     self.current_point = p3;
 }
@@ -115,4 +117,120 @@ pub fn isClosed(self: *const Path) bool {
     const len = self.nodes.items.len;
     if (len < 2) return false;
     return self.nodes.items[len - 2] == .close_path and self.nodes.items[len - 1] == .move_to;
+}
+
+fn clampI32(x: f64) f64 {
+    return math.clamp(x, math.minInt(i32), math.maxInt(i32));
+}
+
+test "moveTo clamped" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 2);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[0]);
+        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
+    }
+    {
+        // Clamped
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(math.minInt(i32) - 1, math.maxInt(i32) + 1);
+        try testing.expectEqual(PathNode{
+            .move_to = .{ .point = .{ .x = math.minInt(i32), .y = math.maxInt(i32) } },
+        }, p.nodes.items[0]);
+        try testing.expectEqual(Point{ .x = math.minInt(i32), .y = math.maxInt(i32) }, p.initial_point);
+        try testing.expectEqual(Point{ .x = math.minInt(i32), .y = math.maxInt(i32) }, p.current_point);
+    }
+}
+
+test "lineTo clamped" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(1, 2);
+        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
+    }
+    {
+        // Clamped
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(math.minInt(i32) - 1, math.maxInt(i32) + 1);
+        try testing.expectEqual(PathNode{
+            .line_to = .{ .point = .{ .x = math.minInt(i32), .y = math.maxInt(i32) } },
+        }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = math.minInt(i32), .y = math.maxInt(i32) }, p.current_point);
+    }
+}
+
+test "curveTo clamped" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.curveTo(1, 2, 3, 4, 5, 6);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{ .x = 1, .y = 2 },
+                .p2 = .{ .x = 3, .y = 4 },
+                .p3 = .{ .x = 5, .y = 6 },
+            },
+        }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+    }
+    {
+        // Clamped
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.curveTo(math.minInt(i32) - 1, math.maxInt(i32) + 1, 3, 4, 5, 6);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{
+                    .x = math.minInt(i32),
+                    .y = math.maxInt(i32),
+                },
+                .p2 = .{ .x = 3, .y = 4 },
+                .p3 = .{ .x = 5, .y = 6 },
+            },
+        }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+        try p.curveTo(1, 2, math.minInt(i32) - 1, math.maxInt(i32) + 1, 5, 6);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{ .x = 1, .y = 2 },
+                .p2 = .{
+                    .x = math.minInt(i32),
+                    .y = math.maxInt(i32),
+                },
+                .p3 = .{ .x = 5, .y = 6 },
+            },
+        }, p.nodes.items[2]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+        try p.curveTo(1, 2, 3, 4, math.minInt(i32) - 1, math.maxInt(i32) + 1);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{ .x = 1, .y = 2 },
+                .p2 = .{ .x = 3, .y = 4 },
+                .p3 = .{
+                    .x = math.minInt(i32),
+                    .y = math.maxInt(i32),
+                },
+            },
+        }, p.nodes.items[3]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = math.minInt(i32), .y = math.maxInt(i32) }, p.current_point);
+    }
 }
