@@ -27,8 +27,8 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     );
     defer mask_sfc.deinit();
 
-    var x: u32 = 0;
-    var y: u32 = 0;
+    var x: i32 = 0;
+    var y: i32 = 0;
     for (image.data[0..image.data.len]) |c| {
         if (c == '\n') {
             y += 1;

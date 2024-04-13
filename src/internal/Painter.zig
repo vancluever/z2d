@@ -132,7 +132,7 @@ fn paintDirect(
                 edge_list.items[start_idx + 1],
             );
 
-            for (start_x..end_x) |x| {
+            for (@intCast(start_x)..@intCast(end_x)) |x| {
                 const src = try self.context.pattern.getPixel(@intCast(x), @intCast(y));
                 const dst = try self.context.surface.getPixel(@intCast(x), @intCast(y));
                 try self.context.surface.putPixel(@intCast(x), @intCast(y), dst.srcOver(src));
@@ -157,15 +157,15 @@ fn paintComposite(
     const arena_alloc = arena.allocator();
 
     const mask_sfc = sfc_m: {
-        const offset_x: u32 = @intFromFloat(polygons.start.x);
-        const offset_y: u32 = @intFromFloat(polygons.start.y);
+        const offset_x: i32 = @intFromFloat(polygons.start.x);
+        const offset_y: i32 = @intFromFloat(polygons.start.y);
         // Add scale to our relative dimensions here, as our polygon extent
         // figures stop at the end pixel, instead of what would technically be
         // one over. Using scale instead of 1 here ensures that we downscale
         // evenly to our original extent dimensions.
-        const mask_width: u32 = @intFromFloat(polygons.end.x - polygons.start.x + scale);
-        const mask_height: u32 = @intFromFloat(polygons.end.y - polygons.start.y + scale);
-        const surface_width: u32 = self.context.surface.getWidth() * @as(u32, @intFromFloat(scale));
+        const mask_width: i32 = @intFromFloat(polygons.end.x - polygons.start.x + scale);
+        const mask_height: i32 = @intFromFloat(polygons.end.y - polygons.start.y + scale);
+        const surface_width: i32 = self.context.surface.getWidth() * @as(i32, @intFromFloat(scale));
 
         const scaled_sfc = try Surface.init(
             .image_surface_alpha8,
@@ -175,9 +175,10 @@ fn paintComposite(
         );
         defer scaled_sfc.deinit();
 
-        const poly_start_y: usize = @intFromFloat(polygons.start.y);
-        const poly_end_y: usize = @intFromFloat(polygons.end.y);
-        for (poly_start_y..poly_end_y + 1) |y| {
+        const poly_start_y: i32 = @intFromFloat(polygons.start.y);
+        const poly_end_y: i32 = @intFromFloat(polygons.end.y);
+        var y = poly_start_y;
+        while (y <= poly_end_y) : (y += 1) {
             var edge_list = try polygons.edgesForY(arena_alloc, @floatFromInt(y), fill_rule);
             defer edge_list.deinit();
 
@@ -192,7 +193,8 @@ fn paintComposite(
                     edge_list.items[start_idx + 1],
                 );
 
-                for (start_x..end_x) |x| {
+                var x = start_x;
+                while (x < end_x) : (x += 1) {
                     try scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
@@ -209,12 +211,12 @@ fn paintComposite(
     defer mask_sfc.deinit();
 
     // Downscaled offsets
-    const offset_x: u32 = @intFromFloat(polygons.start.x / scale);
-    const offset_y: u32 = @intFromFloat(polygons.start.y / scale);
+    const offset_x: i32 = @intFromFloat(polygons.start.x / scale);
+    const offset_y: i32 = @intFromFloat(polygons.start.y / scale);
     // Add a 1 to our relative dimensions here, as our polygon extent figures
     // stop at the end pixel, instead of what would technically be one over.
-    const width: u32 = @intFromFloat(polygons.end.x / scale - polygons.start.x / scale + 1);
-    const height: u32 = @intFromFloat(polygons.end.y / scale - polygons.start.y / scale + 1);
+    const width: i32 = @intFromFloat(polygons.end.x / scale - polygons.start.x / scale + 1);
+    const height: i32 = @intFromFloat(polygons.end.y / scale - polygons.start.y / scale + 1);
 
     const foreground_sfc = switch (self.context.pattern) {
         // This is the surface that we composite our mask on to get the final

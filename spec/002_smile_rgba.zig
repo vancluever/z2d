@@ -20,8 +20,8 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     );
 
     // 1st smile
-    var x: u32 = 2;
-    var y: u32 = 3;
+    var x: i32 = 2;
+    var y: i32 = 3;
 
     for (image.data[0..image.data.len]) |c| {
         if (c == '\n') {

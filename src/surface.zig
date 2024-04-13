@@ -37,8 +37,8 @@ pub const Surface = union(SurfaceType) {
     pub fn init(
         surface_type: SurfaceType,
         alloc: mem.Allocator,
-        width: u32,
-        height: u32,
+        width: i32,
+        height: i32,
     ) !Surface {
         switch (surface_type) {
             inline else => |t| {
@@ -58,8 +58,8 @@ pub const Surface = union(SurfaceType) {
     pub fn initPixel(
         initial_px: pixel.Pixel,
         alloc: mem.Allocator,
-        width: u32,
-        height: u32,
+        width: i32,
+        height: i32,
     ) !Surface {
         switch (initial_px) {
             inline else => |px| {
@@ -111,7 +111,7 @@ pub const Surface = union(SurfaceType) {
     /// Composites the source surface onto this surface using the Porter-Duff
     /// src-over operation at the destination. Any parts of the source outside
     /// of the destination are ignored.
-    pub fn srcOver(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
+    pub fn srcOver(dst: Surface, src: Surface, dst_x: i32, dst_y: i32) !void {
         return switch (dst) {
             inline else => |s| s.srcOver(src, dst_x, dst_y),
         };
@@ -120,21 +120,21 @@ pub const Surface = union(SurfaceType) {
     /// Composites the source surface onto this surface using the Porter-Duff
     /// dst-in operation at the destination. Any parts of the source outside
     /// of the destination are ignored.
-    pub fn dstIn(dst: Surface, src: Surface, dst_x: u32, dst_y: u32) !void {
+    pub fn dstIn(dst: Surface, src: Surface, dst_x: i32, dst_y: i32) !void {
         return switch (dst) {
             inline else => |s| s.dstIn(src, dst_x, dst_y),
         };
     }
 
     /// Gets the width of the surface.
-    pub fn getWidth(self: Surface) u32 {
+    pub fn getWidth(self: Surface) i32 {
         return switch (self) {
             inline else => |s| s.width,
         };
     }
 
     /// Gets the height of the surface.
-    pub fn getHeight(self: Surface) u32 {
+    pub fn getHeight(self: Surface) i32 {
         return switch (self) {
             inline else => |s| s.height,
         };
@@ -148,14 +148,14 @@ pub const Surface = union(SurfaceType) {
     }
 
     /// Gets the pixel data at the co-ordinates specified.
-    pub fn getPixel(self: Surface, x: u32, y: u32) !pixel.Pixel {
+    pub fn getPixel(self: Surface, x: i32, y: i32) !pixel.Pixel {
         return switch (self) {
             inline else => |s| s.getPixel(x, y),
         };
     }
 
     /// Puts a single pixel at the x and y co-ordinates.
-    pub fn putPixel(self: Surface, x: u32, y: u32, px: pixel.Pixel) !void {
+    pub fn putPixel(self: Surface, x: i32, y: i32, px: pixel.Pixel) !void {
         return switch (self) {
             inline else => |s| s.putPixel(x, y, px),
         };
@@ -183,8 +183,8 @@ test "Surface interface" {
         // putPixel
         const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
-        const x: u32 = 7;
-        const y: u32 = 5;
+        const x: i32 = 7;
+        const y: i32 = 5;
 
         try sfc_if.putPixel(x, y, pix_rgb);
 
@@ -205,8 +205,8 @@ test "Surface interface" {
         // putPixel
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         const pix_rgba = rgba.asPixel();
-        const x: u32 = 7;
-        const y: u32 = 5;
+        const x: i32 = 7;
+        const y: i32 = 5;
 
         try sfc_if.putPixel(x, y, pix_rgba);
 
@@ -223,10 +223,10 @@ fn ImageSurface(comptime T: type) type {
         alloc: mem.Allocator,
 
         /// The width of the surface.
-        width: u32,
+        width: i32,
 
         /// The height of the surface.
-        height: u32,
+        height: i32,
 
         /// The underlying buffer. It's not advised to access this directly,
         /// rather use pixel operations such as getPixel and putPixel.
@@ -245,11 +245,14 @@ fn ImageSurface(comptime T: type) type {
         /// pixel.
         pub fn init(
             alloc: mem.Allocator,
-            width: u32,
-            height: u32,
+            width: i32,
+            height: i32,
             initial_px_: ?T,
         ) !ImageSurface(T) {
-            const buf = try alloc.alloc(T, height * width);
+            if (width < 0) return error.InvalidWidth;
+            if (height < 0) return error.InvalidHeight;
+
+            const buf = try alloc.alloc(T, @intCast(height * width));
             if (initial_px_) |initial_px| {
                 @memset(buf, initial_px);
             } else {
@@ -278,17 +281,17 @@ fn ImageSurface(comptime T: type) type {
         /// which it should not be used.
         pub fn downsample(self: *ImageSurface(T)) !ImageSurface(T) {
             const scale = supersample_scale;
-            const height = self.height / scale;
-            const width = self.width / scale;
+            const height: usize = @intCast(@divFloor(self.height, scale));
+            const width: usize = @intCast(@divFloor(self.width, scale));
             const buf = try self.alloc.alloc(T, height * width);
             @memset(buf, mem.zeroes(T));
 
-            for (0..height) |y| {
-                for (0..width) |x| {
+            for (0..@intCast(height)) |y| {
+                for (0..@intCast(width)) |x| {
                     var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
                     for (0..scale) |i| {
                         for (0..scale) |j| {
-                            const idx = (y * scale + i) * self.width + (x * scale + j);
+                            const idx = (y * scale + i) * @as(usize, @intCast(self.width)) + (x * scale + j);
                             pixels[i * scale + j] = self.buf[idx];
                         }
                     }
@@ -298,8 +301,8 @@ fn ImageSurface(comptime T: type) type {
 
             return .{
                 .alloc = self.alloc,
-                .width = width,
-                .height = height,
+                .width = @intCast(width),
+                .height = @intCast(height),
                 .buf = buf,
             };
         }
@@ -307,14 +310,14 @@ fn ImageSurface(comptime T: type) type {
         /// Composites the source surface onto this surface using the
         /// Porter-Duff src-over operation at the destination. Any parts of the
         /// source outside of the destination are ignored.
-        pub fn srcOver(dst: *ImageSurface(T), src: Surface, dst_x: u32, dst_y: u32) !void {
+        pub fn srcOver(dst: *ImageSurface(T), src: Surface, dst_x: i32, dst_y: i32) !void {
             return dst.composite(src, T.srcOver, dst_x, dst_y);
         }
 
         /// Composites the source surface onto this surface using the
         /// Porter-Duff dst-in operation at the destination. Any parts of the
         /// source outside of the destination are ignored.
-        pub fn dstIn(dst: *ImageSurface(T), src: Surface, dst_x: u32, dst_y: u32) !void {
+        pub fn dstIn(dst: *ImageSurface(T), src: Surface, dst_x: i32, dst_y: i32) !void {
             return dst.composite(src, T.dstIn, dst_x, dst_y);
         }
 
@@ -322,25 +325,30 @@ fn ImageSurface(comptime T: type) type {
             dst: *ImageSurface(T),
             src: Surface,
             op: fn (T, pixel.Pixel) T,
-            dst_x: u32,
-            dst_y: u32,
+            dst_x: i32,
+            dst_y: i32,
         ) !void {
             if (dst_x >= dst.width or dst_y >= dst.height) return;
 
-            var height = src.getHeight();
-            if (src.getHeight() + dst_y > dst.height) {
-                height -= src.getHeight() + dst_y - dst.height;
-            }
-            var width = src.getWidth();
-            if (src.getWidth() + dst_x > dst.width) {
-                width -= src.getWidth() + dst_x - dst.width;
-            }
+            const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
+            const src_start_x: i32 = if (dst_x < 0) @intCast(@abs(dst_x)) else 0;
 
-            for (0..height) |src_y| {
-                for (0..width) |src_x| {
+            const height = if (src.getHeight() + dst_y > dst.height)
+                dst.height - dst_y
+            else
+                src.getHeight();
+            const width = if (src.getWidth() + dst_x > dst.width)
+                dst.width - dst_x
+            else
+                src.getWidth();
+
+            var src_y = src_start_y;
+            while (src_y < height) : (src_y += 1) {
+                var src_x = src_start_x;
+                while (src_x < width) : (src_x += 1) {
                     const dst_put_x = src_x + dst_x;
                     const dst_put_y = src_y + dst_y;
-                    const dst_idx = dst.width * dst_put_y + dst_put_x;
+                    const dst_idx: usize = @intCast(dst.width * dst_put_y + dst_put_x);
                     const src_px = try src.getPixel(@intCast(src_x), @intCast(src_y));
                     const dst_px = dst.buf[dst_idx];
                     dst.buf[dst_idx] = op(dst_px, src_px);
@@ -358,22 +366,20 @@ fn ImageSurface(comptime T: type) type {
         }
 
         /// Gets the pixel data at the co-ordinates specified.
-        pub fn getPixel(self: *ImageSurface(T), x: u32, y: u32) !pixel.Pixel {
-            // Check that data is in the surface range. If not, return an error.
-            if (x >= self.width or y >= self.height) {
+        pub fn getPixel(self: *ImageSurface(T), x: i32, y: i32) !pixel.Pixel {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return error.OutOfRange;
             }
 
-            return self.buf[self.width * y + x].asPixel();
+            return self.buf[@intCast(self.width * y + x)].asPixel();
         }
 
         /// Puts a single pixel at the x and y co-ordinates.
-        pub fn putPixel(self: *ImageSurface(T), x: u32, y: u32, px: pixel.Pixel) !void {
-            // Check that data is in the surface range. If not, return an error.
-            if (x >= self.width or y >= self.height) {
+        pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) !void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return error.OutOfRange;
             }
-            self.buf[self.width * y + x] = try T.fromPixel(px);
+            self.buf[@intCast(self.width * y + x)] = try T.fromPixel(px);
         }
 
         /// Replaces the surface with the supplied pixel.
@@ -406,8 +412,8 @@ test "ImageSurface, getPixel" {
 
     {
         // OK
-        const x: u32 = 7;
-        const y: u32 = 5;
+        const x: i32 = 7;
+        const y: i32 = 5;
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         sfc.buf[y * 20 + x] = rgba;
         const expected_px: pixel.Pixel = .{ .rgba = rgba };
@@ -431,8 +437,8 @@ test "ImageSurface, putPixel" {
 
     {
         // OK
-        const x: u32 = 7;
-        const y: u32 = 5;
+        const x: i32 = 7;
+        const y: i32 = 5;
         try sfc.putPixel(x, y, pix_rgba);
         sfc.buf[y * 20 + x] = rgba;
         try testing.expectEqual(rgba, sfc.buf[y * 20 + x]);

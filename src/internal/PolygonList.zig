@@ -47,7 +47,7 @@ pub fn edgesForY(
     alloc: mem.Allocator,
     line_y: f64,
     fill_rule: FillRule,
-) !std.ArrayList(u32) {
+) !std.ArrayList(i32) {
     var edge_list = std.ArrayList(Polygon.Edge).init(alloc);
     defer edge_list.deinit();
 
@@ -71,10 +71,10 @@ pub fn edgesForY(
     // be run each time an edge needs to be removed during non-zero rule
     // processing. Currently, at the very least, we pre-allocate capacity
     // to the incoming sorted edge list.
-    var final_edge_list = try std.ArrayList(u32).initCapacity(alloc, edge_list_sorted.len);
+    var final_edge_list = try std.ArrayList(i32).initCapacity(alloc, edge_list_sorted.len);
     errdefer final_edge_list.deinit();
     var winding_number: i32 = 0;
-    var start: u32 = undefined;
+    var start: i32 = undefined;
     if (fill_rule == .even_odd) {
         // Just copy all of our edges - the outer filler fills by
         // even-odd rule naively, so this is the correct set for that

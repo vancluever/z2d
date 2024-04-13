@@ -46,8 +46,8 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
-    mem.writeInt(u32, &width, sfc.getWidth(), .big);
-    mem.writeInt(u32, &height, sfc.getHeight(), .big);
+    mem.writeInt(u32, &width, @intCast(sfc.getWidth()), .big);
+    mem.writeInt(u32, &height, @intCast(sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
@@ -118,7 +118,7 @@ fn writePNGIDATStream(
     // add scanline filtering headers were appropriate.
     //
     // Iterate through each line to encode as scanlines.
-    for (0..sfc.getHeight()) |y| {
+    for (0..@intCast(sfc.getHeight())) |y| {
         // Initialize a buffer for pixels. TODO: This will need to
         // increase/change when/if we add additional pixel filtering
         // algorithms.
@@ -128,7 +128,7 @@ fn writePNGIDATStream(
         var pixel_buffer = [_]u8{0} ** 5;
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
-        for (0..sfc.getWidth()) |x| {
+        for (0..@intCast(sfc.getWidth())) |x| {
             nbytes += written: {
                 switch (try sfc.getPixel(@intCast(x), @intCast(y))) {
                     // PNG writes out numbers big-endian, but *only numbers larger

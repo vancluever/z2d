@@ -12,7 +12,7 @@ pub const Pattern = union(PatternType) {
     opaque_pattern: OpaquePattern,
 
     /// Gets the pixel data at the co-ordinates specified.
-    pub fn getPixel(self: Pattern, x: u32, y: u32) !Pixel {
+    pub fn getPixel(self: Pattern, x: i32, y: i32) !Pixel {
         _ = x;
         _ = y;
         return switch (self) {

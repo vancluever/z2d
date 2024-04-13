@@ -100,7 +100,7 @@ fn concatByCopying(list1: *CornerList, list2: *const CornerList) void {
 
 /// Represents an edge on a polygon for a particular y-scanline.
 pub const Edge = struct {
-    x: u32,
+    x: i32,
     dir: i2,
 
     pub fn sort_asc(_: void, a: Edge, b: Edge) bool {
@@ -147,7 +147,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
                     (line_y_middle - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x,
                 );
                 break :edge .{
-                    .x = @max(0, @min(math.maxInt(u32), @as(u32, @intFromFloat(edge_x)))),
+                    .x = math.clamp(@as(i32, @intFromFloat(edge_x)), 0, math.maxInt(i32)),
                     // Apply the edge direction to the winding number.
                     // Down-up is +1, up-down is -1.
                     .dir = if (cur_y > last_y)
