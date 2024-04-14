@@ -10,6 +10,7 @@ const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
 const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
+const InternalError = @import("../errors.zig").InternalError;
 
 // TODO: remove this when we make tolerance configurable
 const default_tolerance: f64 = 0.1;
@@ -44,17 +45,17 @@ pub fn plot(
                 current_point = n.point;
             },
             .line_to => |n| {
-                if (initial_point == null) return error.InvalidState;
-                if (current_point == null) return error.InvalidState;
-                if (current_polygon == null) return error.InvalidState;
+                if (initial_point == null) return InternalError.InvalidState;
+                if (current_point == null) return InternalError.InvalidState;
+                if (current_polygon == null) return InternalError.InvalidState;
 
                 try current_polygon.?.plot(n.point, null);
                 current_point = n.point;
             },
             .curve_to => |n| {
-                if (initial_point == null) return error.InvalidState;
-                if (current_point == null) return error.InvalidState;
-                if (current_polygon == null) return error.InvalidState;
+                if (initial_point == null) return InternalError.InvalidState;
+                if (current_point == null) return InternalError.InvalidState;
+                if (current_polygon == null) return InternalError.InvalidState;
 
                 var ctx: SplinePlotterCtx = .{
                     .polygon = &current_polygon.?,
@@ -74,9 +75,9 @@ pub fn plot(
                 try spline.decompose();
             },
             .close_path => {
-                if (initial_point == null) return error.InvalidState;
-                if (current_point == null) return error.InvalidState;
-                if (current_polygon == null) return error.InvalidState;
+                if (initial_point == null) return InternalError.InvalidState;
+                if (current_point == null) return InternalError.InvalidState;
+                if (current_polygon == null) return InternalError.InvalidState;
 
                 // No-op if our initial and current points are equal
                 if (current_point.?.equal(initial_point.?)) break;

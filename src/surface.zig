@@ -3,6 +3,7 @@ const meta = @import("std").meta;
 const testing = @import("std").testing;
 
 const pixel = @import("pixel.zig");
+const SurfaceError = @import("errors.zig").SurfaceError;
 
 // The scale factor used for super-sample anti-aliasing. Any functionality
 // using the downsample method in a surface should import this value.
@@ -249,8 +250,8 @@ fn ImageSurface(comptime T: type) type {
             height: i32,
             initial_px_: ?T,
         ) !ImageSurface(T) {
-            if (width < 0) return error.InvalidWidth;
-            if (height < 0) return error.InvalidHeight;
+            if (width < 0) return SurfaceError.InvalidWidth;
+            if (height < 0) return SurfaceError.InvalidHeight;
 
             const buf = try alloc.alloc(T, @intCast(height * width));
             if (initial_px_) |initial_px| {
@@ -368,7 +369,7 @@ fn ImageSurface(comptime T: type) type {
         /// Gets the pixel data at the co-ordinates specified.
         pub fn getPixel(self: *ImageSurface(T), x: i32, y: i32) !pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
-                return error.OutOfRange;
+                return SurfaceError.OutOfRange;
             }
 
             return self.buf[@intCast(self.width * y + x)].asPixel();
@@ -377,7 +378,7 @@ fn ImageSurface(comptime T: type) type {
         /// Puts a single pixel at the x and y co-ordinates.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) !void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
-                return error.OutOfRange;
+                return SurfaceError.OutOfRange;
             }
             self.buf[@intCast(self.width * y + x)] = try T.fromPixel(px);
         }
@@ -422,8 +423,8 @@ test "ImageSurface, getPixel" {
 
     {
         // Error, out of bounds
-        try testing.expectError(error.OutOfRange, sfc.getPixel(20, 9));
-        try testing.expectError(error.OutOfRange, sfc.getPixel(19, 10));
+        try testing.expectError(SurfaceError.OutOfRange, sfc.getPixel(20, 9));
+        try testing.expectError(SurfaceError.OutOfRange, sfc.getPixel(19, 10));
     }
 }
 
@@ -446,8 +447,8 @@ test "ImageSurface, putPixel" {
 
     {
         // Error, out of bounds
-        try testing.expectError(error.OutOfRange, sfc.putPixel(20, 9, pix_rgba));
-        try testing.expectError(error.OutOfRange, sfc.putPixel(19, 10, pix_rgba));
+        try testing.expectError(SurfaceError.OutOfRange, sfc.putPixel(20, 9, pix_rgba));
+        try testing.expectError(SurfaceError.OutOfRange, sfc.putPixel(19, 10, pix_rgba));
     }
 
     {

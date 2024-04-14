@@ -14,6 +14,7 @@ const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
+const InternalError = @import("../errors.zig").InternalError;
 
 // TODO: remove this when we make tolerance configurable
 const default_tolerance: f64 = 0.1;
@@ -167,9 +168,9 @@ const Iterator = struct {
                         if (state.closed) {
                             // Closed path, insert a join at the start of each
                             // the already plotted inner and outer polygons.
-                            if (state.outer.corners.len == 0) return error.InvalidState;
-                            if (state.inner.corners.len == 0) return error.InvalidState;
-                            if (state.start_clockwise_ == null) return error.InvalidState;
+                            if (state.outer.corners.len == 0) return InternalError.InvalidState;
+                            if (state.inner.corners.len == 0) return InternalError.InvalidState;
+                            if (state.start_clockwise_ == null) return InternalError.InvalidState;
                             const outer_start_node = state.outer.corners.first;
                             _ = try it.join(
                                 &state.outer,
@@ -271,14 +272,14 @@ const Iterator = struct {
                             // Done
                             return .{ .open = state.outer };
                         }
-                    } else return error.InvalidState; // line_to always sets last_point_
-                } else return error.InvalidState; // the very first line_to always sets first_line_point_
-            } else return error.InvalidState; // move_to sets both initial and current points
+                    } else return InternalError.InvalidState; // line_to always sets last_point_
+                } else return InternalError.InvalidState; // the very first line_to always sets first_line_point_
+            } else return InternalError.InvalidState; // move_to sets both initial and current points
         }
 
         // Invalid if we've hit this point (state machine never allows initial
         // point to not be set)
-        return error.InvalidState;
+        return InternalError.InvalidState;
     }
 
     /// Returns points for joining two lines with each other. For point
@@ -464,13 +465,13 @@ const Iterator = struct {
                         if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
                         self.end_clockwise = clockwise;
                     }
-                } else return error.InvalidState; // move_to always sets both initial and current points
+                } else return InternalError.InvalidState; // move_to always sets both initial and current points
                 if (self.first_line_point_ == null) {
                     self.first_line_point_ = node.point;
                 }
                 self.last_point_ = self.current_point_;
                 self.current_point_ = node.point;
-            } else return error.InvalidState; // line_to should never be called internally without move_to
+            } else return InternalError.InvalidState; // line_to should never be called internally without move_to
 
             return true;
         }
@@ -508,7 +509,7 @@ const Iterator = struct {
                     // Decompose now
                     try spline.decompose();
                 }
-            } else return error.InvalidState; // curve_to should never be called internally without move_to
+            } else return InternalError.InvalidState; // curve_to should never be called internally without move_to
 
             return true;
         }
@@ -557,13 +558,13 @@ const Iterator = struct {
                             return false;
                         }
                     }
-                } else return error.InvalidState; // move_to always sets both initial and current points
+                } else return InternalError.InvalidState; // move_to always sets both initial and current points
             }
 
             // close_path should never be called internally without move_to. This
             // means that close_path should *never* return true, and if we hit a
             // point where it would, we've hit an undefined state.
-            return error.InvalidState;
+            return InternalError.InvalidState;
         }
     };
 };

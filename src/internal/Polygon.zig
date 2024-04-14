@@ -9,6 +9,7 @@ const mem = @import("std").mem;
 
 pub const CornerList = std.DoublyLinkedList(Point);
 const Point = @import("Point.zig");
+const InternalError = @import("../errors.zig").InternalError;
 
 arena_alloc: heap.ArenaAllocator,
 concatenated_polygons: std.ArrayList(Polygon),
@@ -127,7 +128,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
     const line_y_middle = line_y + 0.5;
 
     var current_ = self.corners.first;
-    if (self.corners.last == null) return error.InvalidState;
+    if (self.corners.last == null) return InternalError.InvalidState;
     var last = self.corners.last.?;
     while (current_) |current| : (current_ = current.next) {
         const last_y = last.data.y;
@@ -155,7 +156,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
                     else if (cur_y < last_y)
                         1
                     else
-                        return error.InvalidState, // We have already filtered out horizontal edges
+                        return InternalError.InvalidState, // We have already filtered out horizontal edges
                 };
             });
         }

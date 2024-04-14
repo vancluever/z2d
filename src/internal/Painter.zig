@@ -16,6 +16,7 @@ const Surface = @import("../surface.zig").Surface;
 const FillRule = @import("../options.zig").FillRule;
 const StrokePlotter = @import("StrokePlotter.zig");
 const PolygonList = @import("PolygonList.zig");
+const InternalError = @import("../errors.zig").InternalError;
 const supersample_scale = @import("../surface.zig").supersample_scale;
 
 /// The reference to the context that we use for painting operations.
@@ -34,9 +35,9 @@ pub fn fill(
     // NOTE: obviously, to be useful, there would be much more than two nodes,
     // but this is just the minimum for us to assert that the path has been
     // closed correctly.
-    if (nodes.items.len < 2) return error.InvalidPathData;
-    if (nodes.items[nodes.items.len - 2] != .close_path) return error.InvalidPathData;
-    if (nodes.getLast() != .move_to) return error.InvalidPathData;
+    if (nodes.items.len < 2) return InternalError.InvalidPathData;
+    if (nodes.items[nodes.items.len - 2] != .close_path) return InternalError.InvalidPathData;
+    if (nodes.getLast() != .move_to) return InternalError.InvalidPathData;
 
     const scale: f64 = switch (self.context.anti_aliasing_mode) {
         .none => 1,
@@ -65,7 +66,7 @@ pub fn stroke(
     nodes: std.ArrayList(PathNode),
 ) !void {
     // Should not be called with zero nodes
-    if (nodes.items.len == 0) return error.InvalidPathData;
+    if (nodes.items.len == 0) return InternalError.InvalidPathData;
 
     const scale: f64 = switch (self.context.anti_aliasing_mode) {
         .none => 1,

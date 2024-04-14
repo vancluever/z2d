@@ -9,6 +9,7 @@ const testing = @import("std").testing;
 
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("internal/Point.zig");
+const PathError = @import("errors.zig").PathError;
 
 /// The underlying node set.
 nodes: std.ArrayList(PathNode),
@@ -85,7 +86,7 @@ pub fn curveTo(
     x3: f64,
     y3: f64,
 ) !void {
-    if (self.current_point == null) return error.NoCurrentPoint;
+    if (self.current_point == null) return PathError.NoCurrentPoint;
     const p1: Point = .{ .x = clampI32(x1), .y = clampI32(y1) };
     const p2: Point = .{ .x = clampI32(x2), .y = clampI32(y2) };
     const p3: Point = .{ .x = clampI32(x3), .y = clampI32(y3) };
@@ -104,7 +105,7 @@ pub fn close(self: *Path) !void {
         // explicit, to ensure that the state machine for draw operations
         // (fill, stroke) do not get put into an unreachable state.
         try self.moveTo(initial_point.x, initial_point.y);
-    } else return error.NoInitialPoint;
+    } else return PathError.NoInitialPoint;
 }
 
 /// Returns true if the path set is currently closed, meaning that the last

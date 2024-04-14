@@ -10,6 +10,7 @@ const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Painter = @import("internal/Painter.zig");
 const Surface = @import("surface.zig").Surface;
+const PathError = @import("errors.zig").PathError;
 
 /// The underlying surface.
 surface: Surface,
@@ -64,7 +65,7 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 /// This is a no-op if there are no nodes.
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
     if (path.nodes.items.len == 0) return;
-    if (!path.isClosed()) return error.PathNotClosed;
+    if (!path.isClosed()) return PathError.PathNotClosed;
     try (Painter{ .context = self }).fill(alloc, path.nodes);
 }
 

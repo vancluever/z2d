@@ -6,6 +6,7 @@ const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
 const surface = @import("surface.zig");
+const ExportError = @import("errors.zig").ExportError;
 
 const native_endian = builtin.cpu.arch.endian();
 
@@ -20,7 +21,7 @@ pub fn writeToPNGFile(
     switch (sfc.getFormat()) {
         .rgba, .rgb => {},
         else => {
-            return error.UnsupportedSurfaceFormat;
+            return ExportError.UnsupportedSurfaceFormat;
         },
     }
 
@@ -51,12 +52,12 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
-        else => return error.UnsupportedSurfaceFormat,
+        else => return ExportError.UnsupportedSurfaceFormat,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
-        else => return error.UnsupportedSurfaceFormat,
+        else => return ExportError.UnsupportedSurfaceFormat,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -153,12 +154,12 @@ fn writePNGIDATStream(
                         );
                         break :written 4; // 4 bytes
                     },
-                    else => return error.UnsupportedSurfaceFormat,
+                    else => return ExportError.UnsupportedSurfaceFormat,
                 }
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
                 // If we didn't actually write everything, it's an error.
-                return error.BytesWrittenMismatch;
+                return ExportError.BytesWrittenMismatch;
             }
 
             // New remaining at this point is current_remaining - what was
