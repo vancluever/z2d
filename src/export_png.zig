@@ -51,12 +51,12 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
-        else => unreachable,
+        else => return error.UnsupportedSurfaceFormat,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
-        else => unreachable,
+        else => return error.UnsupportedSurfaceFormat,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -153,7 +153,7 @@ fn writePNGIDATStream(
                         );
                         break :written 4; // 4 bytes
                     },
-                    else => unreachable,
+                    else => return error.UnsupportedSurfaceFormat,
                 }
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {

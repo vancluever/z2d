@@ -167,9 +167,9 @@ const Iterator = struct {
                         if (state.closed) {
                             // Closed path, insert a join at the start of each
                             // the already plotted inner and outer polygons.
-                            debug.assert(state.outer.corners.len != 0);
-                            debug.assert(state.inner.corners.len != 0);
-                            debug.assert(state.start_clockwise_ != null);
+                            if (state.outer.corners.len == 0) return error.InvalidState;
+                            if (state.inner.corners.len == 0) return error.InvalidState;
+                            if (state.start_clockwise_ == null) return error.InvalidState;
                             const outer_start_node = state.outer.corners.first;
                             _ = try it.join(
                                 &state.outer,
@@ -271,14 +271,14 @@ const Iterator = struct {
                             // Done
                             return .{ .open = state.outer };
                         }
-                    } else unreachable; // line_to always sets last_point_
-                } else unreachable; // the very first line_to always sets first_line_point_
-            } else unreachable; // move_to sets both initial and current points
+                    } else return error.InvalidState; // line_to always sets last_point_
+                } else return error.InvalidState; // the very first line_to always sets first_line_point_
+            } else return error.InvalidState; // move_to sets both initial and current points
         }
 
         // Invalid if we've hit this point (state machine never allows initial
         // point to not be set)
-        unreachable;
+        return error.InvalidState;
     }
 
     /// Returns points for joining two lines with each other. For point
@@ -464,13 +464,13 @@ const Iterator = struct {
                         if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
                         self.end_clockwise = clockwise;
                     }
-                } else unreachable; // move_to always sets both initial and current points
+                } else return error.InvalidState; // move_to always sets both initial and current points
                 if (self.first_line_point_ == null) {
                     self.first_line_point_ = node.point;
                 }
                 self.last_point_ = self.current_point_;
                 self.current_point_ = node.point;
-            } else unreachable; // line_to should never be called internally without move_to
+            } else return error.InvalidState; // line_to should never be called internally without move_to
 
             return true;
         }
@@ -508,7 +508,7 @@ const Iterator = struct {
                     // Decompose now
                     try spline.decompose();
                 }
-            } else unreachable; // line_to should never be called internally without move_to
+            } else return error.InvalidState; // curve_to should never be called internally without move_to
 
             return true;
         }
@@ -557,13 +557,13 @@ const Iterator = struct {
                             return false;
                         }
                     }
-                } else unreachable; // move_to always sets both initial and current points
+                } else return error.InvalidState; // move_to always sets both initial and current points
             }
 
             // close_path should never be called internally without move_to. This
             // means that close_path should *never* return true, and if we hit a
             // point where it would, we've hit an undefined state.
-            unreachable;
+            return error.InvalidState;
         }
     };
 };

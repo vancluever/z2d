@@ -44,17 +44,18 @@ pub fn plot(
                 current_point = n.point;
             },
             .line_to => |n| {
-                debug.assert(initial_point != null);
-                debug.assert(current_point != null);
-                debug.assert(current_polygon != null);
+                if (initial_point == null) return error.InvalidState;
+                if (current_point == null) return error.InvalidState;
+                if (current_polygon == null) return error.InvalidState;
 
                 try current_polygon.?.plot(n.point, null);
                 current_point = n.point;
             },
             .curve_to => |n| {
-                debug.assert(initial_point != null);
-                debug.assert(current_point != null);
-                debug.assert(current_polygon != null);
+                if (initial_point == null) return error.InvalidState;
+                if (current_point == null) return error.InvalidState;
+                if (current_polygon == null) return error.InvalidState;
+
                 var ctx: SplinePlotterCtx = .{
                     .polygon = &current_polygon.?,
                     .current_point = &current_point,
@@ -73,9 +74,9 @@ pub fn plot(
                 try spline.decompose();
             },
             .close_path => {
-                debug.assert(initial_point != null);
-                debug.assert(current_point != null);
-                debug.assert(current_polygon != null);
+                if (initial_point == null) return error.InvalidState;
+                if (current_point == null) return error.InvalidState;
+                if (current_polygon == null) return error.InvalidState;
 
                 // No-op if our initial and current points are equal
                 if (current_point.?.equal(initial_point.?)) break;

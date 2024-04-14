@@ -34,9 +34,9 @@ pub fn fill(
     // NOTE: obviously, to be useful, there would be much more than two nodes,
     // but this is just the minimum for us to assert that the path has been
     // closed correctly.
-    debug.assert(nodes.items.len >= 2);
-    debug.assert(nodes.items[nodes.items.len - 2] == .close_path);
-    debug.assert(nodes.getLast() == .move_to);
+    if (nodes.items.len < 2) return error.InvalidPathData;
+    if (nodes.items[nodes.items.len - 2] != .close_path) return error.InvalidPathData;
+    if (nodes.getLast() != .move_to) return error.InvalidPathData;
 
     const scale: f64 = switch (self.context.anti_aliasing_mode) {
         .none => 1,
@@ -64,7 +64,9 @@ pub fn stroke(
     alloc: mem.Allocator,
     nodes: std.ArrayList(PathNode),
 ) !void {
-    debug.assert(nodes.items.len != 0); // Should not be called with zero nodes
+    // Should not be called with zero nodes
+    if (nodes.items.len == 0) return error.InvalidPathData;
+
     const scale: f64 = switch (self.context.anti_aliasing_mode) {
         .none => 1,
         .default => supersample_scale,

@@ -58,16 +58,10 @@ pub fn decompose(self: *Spline) !void {
 /// Inner and recursive decomposition into the specified knot set.
 fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: f64) !void {
     if (s1.errorSq() < tolerance) {
-        // Add the point if we're not the actual initial point itself in the
-        // larger curve (our implementations will always plot the initial
-        // move_to or last line point, so this would be a redundant/degenerate
-        // point, and it also throws out current stroke state machine in an
-        // unreachable state).
         if (!s1.a.equal(start)) {
             try self.plotter_impl.lineTo(.{ .point = s1.a });
         }
 
-        // Return in all cases since we're done recursion.
         return;
     }
 

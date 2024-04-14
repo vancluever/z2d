@@ -127,7 +127,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
     const line_y_middle = line_y + 0.5;
 
     var current_ = self.corners.first;
-    debug.assert(self.corners.last != null);
+    if (self.corners.last == null) return error.InvalidState;
     var last = self.corners.last.?;
     while (current_) |current| : (current_ = current.next) {
         const last_y = last.data.y;
@@ -155,7 +155,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
                     else if (cur_y < last_y)
                         1
                     else
-                        unreachable, // We have already filtered out horizontal edges
+                        return error.InvalidState, // We have already filtered out horizontal edges
                 };
             });
         }
