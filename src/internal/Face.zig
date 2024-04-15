@@ -359,16 +359,20 @@ fn capRound(
         .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
         clockwise,
     );
-    var hasVerts = false;
+    if (clockwise) {
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
+    } else {
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
+    }
     while (vit.next()) |v| {
-        hasVerts = true;
         try plotter_impl.lineTo(.{ .point = .{
             .x = self.p1.x + v.point.x,
             .y = self.p1.y + v.point.y,
         } });
     }
-    if (!hasVerts) {
-        // We didn't plot any vertices, do a butt cap instead.
-        try self.capButt(plotter_impl, clockwise);
+    if (clockwise) {
+        try plotter_impl.lineTo(.{ .point = self.p1_cw });
+    } else {
+        try plotter_impl.lineTo(.{ .point = self.p1_ccw });
     }
 }

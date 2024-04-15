@@ -12,13 +12,11 @@ const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
 const InternalError = @import("../errors.zig").InternalError;
 
-// TODO: remove this when we make tolerance configurable
-const default_tolerance: f64 = 0.1;
-
 pub fn plot(
     alloc: mem.Allocator,
     nodes: std.ArrayList(nodepkg.PathNode),
     scale: f64,
+    tolerance: f64,
 ) !PolygonList {
     var result = PolygonList.init(alloc);
     errdefer result.deinit();
@@ -66,7 +64,7 @@ pub fn plot(
                     .b = n.p1,
                     .c = n.p2,
                     .d = n.p3,
-                    .tolerance = default_tolerance, // TODO: Make tolerance configurable
+                    .tolerance = tolerance,
                     .plotter_impl = &.{
                         .ptr = &ctx,
                         .line_to = SplinePlotterCtx.line_to,

@@ -59,6 +59,18 @@ line_cap_mode: options.CapMode = .butt,
 /// "default" anti-aliasing mode.
 anti_aliasing_mode: options.AntiAliasMode = .default,
 
+/// The maximum error tolerance used for approximating curves and arcs. A
+/// higher tolerance will give better performance, but "blockier" curves. The
+/// default tolerance is 0.1, and values below this are unlikely to give better
+/// visual results. This value has a minimum of 0.001, values below this are
+/// clamped.
+///
+/// Note that this setting also affects the "virtual pen" used to draw rounded
+/// caps and joins, which use static vertices for plotting. This can produce
+/// marked artifacts at relatively low tolerance settings, so take care when
+/// changing under these scenarios.
+tolerance: f64 = 0.1,
+
 /// Runs a fill operation on the path(s) in the supplied set. All paths in
 /// the set must be closed.
 ///

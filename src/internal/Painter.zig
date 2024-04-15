@@ -44,7 +44,12 @@ pub fn fill(
         .default => supersample_scale,
     };
 
-    var polygons = try fill_plotter.plot(alloc, nodes, scale);
+    var polygons = try fill_plotter.plot(
+        alloc,
+        nodes,
+        scale,
+        @max(self.context.tolerance, 0.001),
+    );
     defer polygons.deinit();
 
     switch (self.context.anti_aliasing_mode) {
@@ -91,6 +96,7 @@ pub fn stroke(
         if (self.context.line_width >= 2) self.context.miter_limit else 10.0,
         if (self.context.line_width >= 2) self.context.line_cap_mode else .butt,
         scale,
+        @max(self.context.tolerance, 0.001),
     );
     defer plotter.deinit();
 
@@ -181,7 +187,7 @@ fn paintComposite(
         // evenly to our original extent dimensions.
         const mask_width: i32 = @intFromFloat(polygons.end.x - polygons.start.x + scale);
         const mask_height: i32 = @intFromFloat(polygons.end.y - polygons.start.y + scale);
-        const surface_width: i32 = self.context.surface.getWidth() * @as(i32, @intFromFloat(scale));
+        // const surface_width: i32 = self.context.surface.getWidth() * @as(i32, @intFromFloat(scale));
 
         const scaled_sfc = try Surface.init(
             .image_surface_alpha8,
@@ -200,24 +206,18 @@ fn paintComposite(
 
             var start_idx: usize = 0;
             while (start_idx + 1 < edge_list.items.len) {
-                const start_x = @min(
-                    surface_width,
-                    edge_list.items[start_idx],
-                );
+                const start_x = edge_list.items[start_idx];
                 // Subtract 1 from the end edge as this is our pixel boundary
                 // (end_x = 100 actually means we should only fill to x=99).
-                const end_x = @min(
-                    surface_width,
-                    edge_list.items[start_idx + 1] - 1,
-                );
+                const end_x = edge_list.items[start_idx + 1] - 1;
 
                 var x = start_x;
                 while (x <= end_x) : (x += 1) {
-                    try scaled_sfc.putPixel(
+                    scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
                         .{ .alpha8 = .{ .a = 255 } },
-                    );
+                    ) catch unreachable;
                 }
 
                 start_idx += 2;

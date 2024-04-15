@@ -16,15 +16,13 @@ const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
 const InternalError = @import("../errors.zig").InternalError;
 
-// TODO: remove this when we make tolerance configurable
-const default_tolerance: f64 = 0.1;
-
 thickness: f64,
 join_mode: options.JoinMode,
 miter_limit: f64,
 cap_mode: options.CapMode,
 pen: Pen,
 scale: f64,
+tolerance: f64,
 
 pub fn init(
     alloc: mem.Allocator,
@@ -33,14 +31,16 @@ pub fn init(
     miter_limit: f64,
     cap_mode: options.CapMode,
     scale: f64,
+    tolerance: f64,
 ) !StrokePlotter {
     return .{
         .thickness = thickness,
         .join_mode = join_mode,
         .miter_limit = miter_limit,
         .cap_mode = cap_mode,
-        .pen = try Pen.init(alloc, thickness, default_tolerance),
+        .pen = try Pen.init(alloc, thickness, tolerance),
         .scale = scale,
+        .tolerance = tolerance,
     };
 }
 
@@ -353,9 +353,11 @@ const Iterator = struct {
 
             .round => {
                 var vit = it.plotter.pen.vertexIteratorFor(in.slope, out.slope, clockwise);
-                var hasVerts = false;
+                try outer.plot(
+                    if (clockwise) in.p1_ccw else in.p1_cw,
+                    before_outer,
+                );
                 while (vit.next()) |v| {
-                    hasVerts = true;
                     try outer.plot(
                         .{
                             .x = p1.x + v.point.x,
@@ -364,24 +366,10 @@ const Iterator = struct {
                         before_outer,
                     );
                 }
-                if (!hasVerts) {
-                    // In the case where we could not find appropriate vertices for
-                    // a join, it's likely that our outer angle is too small. In
-                    // this case, just bevel the joint.
-                    //
-                    // TODO: I feel like this is going to be the case most of the
-                    // time for curves. As such, we should probably review this and
-                    // think of a better way to handle joins for the decomposed
-                    // splines.
-                    try outer.plot(
-                        if (clockwise) in.p1_ccw else in.p1_cw,
-                        before_outer,
-                    );
-                    try outer.plot(
-                        if (clockwise) out.p0_ccw else out.p0_cw,
-                        before_outer,
-                    );
-                }
+                try outer.plot(
+                    if (clockwise) out.p0_ccw else out.p0_cw,
+                    before_outer,
+                );
             },
         }
 
@@ -493,7 +481,7 @@ const Iterator = struct {
                         .b = node.p1,
                         .c = node.p2,
                         .d = node.p3,
-                        .tolerance = default_tolerance, // TODO: Make tolerance configurable
+                        .tolerance = self.it.plotter.tolerance,
                         .plotter_impl = &.{
                             .ptr = self,
                             .line_to = spline_line_to,

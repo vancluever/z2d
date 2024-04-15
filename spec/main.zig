@@ -34,6 +34,10 @@ const _023_smile_alpha_mask = @import("023_smile_alpha_mask.zig");
 const _024_fill_triangle_direct_cross_format = @import("024_fill_triangle_direct_cross_format.zig");
 const _025_fill_diamond_clipped = @import("025_fill_diamond_clipped.zig");
 const _026_fill_triangle_full = @import("026_fill_triangle_full.zig");
+const _027_stroke_bezier_tolerance = @import("027_stroke_bezier_tolerance.zig");
+const _028_fill_bezier_tolerance = @import("028_fill_bezier_tolerance.zig");
+const _029_stroke_lines_round_caps_tolerance = @import("029_stroke_lines_round_caps_tolerance.zig");
+const _030_stroke_star_round_tolerance = @import("030_stroke_star_round_tolerance.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -67,6 +71,10 @@ pub fn main() !void {
     try pathExportRun(alloc, _024_fill_triangle_direct_cross_format);
     try pathExportRun(alloc, _025_fill_diamond_clipped);
     try pathExportRun(alloc, _026_fill_triangle_full);
+    try pathExportRun(alloc, _027_stroke_bezier_tolerance);
+    try pathExportRun(alloc, _028_fill_bezier_tolerance);
+    try pathExportRun(alloc, _029_stroke_lines_round_caps_tolerance);
+    try pathExportRun(alloc, _030_stroke_star_round_tolerance);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -173,6 +181,22 @@ test "025_fill_diamond_clipped" {
 
 test "026_fill_triangle_full" {
     try pathTestRun(testing.allocator, _026_fill_triangle_full);
+}
+
+test "027_stroke_bezier_tolerance" {
+    try pathTestRun(testing.allocator, _027_stroke_bezier_tolerance);
+}
+
+test "028_fill_bezier_tolerance" {
+    try pathTestRun(testing.allocator, _028_fill_bezier_tolerance);
+}
+
+test "029_stroke_lines_round_caps_tolerance" {
+    try pathTestRun(testing.allocator, _029_stroke_lines_round_caps_tolerance);
+}
+
+test "030_stroke_star_round_tolerance" {
+    try pathTestRun(testing.allocator, _030_stroke_star_round_tolerance);
 }
 
 //////////////////////////////////////////////////////////////////////////////
