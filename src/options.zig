@@ -26,8 +26,6 @@ pub const FillRule = enum {
 };
 
 /// Represents how lines are joined when stroking paths.
-///
-/// TODO: Add bevel join
 pub const JoinMode = enum {
     /// Lines are joined with a miter (pointed end).
     ///

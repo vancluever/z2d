@@ -110,8 +110,6 @@ fn writePNGIDATStream(
 
     // Initialize our remaining buffer size. We keep track of this as
     // we need to flush regularly to output IDAT chunks.
-    //
-    // TODO: We should probably move this to a dedicated writer struct.
     var zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
 
     // To encode, we read from our buffer, pixel-by-pixel, and convert

@@ -4,9 +4,6 @@
 // Cairo can be found at https://www.cairographics.org, governed by MPL 1.1 and
 // LGPL 2.1, which can be found in the Cairo project's COPYING file. This
 // project specifically uses this code under the terms of the MPL.
-//
-// TODO: There's a lot of matrix operations in this code; it would be neat to
-// see how much of this could be implemented as vectors.
 
 //! Given a set of four points representing a bezier curve ("spline"),
 //! subdivide the curve into a series of line_to nodes.
