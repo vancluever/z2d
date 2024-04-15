@@ -187,7 +187,6 @@ fn paintComposite(
         // evenly to our original extent dimensions.
         const mask_width: i32 = @intFromFloat(polygons.end.x - polygons.start.x + scale);
         const mask_height: i32 = @intFromFloat(polygons.end.y - polygons.start.y + scale);
-        // const surface_width: i32 = self.context.surface.getWidth() * @as(i32, @intFromFloat(scale));
 
         const scaled_sfc = try Surface.init(
             .image_surface_alpha8,
@@ -213,11 +212,11 @@ fn paintComposite(
 
                 var x = start_x;
                 while (x <= end_x) : (x += 1) {
-                    scaled_sfc.putPixel(
+                    try scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
                         .{ .alpha8 = .{ .a = 255 } },
-                    ) catch unreachable;
+                    );
                 }
 
                 start_idx += 2;
