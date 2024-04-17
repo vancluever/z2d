@@ -1,11 +1,13 @@
+//! Pixel types represented by the library.
+
 const math = @import("std").math;
 const testing = @import("std").testing;
 
 /// Format descriptors for the pixel formats supported by the library:
 ///
-/// * .rgba is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
-/// * .rgb is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
-/// * .alpha8 is an 8-bit alpha channel.
+/// * `.rgba` is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
+/// * `.rgb` is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
+/// * `.alpha8` is an 8-bit alpha channel.
 pub const Format = enum {
     rgb,
     rgba,
@@ -174,13 +176,9 @@ pub const RGB = packed struct(u32) {
 
 /// Describes a 32-bit RGBA format.
 ///
-/// Note that depending on where this value occurs, it may or may not be
-/// pre-multiplied. During operations where the value is directly supplied
-/// (e.g., direct getPixel and putPixel on a surface, or as a value in
-/// OpaquePattern), the value will not be pre-multiplied. However, compositing
-/// operations on a surface will assume that the values are pre-multiplied. As
-/// such, care should be taken when working with RGBA surfaces directly using
-/// getPixel and putPixel.
+/// Note that all compositing operations in z2d expect a pre-multiplied alpha.
+/// You can convert between pre-multiplied and straight alpha using `multiply`
+/// and `demultiply`. Additionally, `fromClamped` takes straight alpha.
 pub const RGBA = packed struct(u32) {
     r: u8,
     g: u8,

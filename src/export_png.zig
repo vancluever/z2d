@@ -1,3 +1,5 @@
+//! Rudimentary PNG export functionality.
+
 const builtin = @import("builtin");
 const crc32 = @import("std").hash.Crc32;
 const fs = @import("std").fs;

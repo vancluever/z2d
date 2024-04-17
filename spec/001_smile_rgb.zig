@@ -88,7 +88,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     return sfc;
 }
 
-const surface_type: z2d.SurfaceType = .image_surface_rgb;
+const surface_type: z2d.surface.SurfaceType = .image_surface_rgb;
 
 const foregrounds: [3]z2d.Pixel = .{
     .{ .rgb = .{ .r = 0xC5, .g = 0x0F, .b = 0x1F } }, // Red

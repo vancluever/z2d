@@ -1,3 +1,7 @@
+//! Documents error sets related to operations in the library.
+
+const _ = struct {}; // Used to fix autodoc, ignore
+
 /// Errors associated with surfaces.
 pub const SurfaceError = error{
     /// An invalid height was passed to surface initialization.
@@ -16,12 +20,12 @@ pub const PathError = error{
     NoCurrentPoint,
 
     /// A path operation requires an initial point, but does not have one (set
-    /// one with moveTo or other operation that sets it).
+    /// one with `Path.moveTo` or other operation that sets it).
     NoInitialPoint,
 
     /// A drawing operation requires that the supplied path (and any sub-paths)
-    /// are explicitly closed with closePath. If subpaths are unclosed, the
-    /// path must be rebuilt with closePath called on each subpath.
+    /// are explicitly closed with `Path.closePath`. If subpaths are unclosed,
+    /// the path must be rebuilt with `Path.closePath` called on each subpath.
     PathNotClosed,
 };
 

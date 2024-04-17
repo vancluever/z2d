@@ -1,3 +1,8 @@
+//! Documents option enumerations used in various parts of the library, mostly
+//! in `Context`.
+
+const _ = struct {}; // Used to fix autodoc, ignore
+
 /// Represents the kinds of fill rules for paths. This will determine how more
 /// complex paths are filled, such as in the situation where multiple sub-paths
 /// overlap, or a single sub-path traces its path in a way where its lines will
@@ -29,8 +34,8 @@ pub const FillRule = enum {
 pub const JoinMode = enum {
     /// Lines are joined with a miter (pointed end).
     ///
-    /// See the miter_limit setting in Context for details on how to control
-    /// the miter limit.
+    /// See `Context.miter_limit` for details on how to control the miter
+    /// limit.
     miter,
 
     /// Lines are joined with a circle centered around the middle point of the

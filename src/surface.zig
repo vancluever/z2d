@@ -1,3 +1,11 @@
+//! Surfaces are rendering targets, such as pixel buffers of various formats.
+//! Normally, you would use a `Context` to render to surfaces, but they can be
+//! manipulated directly when needed.
+//!
+//! The buffer for each surface can be accessed directly through its union type
+//! field (e.g., `sfc.image_surface_rgba.buf`) and `@bitcast` to get raw access
+//! to its pixel data in the format specified (see the `pixel` module).
+
 const mem = @import("std").mem;
 const meta = @import("std").meta;
 const testing = @import("std").testing;
@@ -5,8 +13,8 @@ const testing = @import("std").testing;
 const pixel = @import("pixel.zig");
 const SurfaceError = @import("errors.zig").SurfaceError;
 
-// The scale factor used for super-sample anti-aliasing. Any functionality
-// using the downsample method in a surface should import this value.
+/// The scale factor used for super-sample anti-aliasing. Any functionality
+/// using the `downsample` method in a surface should be aware of this value.
 pub const supersample_scale = 4;
 
 /// Interface tags for surface types.
@@ -218,7 +226,7 @@ test "Surface interface" {
 
 /// A memory-backed image surface. The pixel format is the type (e.g. RGB or
 /// RGBA). Call init to return an initialized surface.
-fn ImageSurface(comptime T: type) type {
+pub fn ImageSurface(comptime T: type) type {
     return struct {
         /// The underlying allocator, only needed for deinit.
         alloc: mem.Allocator,

@@ -2,24 +2,29 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
 
+    /////////////////////////////////////////////////////////////////////////
     // Main module
+    /////////////////////////////////////////////////////////////////////////
     const z2d = b.addModule("z2d", .{ .root_source_file = .{ .path = "src/z2d.zig" } });
 
-    // Tests
-    const main_test = b.addTest(.{
+    /////////////////////////////////////////////////////////////////////////
+    // Unit tests
+    /////////////////////////////////////////////////////////////////////////
+    const test_run = b.addRunArtifact(b.addTest(.{
         .root_source_file = .{ .path = "src/z2d.zig" },
         .target = target,
-        .optimize = optimize,
-    });
-    const test_run = b.addRunArtifact(main_test);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&test_run.step);
+        .optimize = .Debug,
+    }));
+    b.step("test", "Run unit tests").dependOn(&test_run.step);
 
+    /////////////////////////////////////////////////////////////////////////
+    // Spec tests
+    //
     // Spec tests are complex E2E tests that render to files for comparison.
-    // Use "zig build spec -Dupdate=true" to generate the files used by this test. The
-    // test code itself is found in "spec".
+    // Use "zig build spec -Dupdate=true" to generate the files used by this
+    // test. The test code itself is found in "spec".
+    /////////////////////////////////////////////////////////////////////////
     const spec_update = b.option(
         bool,
         "update",
@@ -30,16 +35,35 @@ pub fn build(b: *std.Build) void {
             .name = "spec",
             .root_source_file = .{ .path = "spec/main.zig" },
             .target = target,
-            .optimize = optimize,
+            .optimize = .Debug,
         };
         if (spec_update orelse false)
             break :spec b.addExecutable(opts)
         else
             break :spec b.addTest(opts);
     };
-
     spec_test.root_module.addImport("z2d", z2d);
-    const spec_test_run = b.addRunArtifact(spec_test);
-    const spec_test_step = b.step("spec", "Run spec (E2E) tests");
-    spec_test_step.dependOn(&spec_test_run.step);
+    const spec_run = b.addRunArtifact(spec_test);
+    b.step("spec", "Run spec (E2E) tests").dependOn(&spec_run.step);
+
+    /////////////////////////////////////////////////////////////////////////
+    // Docs
+    //
+    // Docs are generated with autodoc and need to be hosted with a webserver.
+    // You can run a simple webserver from the CLI if you have python:
+    //
+    //   cd zig-out && python3 -m http.server
+    //
+    /////////////////////////////////////////////////////////////////////////
+    const docs_install = b.addInstallDirectory(.{
+        .install_dir = .prefix,
+        .install_subdir = "z2d",
+        .source_dir = b.addObject(.{
+            .name = "z2d",
+            .root_source_file = .{ .path = "src/z2d.zig" },
+            .target = target,
+            .optimize = .Debug,
+        }).getEmittedDocs(),
+    });
+    b.step("docs", "Build documentation").dependOn(&docs_install.step);
 }

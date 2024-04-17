@@ -25,21 +25,20 @@ pattern: Pattern = .{
 },
 
 /// The current line width for drawing operations, in pixels. This value is
-/// taken at call time during stroke operations in a path, and has no
-/// effect during path construction.
-///
-/// The default line width is 2.0.
+/// taken at call time during `stroke` operations, and has no effect during path
+/// construction.
 line_width: f64 = 2.0,
 
-/// The current fill rule. The default is non_zero.
+/// The current fill rule. Note that `stroke` operations always fill non-zero,
+/// regardless of this setting.
 fill_rule: options.FillRule = .non_zero,
 
-/// The current line join style for stroking. The default is miter.
+/// The current line join style for `stroke` operations.
 line_join_mode: options.JoinMode = .miter,
 
-/// The limit when line_join_mode is set to miter; in this mode, this value
-/// determines when the join is instead drawn as a bevel. This can be used
-/// to prevent extremely large miter points that result from very sharp
+/// The limit when `line_join_mode` is set to `.miter`; in this mode, this
+/// value determines when the join is instead drawn as a bevel. This can be
+/// used to prevent extremely large miter points that result from very sharp
 /// angled joins.
 ///
 /// The value here is the maximum allowed ratio of the miter distance (the
@@ -52,7 +51,7 @@ line_join_mode: options.JoinMode = .miter,
 /// translates to ~90 degrees.
 miter_limit: f64 = 10.0,
 
-/// The current line cap rule. The default is butt.
+/// The current line cap rule for `stroke` operations.
 line_cap_mode: options.CapMode = .butt,
 
 /// The current anti-aliasing mode. The default is the aptly-named
@@ -71,8 +70,8 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 /// changing under these scenarios.
 tolerance: f64 = 0.1,
 
-/// Runs a fill operation on the path(s) in the supplied set. All paths in
-/// the set must be closed.
+/// Runs a fill operation on the path(s) in the supplied set. All paths in the
+/// set must be closed.
 ///
 /// This is a no-op if there are no nodes.
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
@@ -83,13 +82,13 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
 
 /// Strokes a line for the path(s) in the supplied set.
 ///
-/// The behavior of open and closed paths are different for stroking. For
-/// open paths (not explicitly closed with close), the start and the
-/// end of the line are capped using the style set in line_cap_mode (e.g.,
-/// butt, round, or square). For closed paths (ones that *are* explicitly
-/// closed with close), the intersection joint of the start and end are
-/// instead joined, along with all other joints along the way, with the
-/// style set in line_join_mode (e.g., miter, round, or bevel).
+/// The behavior of open and closed paths are different for stroking. For open
+/// paths (not explicitly closed with `Path.close`), the start and the end of
+/// the line are capped using the style set in `line_cap_mode` (see
+/// `options.CapMode`). For closed paths (ones that *are* explicitly closed
+/// with `Path.close`), the intersection joint of the start and end are instead
+/// joined, as with with all other joints along the way, with the style set in
+/// `line_join_mode` (see `options.JoinMode`).
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {

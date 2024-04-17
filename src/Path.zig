@@ -20,7 +20,7 @@ initial_point: ?Point = null,
 /// The current point when working with drawing operations.
 current_point: ?Point = null,
 
-/// Initializes the path operation. Call deinit to release the node list when
+/// Initializes the path set. Call deinit to release the node list when
 /// complete.
 pub fn init(alloc: mem.Allocator) Path {
     return .{
@@ -28,13 +28,13 @@ pub fn init(alloc: mem.Allocator) Path {
     };
 }
 
-/// Releases the path node array list. It's invalid to use the operation after
+/// Releases the path node array list. It's invalid to use the path set after
 /// this call.
 pub fn deinit(self: *Path) void {
     self.nodes.deinit();
 }
 
-/// Rests the path operation, clearing all nodes and state.
+/// Rests the path set, clearing all nodes and state.
 pub fn reset(self: *Path) void {
     self.nodes.clearRetainingCapacity();
     self.initial_point = null;
@@ -63,9 +63,7 @@ pub fn moveTo(self: *Path, x: f64, y: f64) !void {
 }
 
 /// Draws a line from the current point to the specified point and sets it as
-/// the current point.
-///
-/// Acts as a moveTo instead if there is no current point.
+/// the current point. Acts as a `moveTo` instead if there is no current point.
 pub fn lineTo(self: *Path, x: f64, y: f64) !void {
     if (self.current_point == null) return self.moveTo(x, y);
     const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
@@ -74,9 +72,8 @@ pub fn lineTo(self: *Path, x: f64, y: f64) !void {
 }
 
 /// Draws a cubic bezier with the three supplied control points from the
-/// current point. The new current point is set to (x3, y3).
-///
-/// It is an error to call this without a current point.
+/// current point. The new current point is set to (x3, y3). It is an error to
+/// call this without a current point.
 pub fn curveTo(
     self: *Path,
     x1: f64,
@@ -94,8 +91,8 @@ pub fn curveTo(
     self.current_point = p3;
 }
 
-/// Closes the path by drawing a line from the current point by the
-/// starting point. No effect if there is no current point.
+/// Closes the path by drawing a line from the current point by the starting
+/// point. No effect if there is no current point.
 pub fn close(self: *Path) !void {
     if (self.current_point == null) return;
     if (self.initial_point) |initial_point| {
@@ -109,7 +106,7 @@ pub fn close(self: *Path) !void {
 }
 
 /// Returns true if the path set is currently closed, meaning that the last
-/// operation called on the path set was close.
+/// operation called on the path set was `close`.
 ///
 /// This is used to check if a path is closed for filling, so it does not
 /// guarantee that any sub-paths that may be part of the set that precede

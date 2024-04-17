@@ -241,7 +241,7 @@ fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
 fn specExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u8) !void {
     const target_path = try fs.path.join(alloc, &.{ "spec/files", filename });
     errdefer alloc.free(target_path);
-    try z2d.writeToPNGFile(surface, target_path);
+    try z2d.png_exporter.writeToPNGFile(surface, target_path);
 }
 
 fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -308,7 +308,7 @@ fn testExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u
     const target_path = try fs.path.join(alloc, &.{ parent_path, filename });
     errdefer alloc.free(target_path);
 
-    try z2d.writeToPNGFile(surface, target_path);
+    try z2d.png_exporter.writeToPNGFile(surface, target_path);
 
     return .{
         .tmp_dir = tmp_dir,

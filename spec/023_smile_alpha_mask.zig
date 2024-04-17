@@ -101,18 +101,18 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     return result_sfc;
 }
 
-const surface_type: z2d.SurfaceType = .image_surface_rgba;
+const surface_type: z2d.surface.SurfaceType = .image_surface_rgba;
 
 const foregrounds: [3]z2d.Pixel = .{
-    .{ .rgba = (z2d.RGBA{ .r = 0xC5, .g = 0x0F, .b = 0x1F, .a = 0xFF }).multiply() }, // Red
-    .{ .rgba = (z2d.RGBA{ .r = 0x88, .g = 0x17, .b = 0x98, .a = 0xFF }).multiply() }, // Purple
-    .{ .rgba = (z2d.RGBA{ .r = 0xFC, .g = 0x7F, .b = 0x11, .a = 0xFF }).multiply() }, // Orange
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0xC5, .g = 0x0F, .b = 0x1F, .a = 0xFF }).multiply() }, // Red
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0x88, .g = 0x17, .b = 0x98, .a = 0xFF }).multiply() }, // Purple
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0xFC, .g = 0x7F, .b = 0x11, .a = 0xFF }).multiply() }, // Orange
 };
 
 const backgrounds: [3]z2d.Pixel = .{
-    .{ .rgba = (z2d.RGBA{ .r = 0xC1, .g = 0x9C, .b = 0x10, .a = 0x99 }).multiply() }, // Yellow-ish green
-    .{ .rgba = (z2d.RGBA{ .r = 0x3A, .g = 0x96, .b = 0xDD, .a = 0x99 }).multiply() }, // Blue
-    .{ .rgba = (z2d.RGBA{ .r = 0x01, .g = 0x24, .b = 0x86, .a = 0x99 }).multiply() }, // Deep blue
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0xC1, .g = 0x9C, .b = 0x10, .a = 0x99 }).multiply() }, // Yellow-ish green
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0x3A, .g = 0x96, .b = 0xDD, .a = 0x99 }).multiply() }, // Blue
+    .{ .rgba = (z2d.pixel.RGBA{ .r = 0x01, .g = 0x24, .b = 0x86, .a = 0x99 }).multiply() }, // Deep blue
 };
 
 const image = .{

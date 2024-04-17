@@ -1,3 +1,7 @@
+//! Pattern types and interfaces. Patterns are sources of pixel data, such as
+//! "opaque" single-pixel patterns, gradients, or even whole other surfaces.
+//!
+//! Currently, only opaque patterns are supported, others are WIP.
 const testing = @import("std").testing;
 
 const Pixel = @import("pixel.zig").Pixel;
