@@ -33,11 +33,10 @@ vertices: std.ArrayList(PenVertex),
 /// based on the maximum error along the radius, being equal to or less
 /// than tolerance.
 pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
-    // You can find the proof for our calculation here in cairo-pen.c in
-    // the Cairo project (https://www.cairographics.org/, MPL 1.1). It
-    // shows that ultimately, the maximum error of an ellipse is along its
-    // major axis, and to get our needed number of vertices, we can
-    // calculate the following:
+    // You can find the proof for our calculation here in cairo-pen.c in the
+    // Cairo project. It shows that ultimately, the maximum error of an ellipse
+    // is along its major axis, and to get our needed number of vertices, we
+    // can calculate the following:
     //
     // ceil(2 * Π / acos(1 - tolerance / M))
     //
@@ -137,9 +136,6 @@ pub fn verticesFor(
     var result = std.ArrayList(PenVertex).init(self.alloc);
     errdefer result.deinit();
 
-    // Some of this logic was transcribed from cairo-slope.c in the Cairo
-    // project (https://www.cairographics.org, MPL 1.1).
-    //
     // The algorithm is basically a binary search back from the middle of
     // the vertex set. We search backwards for the vertex right after the
     // outer point of the end of the inbound face (i.e., the unjoined
@@ -250,9 +246,6 @@ pub fn vertexIteratorFor(
     to_slope: Slope,
     clockwise: bool,
 ) VertexIterator {
-    // Some of this logic was transcribed from cairo-slope.c in the Cairo
-    // project (https://www.cairographics.org, MPL 1.1).
-    //
     // The algorithm is basically a binary search back from the middle of
     // the vertex set. We search backwards for the vertex right after the
     // outer point of the end of the inbound face (i.e., the unjoined
