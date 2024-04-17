@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Painter represents the internal code related to painting (fill/stroke/etc).
 const Painter = @This();
 

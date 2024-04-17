@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2002 University of Southern California
+//
+// Portions of the code in this file have been derived and adapted from the
+// Cairo project (https://www.cairographics.org/), notably cairo-pen.c.
+
 //! A Pen represents a circular area designed for specific stroking operations,
 //! such as round joins and caps.
 const Pen = @This();

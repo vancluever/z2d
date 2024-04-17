@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! A polygon plotter for stroke operations.
 const StrokePlotter = @This();
 

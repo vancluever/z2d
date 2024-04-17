@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Context is the draw context, which connects patterns to surfaces, holds
 //! other state data, and is used to dispatch drawing operations.
 const Context = @This();

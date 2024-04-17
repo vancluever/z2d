@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! An interface for plotting lines on a polygon, used by some of our drawing
 //! implementations (e.g., spline deconstruction, line capping).
 const PlotterVTable = @This();

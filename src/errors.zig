@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Documents error sets related to operations in the library.
 
 const _ = struct {}; // Used to fix autodoc, ignore

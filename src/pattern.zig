@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Pattern types and interfaces. Patterns are sources of pixel data, such as
 //! "opaque" single-pixel patterns, gradients, or even whole other surfaces.
 //!

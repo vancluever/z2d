@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 const Point = @import("Point.zig");
 
 /// A tagged union of all path node types.

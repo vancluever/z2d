@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! z2d is a 2D vector and raster graphics library. Drawing inspiration from
 //! [Cairo](https://www.cairographics.org/), it provides a model that allows
 //! you to execute vector operations that you would normally find in SVG,

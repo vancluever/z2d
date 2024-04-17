@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2002 University of Southern California
+//
+// Portions of the code in this file have been derived and adapted from the
+// Cairo project (https://www.cairographics.org/), notably cairo-slope.c.
+
 //! Slope represents a slope, de-constructed as its deltas.
 const Slope = @This();
 
@@ -35,9 +42,6 @@ pub fn calculate(self: Slope) f64 {
 ///   * == 0 when a is the same as b
 ///   * > 0 when a is larger than b
 pub fn compare(a: Slope, b: Slope) i32 {
-    // Some of this logic was transcribed from cairo-slope.c in the Cairo
-    // project (https://www.cairographics.org, MPL 1.1).
-
     // Do basic comparison first. Our comparison is done multiplicatively
     // on the vector (saves division, allows for calculation of things like
     // clockwise/counterclockwise direction, etc).

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Surfaces are rendering targets, such as pixel buffers of various formats.
 //! Normally, you would use a `Context` to render to surfaces, but they can be
 //! manipulated directly when needed.

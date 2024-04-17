@@ -1,9 +1,5 @@
-// The code in this file takes a lot of its logic from the Cairo project,
-// namely src/cairo-spline.c.
-//
-// Cairo can be found at https://www.cairographics.org, governed by MPL 1.1 and
-// LGPL 2.1, which can be found in the Cairo project's COPYING file. This
-// project specifically uses this code under the terms of the MPL.
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
 
 //! Given a set of four points representing a bezier curve ("spline"),
 //! subdivide the curve into a series of line_to nodes.

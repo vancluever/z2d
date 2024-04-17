@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+
 //! Path is the "path builder" type, and contains a set of sub-paths used for
 //! filling or stroking operations.
 const Path = @This();
