@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and fills a triangle on a 300x300 surface, but with different
 //! pixel types (RGBA on RGB surface) We expect compositing to work on both
 //! main AA modes (no AA, default AA).

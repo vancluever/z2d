@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and strokes stars on a 900x300 surface with rounded corners,
 //! and varying tolerance.
 const debug = @import("std").debug;

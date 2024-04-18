@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Render a smile (similar to 001_smile_rgb.zig and 002_smile_rgba.zig),
 //! but use an alpha mask as the template image instead of iterating over the
 //! image data every single time. Demonstrates basic composting onto a surface.

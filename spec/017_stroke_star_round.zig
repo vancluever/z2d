@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and strokes a star on a 300x300 surface with rounded corners.
 const debug = @import("std").debug;
 const mem = @import("std").mem;

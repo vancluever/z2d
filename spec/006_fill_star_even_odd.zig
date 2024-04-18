@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and fills a star on a 300x300 surface.
 //!
 //! NOTE: This star fills with even-odd rule, so it's expected for there to be

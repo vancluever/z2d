@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and fills a triangle on a 300x300 surface, extended to the
 //! full canvas.
 const debug = @import("std").debug;

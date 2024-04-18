@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Basic test case for rendering a group of smiles on to an image
 //! surface, and exporting them to a PNG file.
 //!

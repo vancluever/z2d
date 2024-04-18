@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and strokes stacked beziers of varying thickness on a 300x300
 //! surface, at varying levels of error tolerance.
 //!

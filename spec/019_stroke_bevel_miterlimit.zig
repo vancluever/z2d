@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders multiple cornered lines with bevels and miters, the latter
 //! with varying miter limits.
 const debug = @import("std").debug;

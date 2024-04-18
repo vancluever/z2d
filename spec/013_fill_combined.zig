@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: 0BSD
+//   Copyright © 2024 Chris Marchesi
+
 //! Case: Renders and fills multiple shapes using a single path operation, used
 //! to ensure we can do this without having to fill each polygon individually.
 const debug = @import("std").debug;
