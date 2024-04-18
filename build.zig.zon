@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
+.{
+    .name = "z2d",
+    .version = "0.1.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
