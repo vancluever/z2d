@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+//   Copyright © 2024 Chris Marchesi
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
@@ -6,13 +8,15 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Main module
     /////////////////////////////////////////////////////////////////////////
-    const z2d = b.addModule("z2d", .{ .root_source_file = .{ .path = "src/z2d.zig" } });
+    const z2d = b.addModule("z2d", .{
+        .root_source_file = b.path("src/z2d.zig"),
+    });
 
     /////////////////////////////////////////////////////////////////////////
     // Unit tests
     /////////////////////////////////////////////////////////////////////////
     const test_run = b.addRunArtifact(b.addTest(.{
-        .root_source_file = .{ .path = "src/z2d.zig" },
+        .root_source_file = b.path("src/z2d.zig"),
         .target = target,
         .optimize = .Debug,
     }));
@@ -33,7 +37,7 @@ pub fn build(b: *std.Build) void {
     const spec_test = spec: {
         const opts = .{
             .name = "spec",
-            .root_source_file = .{ .path = "spec/main.zig" },
+            .root_source_file = b.path("src/z2d.zig"),
             .target = target,
             .optimize = .Debug,
         };
@@ -52,18 +56,18 @@ pub fn build(b: *std.Build) void {
     // Docs are generated with autodoc and need to be hosted with a webserver.
     // You can run a simple webserver from the CLI if you have python:
     //
-    //   cd zig-out && python3 -m http.server
+    //   cd zig-out/docs && python3 -m http.server
     //
     /////////////////////////////////////////////////////////////////////////
-    const docs_install = b.addInstallDirectory(.{
+    const docs_build = b.addInstallDirectory(.{
         .install_dir = .prefix,
-        .install_subdir = "z2d",
+        .install_subdir = "docs/z2d",
         .source_dir = b.addObject(.{
             .name = "z2d",
-            .root_source_file = .{ .path = "src/z2d.zig" },
+            .root_source_file = b.path("src/z2d.zig"),
             .target = target,
             .optimize = .Debug,
         }).getEmittedDocs(),
     });
-    b.step("docs", "Build documentation").dependOn(&docs_install.step);
+    b.step("docs", "Build documentation").dependOn(&docs_build.step);
 }
