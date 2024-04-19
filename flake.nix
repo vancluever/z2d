@@ -46,6 +46,7 @@
           nativeBuildInputs = with pkgs; [
             zigpkgs.master
             zlspkgs.zls
+            python3
           ];
         };
 
