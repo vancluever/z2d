@@ -122,12 +122,6 @@ pub fn build(b: *std.Build) void {
 
     /////////////////////////////////////////////////////////////////////////
     // Docs
-    //
-    // Docs are generated with autodoc and need to be hosted with a webserver.
-    // You can run a simple webserver from the CLI if you have python:
-    //
-    //   cd zig-out/docs && python3 -m http.server
-    //
     /////////////////////////////////////////////////////////////////////////a
     const docs_step = docsStep(b, "", target);
     b.step("docs", "Generate documentation").dependOn(docs_step);
