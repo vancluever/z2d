@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
     const spec_test = spec: {
         const opts = .{
             .name = "spec",
-            .root_source_file = b.path("src/z2d.zig"),
+            .root_source_file = b.path("spec/main.zig"),
             .target = target,
             .optimize = .Debug,
         };
