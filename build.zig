@@ -9,13 +9,12 @@ const std = @import("std");
 /// gets better, I'd love to move this to pure Zig.
 pub fn docsStep(
     b: *std.Build,
-    vendor_prefix: []const u8,
     target: std.Build.ResolvedTarget,
 ) *std.Build.Step {
     const dir = b.addInstallDirectory(.{
         .source_dir = b.addObject(.{
             .name = "z2d",
-            .root_source_file = b.path(b.pathJoin(&.{ vendor_prefix, "src/z2d.zig" })),
+            .root_source_file = b.path("src/z2d.zig"),
             .target = target,
             .optimize = .Debug,
         }).getEmittedDocs(),
@@ -59,7 +58,10 @@ pub fn docsServeStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step 
 ///
 /// NOTE: This relies on system tools right now, but eventually once the stdlib
 /// gets better, I'd love to move this to pure Zig.
-pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step {
+///
+/// If branch is specified, ensures that main.js, main.wasm, and sources.tar
+/// reference that branch.
+pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step, branch_: ?[]const u8) *std.Build.Step {
     const dir = b.pathJoin(
         &.{ b.install_prefix, "docs" },
     );
@@ -74,7 +76,33 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step
         b.fmt("--file={s}", .{target}),
         ".",
     });
-    tar.step.dependOn(docs_step);
+    const branch = if (branch_) |br| br else "";
+    if (branch.len > 0) {
+        const main_js_sed = b.addSystemCommand(&.{
+            "sed",
+            "--in-place",
+            b.fmt("s#main.js#/{s}/main.js#g", .{branch}),
+            b.pathJoin(&.{ dir, "index.html" }),
+        });
+        const main_wasm_sed = b.addSystemCommand(&.{
+            "sed",
+            "--in-place",
+            b.fmt("s#main.wasm#/{s}/main.wasm#g", .{branch}),
+            b.pathJoin(&.{ dir, "main.js" }),
+        });
+        const sources_tar_sed = b.addSystemCommand(&.{
+            "sed",
+            "--in-place",
+            b.fmt("s#sources.tar#/{s}/sources.tar#g", .{branch}),
+            b.pathJoin(&.{ dir, "main.js" }),
+        });
+        main_js_sed.step.dependOn(docs_step);
+        main_wasm_sed.step.dependOn(&main_js_sed.step);
+        sources_tar_sed.step.dependOn(&main_wasm_sed.step);
+        tar.step.dependOn(&sources_tar_sed.step);
+    } else {
+        tar.step.dependOn(docs_step);
+    }
     return &tar.step;
 }
 
@@ -129,8 +157,13 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Docs
     /////////////////////////////////////////////////////////////////////////a
-    const docs_step = docsStep(b, "", target);
+    const docs_step = docsStep(b, target);
     b.step("docs", "Generate documentation").dependOn(docs_step);
     b.step("docs-serve", "Serve documentation").dependOn(docsServeStep(b, docs_step));
-    b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step));
+    const bundle_branch = b.option(
+        []const u8,
+        "bundle-branch",
+        "Branch to bundle docs for (use with \"docs-bundle\" target",
+    );
+    b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step, bundle_branch));
 }

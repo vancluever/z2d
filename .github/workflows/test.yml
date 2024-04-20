@@ -1,0 +1,20 @@
+on: [push, pull_request]
+name: Test
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Nix
+        uses: DeterminateSystems/nix-installer-action@v10
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v4
+
+      - name: Run unit tests
+        run: nix develop -c zig build test
+
+      - name: Run spec tests
+        run: nix develop -c zig build spec
