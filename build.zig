@@ -29,18 +29,17 @@ pub fn docsStep(
     const out_tar = b.pathJoin(
         &.{ b.install_prefix, "docs", "sources.tar.new" },
     );
-    const tar_fmt =
-        \\cat {s} | tar --delete std builtin > {s}
-        \\mv {s} {s}
-    ;
     const tar = b.addSystemCommand(&.{"sh"});
     tar.addArgs(&.{
         "-c",
-        b.fmt(tar_fmt, .{ in_tar, out_tar, out_tar, in_tar }),
+        b.fmt("cat {s} | tar --delete std builtin > {s}", .{ in_tar, out_tar }),
     });
 
+    const mv = b.addSystemCommand(&.{ "mv", out_tar, in_tar });
+
     tar.step.dependOn(&dir.step);
-    return &tar.step;
+    mv.step.dependOn(&tar.step);
+    return &mv.step;
 }
 
 /// Serves the "docs" directory. Relies on python3 being installed.
@@ -67,7 +66,14 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step
     const target = b.pathJoin(
         &.{ b.install_prefix, "z2d-docs.tar.gz" },
     );
-    const tar = b.addSystemCommand(&.{ "tar", "-zcf", target, "-C", dir, "." });
+    const tar = b.addSystemCommand(&.{
+        "tar",
+        "--create",
+        "--gzip",
+        b.fmt("--directory={s}", .{dir}),
+        b.fmt("--file={s}", .{target}),
+        ".",
+    });
     tar.step.dependOn(docs_step);
     return &tar.step;
 }
