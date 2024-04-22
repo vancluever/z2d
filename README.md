@@ -20,9 +20,9 @@ stroking operations. Additionally, surfaces can be interfaced with directly.
 Currently:
 
  * Basic rendering of lines and cubic Beziers.
-   - Additionally, examples exist in the `spec/` directory for representing arcs
-     and quadratic Beziers with current primitives. Dedicated helpers for these
-     are planned!
+   - Additionally, examples exist in the [`spec/`](spec/) directory for
+     representing arcs and quadratic Beziers with current primitives. Dedicated
+     helpers for these are planned!
  * Filling and stroking:
    - Miter, bevel, and round join supported for stroking.
    - Butt, square, and round caps supported for stroking.
