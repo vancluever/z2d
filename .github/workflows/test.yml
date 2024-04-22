@@ -14,7 +14,7 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@v4
 
       - name: Run unit tests
-        run: nix develop -c zig build test
+        run: nix develop --quiet --command zig build test --summary all
 
       - name: Run spec tests
-        run: nix develop -c zig build spec
+        run: nix develop --quiet --command zig build spec --summary all
