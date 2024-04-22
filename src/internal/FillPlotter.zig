@@ -81,7 +81,7 @@ pub fn plot(
                 if (current_polygon == null) return InternalError.InvalidState;
 
                 // No-op if our initial and current points are equal
-                if (current_point.?.equal(initial_point.?)) break;
+                if (current_point.?.equal(initial_point.?)) continue;
 
                 // Set the current point to the initial point.
                 current_point = initial_point;

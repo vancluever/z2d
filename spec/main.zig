@@ -41,6 +41,8 @@ const _027_stroke_bezier_tolerance = @import("027_stroke_bezier_tolerance.zig");
 const _028_fill_bezier_tolerance = @import("028_fill_bezier_tolerance.zig");
 const _029_stroke_lines_round_caps_tolerance = @import("029_stroke_lines_round_caps_tolerance.zig");
 const _030_stroke_star_round_tolerance = @import("030_stroke_star_round_tolerance.zig");
+const _031_fill_quad_bezier = @import("031_fill_quad_bezier.zig");
+const _032_fill_arc = @import("032_fill_arc.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -78,6 +80,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _028_fill_bezier_tolerance);
     try pathExportRun(alloc, _029_stroke_lines_round_caps_tolerance);
     try pathExportRun(alloc, _030_stroke_star_round_tolerance);
+    try pathExportRun(alloc, _031_fill_quad_bezier);
+    try pathExportRun(alloc, _032_fill_arc);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -200,6 +204,14 @@ test "029_stroke_lines_round_caps_tolerance" {
 
 test "030_stroke_star_round_tolerance" {
     try pathTestRun(testing.allocator, _030_stroke_star_round_tolerance);
+}
+
+test "031_fill_quad_bezier" {
+    try pathTestRun(testing.allocator, _031_fill_quad_bezier);
+}
+
+test "032_fill_arc" {
+    try pathTestRun(testing.allocator, _032_fill_arc);
 }
 
 //////////////////////////////////////////////////////////////////////////////
