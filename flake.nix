@@ -1,57 +1,40 @@
 {
-  description = "z2d";
-
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
-    flake-utils.url = "github:numtide/flake-utils";
-    zig.url = "github:mitchellh/zig-overlay";
-
-    # Used for shell.nix
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
-      flake = false;
-    };
-
-    zls = {
-      url = "github:zigtools/zls/master";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.zls = {
+    url = "github:zigtools/zls/master";
+    inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , flake-utils
-    , ...
-    } @ inputs:
+  outputs = { self, nixpkgs, zls }:
     let
-      overlays = [
-        # Other overlays
-        (final: prev: {
-          zigpkgs = inputs.zig.packages.${prev.system};
-          zlspkgs = inputs.zls.packages.${prev.system};
-        })
+      supportedSystems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "x86_64-linux"
       ];
 
-      # Our supported systems are the same supported systems as the Zig binaries
-      systems = builtins.attrNames inputs.zig.packages;
+      defaultForEachSupportedSystem = (func:
+        nixpkgs.lib.genAttrs supportedSystems (system: {
+          default = func system;
+        })
+      );
     in
-    flake-utils.lib.eachSystem systems (
-      system:
-      let
-        pkgs = import nixpkgs { inherit overlays system; };
-      in
-      rec {
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            zigpkgs.master
-            zlspkgs.zls
-            python3
-          ];
-        };
-
-        # For compatibility with older versions of the `nix` binary
-        devShell = self.devShells.${system}.default;
-      }
-    );
+    {
+      devShells = defaultForEachSupportedSystem
+        (system:
+          let
+            pkgs = import nixpkgs {
+              inherit system;
+            };
+          in
+          pkgs.mkShell {
+            packages = with pkgs; [
+              zig_0_12
+              zls.packages.${system}.zls
+              python3
+            ];
+          }
+        );
+    };
 }
