@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
 
-//! z2d is a 2D vector and raster graphics library. Drawing inspiration from
-//! [Cairo](https://www.cairographics.org/), it provides a model that allows
-//! you to execute vector operations that you would normally find in SVG,
-//! PostScript, and PDF, such as stroking and filling of cubic Beziers, in
-//! addition to composition of image data in a reliable format suitable for
-//! export.
+//! z2d is a 2D graphics library primarily designed around rasterizing vector
+//! primitives like lines and cubic Beziers. In other words, it's designed
+//! around supporting operations that you would see in SVG or other vector
+//! languages like PostScript or PDF.
 //!
-//! The API is broken down into various components:
+//! Our drawing model is (loosely) inspired by
+//! [Cairo](https://www.cairographics.org).
+//!
+//! The full API can be broken down as follows:
 //!
 //! ## Core types and interfaces
 //!
