@@ -14,7 +14,8 @@ const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("internal/Point.zig");
 const PathError = @import("errors.zig").PathError;
 
-/// The underlying node set.
+/// The underlying node set. Do not edit or populate this directly, use the
+/// builder functions (e.g., moveTo, lineTo, curveTo, closePath, etc).
 nodes: std.ArrayList(PathNode),
 
 /// The start of the current subpath when working with drawing operations.
@@ -108,16 +109,20 @@ pub fn close(self: *Path) !void {
     } else return PathError.NoInitialPoint;
 }
 
-/// Returns true if the path set is currently closed, meaning that the last
-/// operation called on the path set was `close`.
-///
-/// This is used to check if a path is closed for filling, so it does not
-/// guarantee that any sub-paths that may be part of the set that precede
-/// the current path are closed as well.
+/// Returns true if all subpaths in the path set are currently closed.
 pub fn isClosed(self: *const Path) bool {
-    const len = self.nodes.items.len;
-    if (len < 2) return false;
-    return self.nodes.items[len - 2] == .close_path and self.nodes.items[len - 1] == .move_to;
+    if (self.nodes.items.len == 0) return false;
+
+    var closed = false;
+    for (self.nodes.items, 0..) |node, i| {
+        switch (node) {
+            .move_to => if (!closed and i != 0) break,
+            .close_path => closed = true,
+            else => closed = false,
+        }
+    }
+
+    return closed;
 }
 
 fn clampI32(x: f64) f64 {
@@ -233,5 +238,78 @@ test "curveTo clamped" {
         }, p.nodes.items[3]);
         try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
         try testing.expectEqual(Point{ .x = math.minInt(i32), .y = math.maxInt(i32) }, p.current_point);
+    }
+}
+
+test "isClosed" {
+    {
+        // Basic (closed)
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(2, 2);
+        try p.lineTo(3, 3);
+        try p.close();
+        try testing.expectEqual(true, p.isClosed());
+    }
+
+    {
+        // Multiple subpaths, all closed
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(2, 2);
+        try p.lineTo(3, 3);
+        try p.close();
+        try p.moveTo(4, 4);
+        try p.lineTo(5, 5);
+        try p.lineTo(6, 6);
+        try p.close();
+        try testing.expectEqual(true, p.isClosed());
+    }
+
+    {
+        // Basic (not closed)
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(2, 2);
+        try p.moveTo(3, 3);
+        try p.lineTo(4, 4);
+        try p.lineTo(5, 5);
+        try testing.expectEqual(false, p.isClosed());
+    }
+
+    {
+        // Closed in the middle
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(2, 2);
+        try p.close();
+        try p.moveTo(3, 3);
+        try p.lineTo(4, 4);
+        try p.lineTo(5, 5);
+        try testing.expectEqual(false, p.isClosed());
+    }
+
+    {
+        // Closed at the end (not in the middle)
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.lineTo(2, 2);
+        try p.moveTo(3, 3);
+        try p.lineTo(4, 4);
+        try p.lineTo(5, 5);
+        try p.close();
+        try testing.expectEqual(false, p.isClosed());
+    }
+
+    {
+        // Empty node set
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try testing.expectEqual(false, p.isClosed());
     }
 }
