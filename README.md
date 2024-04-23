@@ -48,7 +48,7 @@ Note that Zig 0.12.0 or later is required.
 
 ## Documentation and Examples
 
-View the documentation for the `main` branch at: https://z2d.vancluevertech.com/main
+View the documentation for the `main` branch at: https://z2d.vancluevertech.com/docs
 
 See the [`spec/`](spec/) directory for a number of rudimentary usage examples.
 

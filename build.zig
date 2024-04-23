@@ -61,7 +61,7 @@ pub fn docsServeStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step 
 ///
 /// If branch is specified, ensures that main.js, main.wasm, and sources.tar
 /// reference that branch.
-pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step, branch_: ?[]const u8) *std.Build.Step {
+pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step {
     const dir = b.pathJoin(
         &.{ b.install_prefix, "docs" },
     );
@@ -76,33 +76,29 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step, branch_: ?[]con
         b.fmt("--file={s}", .{target}),
         ".",
     });
-    const branch = if (branch_) |br| br else "";
-    if (branch.len > 0) {
-        const main_js_sed = b.addSystemCommand(&.{
-            "sed",
-            "--in-place",
-            b.fmt("s#main.js#/{s}/main.js#g", .{branch}),
-            b.pathJoin(&.{ dir, "index.html" }),
-        });
-        const main_wasm_sed = b.addSystemCommand(&.{
-            "sed",
-            "--in-place",
-            b.fmt("s#main.wasm#/{s}/main.wasm#g", .{branch}),
-            b.pathJoin(&.{ dir, "main.js" }),
-        });
-        const sources_tar_sed = b.addSystemCommand(&.{
-            "sed",
-            "--in-place",
-            b.fmt("s#sources.tar#/{s}/sources.tar#g", .{branch}),
-            b.pathJoin(&.{ dir, "main.js" }),
-        });
-        main_js_sed.step.dependOn(docs_step);
-        main_wasm_sed.step.dependOn(&main_js_sed.step);
-        sources_tar_sed.step.dependOn(&main_wasm_sed.step);
-        tar.step.dependOn(&sources_tar_sed.step);
-    } else {
-        tar.step.dependOn(docs_step);
-    }
+
+    const main_js_sed = b.addSystemCommand(&.{
+        "sed",
+        "--in-place",
+        "s#main.js#/docs/main.js#g",
+        b.pathJoin(&.{ dir, "index.html" }),
+    });
+    const main_wasm_sed = b.addSystemCommand(&.{
+        "sed",
+        "--in-place",
+        "s#main.wasm#/docs/main.wasm#g",
+        b.pathJoin(&.{ dir, "main.js" }),
+    });
+    const sources_tar_sed = b.addSystemCommand(&.{
+        "sed",
+        "--in-place",
+        "s#sources.tar#/docs/sources.tar#g",
+        b.pathJoin(&.{ dir, "main.js" }),
+    });
+    main_js_sed.step.dependOn(docs_step);
+    main_wasm_sed.step.dependOn(&main_js_sed.step);
+    sources_tar_sed.step.dependOn(&main_wasm_sed.step);
+    tar.step.dependOn(&sources_tar_sed.step);
     return &tar.step;
 }
 
@@ -160,10 +156,5 @@ pub fn build(b: *std.Build) void {
     const docs_step = docsStep(b, target);
     b.step("docs", "Generate documentation").dependOn(docs_step);
     b.step("docs-serve", "Serve documentation").dependOn(docsServeStep(b, docs_step));
-    const bundle_branch = b.option(
-        []const u8,
-        "bundle-branch",
-        "Branch to bundle docs for (use with \"docs-bundle\" target",
-    );
-    b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step, bundle_branch));
+    b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step));
 }
