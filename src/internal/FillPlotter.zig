@@ -31,7 +31,16 @@ pub fn plot(
     for (nodes.items, 0..) |node, i| {
         switch (node) {
             .move_to => |n| {
-                if (current_polygon) |poly| try result.append(poly);
+                if (current_polygon) |poly| {
+                    // Only append this polygon if it's useful (has more than 2
+                    // corners). Otherwise, get rid of it.
+                    if (poly.corners.len > 2) {
+                        try result.append(poly);
+                    } else {
+                        poly.deinit();
+                        current_polygon = null;
+                    }
+                }
 
                 // Check if this is the last node, and no-op if it is, as this
                 // is the auto-added move_to node that is given after
