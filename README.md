@@ -164,15 +164,17 @@ vector rasterization, suitable for UI design and other similar tasks.
 Note that Zig 0.12.0 is required. At this time we are not tracking nightly
 releases, so they may or may not work!
 
-## Documentation and Examples
+## Documentation and examples
 
 View the documentation for the `main` branch at: https://z2d.vancluevertech.com/docs
 
 See the [`spec/`](spec/) directory for a number of rudimentary usage examples.
 
-## LICENSE
+## LICENSE and acknowledgments 
 
 z2d itself is licensed MPL 2.0; see the LICENSE file for further details.
 
 Code examples in the [`spec/`](spec/) directory are licensed 0BSD, this means
 you can use them freely to integrate z2d.
+
+The [Zig logo](https://github.com/ziglang/logo) mark is licensed CC BY-SA 4.0.
