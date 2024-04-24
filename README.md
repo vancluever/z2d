@@ -4,7 +4,8 @@ A 2d vector graphics library, written in pure Zig.
 
 ## Example
 
-The following code will generate the [Zig logo](https://github.com/ziglang/logo) mark:
+The following code will generate the [Zig
+logo](https://github.com/ziglang/logo) logomark:
 
 <details>
 <summary>Click to expand</summary>
