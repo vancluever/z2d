@@ -177,4 +177,5 @@ z2d itself is licensed MPL 2.0; see the LICENSE file for further details.
 Code examples in the [`spec/`](spec/) directory are licensed 0BSD, this means
 you can use them freely to integrate z2d.
 
-The [Zig logo](https://github.com/ziglang/logo) mark is licensed CC BY-SA 4.0.
+The [Zig logo](https://github.com/ziglang/logo) and logomark are licensed
+CC-BY-SA 4.0.

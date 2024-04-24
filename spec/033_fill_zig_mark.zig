@@ -4,7 +4,8 @@
 //! Case: Renders the Zig logo mark. Interpreted from:
 //!   https://github.com/ziglang/logo/blob/9d06c090ca39ef66019a639241ea2d7e448b9fe1/zig-mark.svg
 //!
-//! The Zig logo and all related marks are licensed CC-BY-SA 4.0.
+//! The [Zig logo](https://github.com/ziglang/logo) and logomark are licensed
+//! CC-BY-SA 4.0.
 const debug = @import("std").debug;
 const mem = @import("std").mem;
 
