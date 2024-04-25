@@ -1,7 +1,7 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   inputs.zls = {
-    url = "github:zigtools/zls/master";
+    url = "github:zigtools/zls/07508440588bf06f041da9f6dd3956948368f194";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
