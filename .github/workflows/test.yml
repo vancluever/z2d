@@ -7,14 +7,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Nix
-        uses: DeterminateSystems/nix-installer-action@v10
-
-      - name: Setup Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v4
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: "0.12.0"
 
       - name: Run unit tests
-        run: nix develop --quiet --command zig build test --summary all
+        run: zig build test --summary all
 
       - name: Run spec tests
-        run: nix develop --quiet --command zig build spec --summary all
+        run: zig build spec --summary all
