@@ -4,6 +4,7 @@
 //! Pixel types represented by the library.
 
 const math = @import("std").math;
+const mem = @import("std").mem;
 const testing = @import("std").testing;
 
 /// Format descriptors for the pixel formats supported by the library:
@@ -86,6 +87,45 @@ pub const RGB = packed struct(u32) {
                 .a = 255,
             },
         };
+    }
+
+    /// Returns a color from a CSS2 name.
+    pub fn fromName(name: []const u8) ?RGB {
+        if (mem.eql(u8, name, "black")) {
+            return .{ .r = 0, .g = 0, .b = 0 };
+        } else if (mem.eql(u8, name, "silver")) {
+            return .{ .r = 192, .g = 192, .b = 192 };
+        } else if (mem.eql(u8, name, "gray")) {
+            return .{ .r = 128, .g = 128, .b = 128 };
+        } else if (mem.eql(u8, name, "white")) {
+            return .{ .r = 255, .g = 255, .b = 255 };
+        } else if (mem.eql(u8, name, "maroon")) {
+            return .{ .r = 128, .g = 0, .b = 0 };
+        } else if (mem.eql(u8, name, "red")) {
+            return .{ .r = 255, .g = 0, .b = 0 };
+        } else if (mem.eql(u8, name, "purple")) {
+            return .{ .r = 128, .g = 0, .b = 128 };
+        } else if (mem.eql(u8, name, "fuchsia")) {
+            return .{ .r = 255, .g = 0, .b = 255 };
+        } else if (mem.eql(u8, name, "green")) {
+            return .{ .r = 0, .g = 128, .b = 0 };
+        } else if (mem.eql(u8, name, "lime")) {
+            return .{ .r = 0, .g = 255, .b = 0 };
+        } else if (mem.eql(u8, name, "olive")) {
+            return .{ .r = 128, .g = 128, .b = 0 };
+        } else if (mem.eql(u8, name, "yellow")) {
+            return .{ .r = 255, .g = 255, .b = 0 };
+        } else if (mem.eql(u8, name, "navy")) {
+            return .{ .r = 0, .g = 0, .b = 128 };
+        } else if (mem.eql(u8, name, "blue")) {
+            return .{ .r = 0, .g = 0, .b = 255 };
+        } else if (mem.eql(u8, name, "teal")) {
+            return .{ .r = 0, .g = 128, .b = 128 };
+        } else if (mem.eql(u8, name, "aqua")) {
+            return .{ .r = 0, .g = 255, .b = 255 };
+        }
+
+        return null;
     }
 
     /// Returns an average of the pixels in the supplied slice.

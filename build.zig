@@ -104,6 +104,12 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    const zig_svg_dep = b.dependency("zig-svg", .{
+        .target = b.host,
+    });
+    const zig_xml_dep = b.dependency("zig-xml", .{
+        .target = b.host,
+    });
 
     /////////////////////////////////////////////////////////////////////////
     // Main module
@@ -111,15 +117,20 @@ pub fn build(b: *std.Build) void {
     const z2d = b.addModule("z2d", .{
         .root_source_file = b.path("src/z2d.zig"),
     });
+    z2d.addImport("zig-svg", zig_svg_dep.module("svg"));
+    z2d.addImport("zig-xml", zig_xml_dep.module("xml"));
 
     /////////////////////////////////////////////////////////////////////////
     // Unit tests
     /////////////////////////////////////////////////////////////////////////
-    const test_run = b.addRunArtifact(b.addTest(.{
+    const test_unit = b.addTest(.{
         .root_source_file = b.path("src/z2d.zig"),
         .target = target,
         .optimize = .Debug,
-    }));
+    });
+    test_unit.root_module.addImport("zig-svg", zig_svg_dep.module("svg"));
+    test_unit.root_module.addImport("zig-xml", zig_xml_dep.module("xml"));
+    const test_run = b.addRunArtifact(test_unit);
     b.step("test", "Run unit tests").dependOn(&test_run.step);
 
     /////////////////////////////////////////////////////////////////////////

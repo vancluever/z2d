@@ -3,6 +3,16 @@
 .{
     .name = "z2d",
     .version = "0.1.0",
+    .dependencies = .{
+        .@"zig-xml" = .{
+            .url = "git+https://github.com/ianprime0509/zig-xml#91aaa63710b543b39bc39ce2149e6b9f1a8f9a82",
+            .hash = "1220a5bf5e9770e82abc2ae4c1c1762b8d79f11fd9a49f0639bf0228e69311982893",
+        },
+        .@"zig-svg" = .{
+            .url = "/home/chrism/src/zig-svg",
+            .hash = "1220778cb7a30067852976cb50133dc02b9928decad87d8fdfb21a9877a806e69377",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
