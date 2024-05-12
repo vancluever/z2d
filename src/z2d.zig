@@ -62,4 +62,5 @@ pub const Surface = surface.Surface;
 
 test {
     @import("std").testing.refAllDecls(@This());
+    _ = @import("svg.zig");
 }
