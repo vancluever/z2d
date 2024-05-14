@@ -64,11 +64,11 @@ fn parse(self: *Controller, reader: anytype) !void {
                 } else if (!in_svg) {
                     continue;
                 } else if (mem.eql(u8, e.name.local, "path")) {
+                    var s: Shape = .{
+                        .path = Path.init(self.alloc),
+                    };
+                    errdefer s.path.deinit();
                     for (e.attributes) |attr| {
-                        var s: Shape = .{
-                            .path = Path.init(self.alloc),
-                        };
-                        errdefer s.path.deinit();
                         if (mem.eql(u8, attr.name.local, "fill")) {
                             if (mem.eql(u8, attr.value, "none")) {
                                 s.fill = null;
@@ -149,9 +149,8 @@ fn parse(self: *Controller, reader: anytype) !void {
                                 }
                             }
                         }
-
-                        try self.shapes.append(s);
                     }
+                    try self.shapes.append(s);
                 }
             },
             .element_end => |e| {
@@ -174,6 +173,39 @@ test "basic path" {
     var controller = init(testing.allocator);
     defer controller.deinit();
     try controller.parse(input_stream.reader());
+    try testing.expectEqual(0, controller.errors.items.len);
+    try testing.expectEqualSlices(
+        PathNode,
+        &.{
+            .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
+            .{ .line_to = .{ .point = .{ .x = 90, .y = 10 } } },
+            .{ .line_to = .{ .point = .{ .x = 45, .y = 90 } } },
+            .{ .close_path = .{} },
+            .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
+        },
+        controller.shapes.items[0].path.nodes.items,
+    );
+}
+
+test "path with fill/stroke color" {
+    const input =
+        \\<svg>
+        \\<path fill="yellow" stroke="#aabbcc" d="M 10 10 L 90 10 L 45 90 Z"/>
+        \\</svg>
+    ;
+    var input_stream = io.fixedBufferStream(input);
+    var controller = init(testing.allocator);
+    defer controller.deinit();
+    try controller.parse(input_stream.reader());
+    try testing.expectEqual(0, controller.errors.items.len);
+    try testing.expectEqual(
+        pixel.RGB{ .r = 255, .g = 255, .b = 0 },
+        controller.shapes.items[0].fill,
+    );
+    try testing.expectEqual(
+        pixel.RGB{ .r = 170, .g = 187, .b = 204 },
+        controller.shapes.items[0].stroke,
+    );
     try testing.expectEqualSlices(
         PathNode,
         &.{
