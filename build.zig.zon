@@ -9,8 +9,8 @@
             .hash = "1220a5bf5e9770e82abc2ae4c1c1762b8d79f11fd9a49f0639bf0228e69311982893",
         },
         .@"zig-svg" = .{
-            .url = "/home/chrism/src/zig-svg",
-            .hash = "1220778cb7a30067852976cb50133dc02b9928decad87d8fdfb21a9877a806e69377",
+            .url = "git+https://github.com/vancluever/zig-svg#d97db09446ee2610af06de121919bc0b8b9fd147",
+            .hash = "1220a300b5c395b7e1c0e02953c76065029b4c33173a5852b81a62e9e4ccde7e9dac",
         },
     },
     .paths = .{
