@@ -448,6 +448,7 @@ test "relCurveTo" {
         try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
         try testing.expectEqual(Point{ .x = -11, .y = -11 }, p.current_point);
     }
+
     {
         // No current point
         var p = init(testing.allocator);
