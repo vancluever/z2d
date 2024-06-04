@@ -66,6 +66,14 @@ pub fn moveTo(self: *Path, x: f64, y: f64) !void {
     self.current_point = point;
 }
 
+/// Begins a new sub-path relative to the current point. It is an error to call
+/// this without a current point.
+pub fn relMoveTo(self: *Path, x: f64, y: f64) !void {
+    if (self.current_point) |p| {
+        return self.moveTo(p.x + x, p.y + y);
+    } else return PathError.NoCurrentPoint;
+}
+
 /// Draws a line from the current point to the specified point and sets it as
 /// the current point. Acts as a `moveTo` instead if there is no current point.
 pub fn lineTo(self: *Path, x: f64, y: f64) !void {
@@ -73,6 +81,14 @@ pub fn lineTo(self: *Path, x: f64, y: f64) !void {
     const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
     try self.nodes.append(.{ .line_to = .{ .point = point } });
     self.current_point = point;
+}
+
+/// Draws a line relative to the current point. It is an error to call this
+/// without a current point.
+pub fn relLineTo(self: *Path, x: f64, y: f64) !void {
+    if (self.current_point) |p| {
+        return self.lineTo(p.x + x, p.y + y);
+    } else return PathError.NoCurrentPoint;
 }
 
 /// Draws a cubic bezier with the three supplied control points from the
@@ -93,6 +109,22 @@ pub fn curveTo(
     const p3: Point = .{ .x = clampI32(x3), .y = clampI32(y3) };
     try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
     self.current_point = p3;
+}
+
+/// Draws a cubic bezier relative to the current point. It is an error to call
+/// this without a current point.
+pub fn relCurveTo(
+    self: *Path,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+) !void {
+    if (self.current_point) |p| {
+        return self.curveTo(p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
+    } else return PathError.NoCurrentPoint;
 }
 
 /// Closes the path by drawing a line from the current point by the starting
@@ -311,5 +343,115 @@ test "isClosed" {
         var p = init(testing.allocator);
         defer p.deinit();
         try testing.expectEqual(false, p.isClosed());
+    }
+}
+
+test "relMoveTo" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relMoveTo(1, 1);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
+    }
+
+    {
+        // Reverse
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relMoveTo(-10, -10);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
+    }
+
+    {
+        // No current point
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try testing.expectEqual(PathError.NoCurrentPoint, p.relMoveTo(1, 1));
+    }
+}
+
+test "relLineTo" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relLineTo(1, 1);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
+    }
+
+    {
+        // Reverse
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relLineTo(-10, -10);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
+    }
+
+    {
+        // No current point
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try testing.expectEqual(PathError.NoCurrentPoint, p.relLineTo(1, 1));
+    }
+}
+
+test "relCurveTo" {
+    {
+        // Normal
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relCurveTo(1, 1, 2, 2, 3, 3);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{ .x = 2, .y = 2 },
+                .p2 = .{ .x = 3, .y = 3 },
+                .p3 = .{ .x = 4, .y = 4 },
+            },
+        }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = 4, .y = 4 }, p.current_point);
+    }
+
+    {
+        // Reverse
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try p.moveTo(1, 1);
+        try p.relCurveTo(-10, -10, -11, -11, -12, -12);
+        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try testing.expectEqual(PathNode{
+            .curve_to = .{
+                .p1 = .{ .x = -9, .y = -9 },
+                .p2 = .{ .x = -10, .y = -10 },
+                .p3 = .{ .x = -11, .y = -11 },
+            },
+        }, p.nodes.items[1]);
+        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try testing.expectEqual(Point{ .x = -11, .y = -11 }, p.current_point);
+    }
+    {
+        // No current point
+        var p = init(testing.allocator);
+        defer p.deinit();
+        try testing.expectEqual(PathError.NoCurrentPoint, p.relCurveTo(1, 1, 2, 2, 3, 3));
     }
 }
