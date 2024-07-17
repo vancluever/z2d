@@ -131,7 +131,7 @@ const Iterator = struct {
 
         // Init the node iterator state that we will use to process our nodes.
         // We use a separate state and functions within that to keep things
-        // clean and also allow for recursion (e.g. on curve_to -> line_to).a
+        // clean and also allow for recursion (e.g. on curve_to -> line_to).
         var state = State.init(alloc, it);
         errdefer state.deinit();
 
@@ -181,6 +181,7 @@ const Iterator = struct {
                                 current_point,
                                 initial_point,
                                 first_line_point,
+                                state.start_clockwise_,
                                 outer_start_node,
                             );
 
@@ -297,11 +298,12 @@ const Iterator = struct {
         p0: Point,
         p1: Point,
         p2: Point,
+        clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
     ) !bool {
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
-        const clockwise = in.slope.compare(out.slope) < 0;
+        const clockwise = if (clockwise_) |cw| cw else in.slope.compare(out.slope) < 0;
 
         // Calculate our inner join ahead of time as we may need it for miter limit
         // calculation
@@ -451,6 +453,7 @@ const Iterator = struct {
                             last_point,
                             current_point,
                             node.point,
+                            self.start_clockwise_,
                             null,
                         );
                         if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
@@ -533,6 +536,7 @@ const Iterator = struct {
                                 last_point,
                                 current_point,
                                 initial_point,
+                                self.start_clockwise_,
                                 null,
                             );
                             if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
