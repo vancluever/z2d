@@ -132,8 +132,8 @@ pub fn relCurveTo(
 /// Adds a circular arc of the given radius to the current path. The arc is
 /// centered at (xc, yc), begins at angle1 and proceeds in the direction of
 /// increasing angles (if negative is false; i.e., counterclockwise direction)
-/// or positive (if negative is true; i.e., counterclockwise direction) to end
-/// at angle2.
+/// or decreasing angles (if negative is true; i.e., counterclockwise
+/// direction) to end at angle2.
 ///
 /// If angle2 is less than angle1 and negative is false, it will be increased
 /// by 2*Π until it's greater than angle1; If angle2 is greater than angle1 and
