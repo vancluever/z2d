@@ -10,6 +10,8 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const arcpkg = @import("internal/arc.zig");
+
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("internal/Point.zig");
 const PathError = @import("errors.zig").PathError;
@@ -125,6 +127,114 @@ pub fn relCurveTo(
     if (self.current_point) |p| {
         return self.curveTo(p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
     } else return PathError.NoCurrentPoint;
+}
+
+/// Adds a circular arc of the given radius to the current path. The arc is
+/// centered at (xc, yc), begins at angle1 and proceeds in the direction of
+/// increasing angles (if negative is false; i.e., counterclockwise direction)
+/// or positive (if negative is true; i.e., counterclockwise direction) to end
+/// at angle2.
+///
+/// If angle2 is less than angle1 and negative is false, it will be increased
+/// by 2*Π until it's greater than angle1; If angle2 is greater than angle1 and
+/// negative is true, it will be decreased by 2*Π until it's greater than
+/// angle1.
+///
+/// Angles are measured at radians (to convert from degrees, multiply by Π /
+/// 180).
+///
+/// If there's a current point, an initial line segment will be added to the
+/// path to connect the current point to the beginning of the arc. If this
+/// behavior is undesired, call `clear` before calling. This will trigger a
+/// `moveTo` before the splines are plotted, creating a new subpath.
+///
+/// If you have changed tolerance in the context that will be acting on this
+/// path, supply that value to tolerance; you can get the value from the
+/// `tolerance` field in the context. Otherwise, use null, and the default
+/// tolerance will be used.
+///
+/// After this operation, the current point will be the end of the arc.
+pub fn arc(
+    self: *Path,
+    xc: f64,
+    yc: f64,
+    radius: f64,
+    angle1: f64,
+    angle2: f64,
+    negative: bool,
+    tolerance: ?f64,
+) !void {
+    if (negative) {
+        var effective_angle2 = angle2;
+        while (effective_angle2 > angle1) effective_angle2 -= math.pi * 2;
+        try arcpkg.arc_in_direction(
+            &.{
+                .ptr = self,
+                .line_to = arc_line_to,
+                .curve_to = arc_curve_to,
+            },
+            xc,
+            yc,
+            radius,
+            effective_angle2,
+            angle1,
+            .reverse,
+            tolerance,
+        );
+    } else {
+        var effective_angle2 = angle2;
+        while (effective_angle2 < angle1) effective_angle2 += math.pi * 2;
+        try arcpkg.arc_in_direction(
+            &.{
+                .ptr = self,
+                .line_to = arc_line_to,
+                .curve_to = arc_curve_to,
+            },
+            xc,
+            yc,
+            radius,
+            angle1,
+            effective_angle2,
+            .forward,
+            tolerance,
+        );
+    }
+}
+
+fn arc_line_to(
+    ctx: *anyopaque,
+    err_: *?anyerror,
+    x: f64,
+    y: f64,
+) void {
+    const self: *Path = @ptrCast(@alignCast(ctx));
+    // no-op if our current point == destination. This is used to avoid drawing
+    // artifacts for now on arcs, but if it's needed generally, we can
+    // add it to lineTo proper itself.
+    if (self.current_point) |p| {
+        if (p.x == x and p.y == y) return;
+    }
+    self.lineTo(x, y) catch |err| {
+        err_.* = err;
+        return;
+    };
+}
+
+fn arc_curve_to(
+    ctx: *anyopaque,
+    err_: *?anyerror,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+) void {
+    const self: *Path = @ptrCast(@alignCast(ctx));
+    self.curveTo(x1, y1, x2, y2, x3, y3) catch |err| {
+        err_.* = err;
+        return;
+    };
 }
 
 /// Closes the path by drawing a line from the current point by the starting

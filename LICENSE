@@ -22,8 +22,9 @@ obtain one at https://mozilla.org/MPL/2.0/.
 
 ---
 
-The acceptance tests in the "spec" directory are licensed 0BSD to allow the
-unambiguous free use of this code in assisting the integration of z2d.
+The acceptance tests in the "spec" directory (unless otherwise specified) are
+licensed 0BSD to allow the unambiguous free use of this code in assisting the
+integration of z2d.
 
 Below is the license text of the 0BSD license.
 
