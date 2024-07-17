@@ -6,6 +6,9 @@
 
 const _ = struct {}; // Used to fix autodoc, ignore
 
+/// The default maximum error tolerance used in spline and arc calculations.
+pub const default_tolerance: f64 = 0.1;
+
 /// Represents the kinds of fill rules for paths. This will determine how more
 /// complex paths are filled, such as in the situation where multiple sub-paths
 /// overlap, or a single sub-path traces its path in a way where its lines will

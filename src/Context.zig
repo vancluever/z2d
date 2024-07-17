@@ -71,7 +71,7 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 /// caps and joins, which use static vertices for plotting. This can produce
 /// marked artifacts at relatively low tolerance settings, so take care when
 /// changing under these scenarios.
-tolerance: f64 = 0.1,
+tolerance: f64 = options.default_tolerance,
 
 /// Runs a fill operation on the path(s) in the supplied set. All paths in the
 /// set must be closed.
