@@ -136,8 +136,8 @@ pub fn relCurveTo(
 /// direction) to end at angle2.
 ///
 /// If angle2 is less than angle1 and negative is false, it will be increased
-/// by 2*Π until it's greater than angle1; If angle2 is greater than angle1 and
-/// negative is true, it will be decreased by 2*Π until it's greater than
+/// by 2 * Π until it's greater than angle1; If angle2 is greater than angle1
+/// and negative is true, it will be decreased by 2 * Π until it's greater than
 /// angle1.
 ///
 /// Angles are measured at radians (to convert from degrees, multiply by Π /
@@ -145,10 +145,10 @@ pub fn relCurveTo(
 ///
 /// If there's a current point, an initial line segment will be added to the
 /// path to connect the current point to the beginning of the arc. If this
-/// behavior is undesired, call `clear` before calling. This will trigger a
+/// behavior is undesired, call `reset` before calling. This will trigger a
 /// `moveTo` before the splines are plotted, creating a new subpath.
 ///
-/// If you have changed tolerance in the context that will be acting on this
+/// If you have changed tolerance in the `Context` that will be acting on this
 /// path, supply that value to tolerance; you can get the value from the
 /// `tolerance` field in the context. Otherwise, use null, and the default
 /// tolerance will be used.
