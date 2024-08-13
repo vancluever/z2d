@@ -204,8 +204,10 @@ const Iterator = struct {
                             );
 
                             // Check our join directions so we know how to plot our cap points
-                            const start_clockwise = state.start_clockwise_.?;
-                            const end_clockwise = state.end_clockwise;
+                            const start_clockwise = if (state.start_clockwise_) |cw| cw else false;
+                            const end_clockwise = if (state.start_clockwise_ == null)
+                                start_clockwise
+                            else if (state.end_clockwise_) |cw| cw else false;
 
                             // Start point
                             const outer_start_node = state.outer.corners.first;
@@ -300,10 +302,44 @@ const Iterator = struct {
         p2: Point,
         clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
-    ) !bool {
+    ) !?bool {
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
         const clockwise = if (clockwise_) |cw| cw else in.slope.compare(out.slope) < 0;
+
+        // If our slopes are equal (co-linear), only plot the end of the
+        // inbound face, regardless of join mode.
+        if (in.slope.compare(out.slope) == 0) {
+            try outer.plot(
+                if (clockwise) in.p1_ccw else in.p1_cw,
+                before_outer,
+            );
+            try inner.plot(
+                if (clockwise) in.p1_cw else in.p1_ccw,
+                before_outer,
+            );
+            return clockwise_;
+        }
+
+        // If this is the first join where we've been able to determine a
+        // proper rotational direction due to co-linearity, and we've moved
+        // from counter-clockwise to clockwise (implicit as co-linear slopes
+        // are assumed counter-clockwise), we need to swap our polygons.
+        //
+        // NOTE: I'm not the biggest fan of this approach - it makes the
+        // assumption that every join done up until this point has been
+        // co-linear and thus using the same orientation. The assertions should
+        // help make sure this is correct, but I'd like keep a lookout out for
+        // a better way.
+        if (clockwise_ == null and
+            clockwise and
+            outer.corners.len != 0 and
+            outer.corners.len == inner.corners.len)
+        {
+            const new_inner = outer.*;
+            outer.* = inner.*;
+            inner.* = new_inner;
+        }
 
         // Calculate our inner join ahead of time as we may need it for miter limit
         // calculation
@@ -396,7 +432,7 @@ const Iterator = struct {
         current_point_: ?Point = null,
         last_point_: ?Point = null,
         start_clockwise_: ?bool = null,
-        end_clockwise: bool = false,
+        end_clockwise_: ?bool = false,
 
         fn init(alloc: mem.Allocator, it: *Iterator) State {
             return .{
@@ -457,7 +493,7 @@ const Iterator = struct {
                             null,
                         );
                         if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
-                        self.end_clockwise = clockwise;
+                        self.end_clockwise_ = clockwise;
                     }
                 } else return InternalError.InvalidState; // move_to always sets both initial and current points
                 if (self.first_line_point_ == null) {
@@ -540,7 +576,7 @@ const Iterator = struct {
                                 null,
                             );
                             if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
-                            self.end_clockwise = clockwise;
+                            self.end_clockwise_ = clockwise;
 
                             // Mark as closed and break.
                             //
