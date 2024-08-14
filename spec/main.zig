@@ -46,6 +46,7 @@ const _032_fill_arc = @import("032_fill_arc.zig");
 const _033_fill_zig_mark = @import("033_fill_zig_mark.zig");
 const _034_stroke_cross = @import("034_stroke_cross.zig");
 const _035_arc_command = @import("035_arc_command.zig");
+const _036_stroke_colinear = @import("036_stroke_colinear.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -88,6 +89,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _033_fill_zig_mark);
     try pathExportRun(alloc, _034_stroke_cross);
     try pathExportRun(alloc, _035_arc_command);
+    try pathExportRun(alloc, _036_stroke_colinear);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -230,6 +232,10 @@ test "034_stroke_cross" {
 
 test "035_arc_command" {
     try pathTestRun(testing.allocator, _035_arc_command);
+}
+
+test "036_stroke_colinear" {
+    try pathTestRun(testing.allocator, _036_stroke_colinear);
 }
 
 //////////////////////////////////////////////////////////////////////////////
