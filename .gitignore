@@ -1,3 +1,4 @@
 .direnv
 zig-out
 zig-cache
+.zig-cache

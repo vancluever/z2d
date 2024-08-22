@@ -1,7 +1,7 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   inputs.zls = {
-    url = "github:zigtools/zls/07508440588bf06f041da9f6dd3956948368f194";
+    url = "github:zigtools/zls/0.13.0";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
@@ -30,7 +30,7 @@
           in
           pkgs.mkShell {
             packages = with pkgs; [
-              zig_0_12
+              zig_0_13
               zls.packages.${system}.zls
               python3
             ];

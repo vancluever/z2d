@@ -49,7 +49,7 @@ pub fn docsServeStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step 
     const server = b.addSystemCommand(&.{ "python3", "-m", "http.server" });
     // No idea how to access the build prefix otherwise right now, so we have
     // to set this manually
-    server.setCwd(.{ .path = b.pathJoin(&.{ b.install_prefix, "docs" }) });
+    server.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, "docs" }) });
     server.step.dependOn(docs_step);
     return &server.step;
 }
