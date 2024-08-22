@@ -3,11 +3,13 @@
 //   Copyright © 2002 University of Southern California
 //
 // Portions of the code in this file have been derived and adapted from the
-// Cairo project (https://www.cairographics.org/), notably cairo-slope.c.
+// Cairo project (https://www.cairographics.org/), notably cairo-slope.c and
+// cairo-path-stroke-polygon.c.
 
 //! Slope represents a slope, de-constructed as its deltas.
 const Slope = @This();
 
+const debug = @import("std").debug;
 const math = @import("std").math;
 
 const Point = @import("Point.zig");
@@ -74,4 +76,120 @@ pub fn compare(a: Slope, b: Slope) i32 {
 
     // If we've got here, are truly identical and can be returned as 0.
     return 0;
+}
+
+/// Takes the dot product of two slopes (normalization is done for you) for
+/// purposes of miter limit comparison.
+///
+/// This is based on the following proof, which can be seen in various places
+/// in the Cairo codebase, including cairo-stroke-polygon.c:
+///
+/// Consider the miter join formed when two line segments
+/// meet at an angle psi:
+///
+///	   /.\
+///	  /. .\
+///	 /./ \.\
+///	/./psi\.\
+///
+/// We can zoom in on the right half of that to see:
+///
+///	    |\
+///	    | \ psi/2
+///	    |  \
+///	    |   \
+///	    |    \
+///	    |     \
+///	  miter    \
+///	 length     \
+///	    |        \
+///	    |        .\
+///	    |    .     \
+///	    |.   line   \
+///	     \    width  \
+///	      \           \
+///
+///
+/// The right triangle in that figure, (the line-width side is
+/// shown faintly with three '.' characters), gives us the
+/// following expression relating miter length, angle and line
+/// width:
+///
+///	1 /sin (psi/2) = miter_length / line_width
+///
+/// The right-hand side of this relationship is the same ratio
+/// in which the miter limit (ml) is expressed. We want to know
+/// when the miter length is within the miter limit. That is
+/// when the following condition holds:
+///
+///	1/sin(psi/2) <= ml
+///	1 <= ml sin(psi/2)
+///	1 <= ml² sin²(psi/2)
+///	2 <= ml² 2 sin²(psi/2)
+///				2·sin²(psi/2) = 1-cos(psi)
+///	2 <= ml² (1-cos(psi))
+///
+///				in · out = |in| |out| cos (psi)
+///
+/// in and out are both unit vectors, so:
+///
+///				in · out = cos (psi)
+///
+///	2 <= ml² (1 + in · out)
+///
+/// NOTE: The proof solution has a typo in Cairo, which you can usually easily
+/// see given that it is immediately repeated in code after the comments; while
+/// the code will read as above ("2 <= ml² (1 + in · out)"), the comments will
+/// subtract one from the dot product instead.
+pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f64) bool {
+    // Normalize our slopes
+    const in_slope_normal = in_slope.normalize();
+    const out_slope_normal = out_slope.normalize();
+
+    // Take the dot product of our slopes
+    const in_dot_out = in_slope_normal.dx * out_slope_normal.dx + in_slope_normal.dy * out_slope_normal.dy;
+
+    return 2 <= miter_limit * miter_limit * (1 + in_dot_out);
+}
+
+/// Returns the slope normalized to the unit vector.
+///
+/// Take care when using this method with any other comparison methods (e.g.,
+/// equal or compare); normalized slopes are only comparable with other slopes
+/// and vice versa.
+fn normalize(self: Slope) Slope {
+    var result_dx: f64 = undefined;
+    var result_dy: f64 = undefined;
+    var mag: f64 = undefined;
+
+    debug.assert(self.dx != 0.0 or self.dy != 0.0);
+
+    if (self.dx == 0.0) {
+        result_dx = 0.0;
+        if (self.dy > 0.0) {
+            mag = self.dy;
+            result_dy = 1.0;
+        } else {
+            mag = -self.dy;
+            result_dy = -1.0;
+        }
+    } else if (self.dy == 0.0) {
+        result_dy = 0.0;
+        if (self.dx > 0.0) {
+            mag = self.dx;
+            result_dx = 1.0;
+        } else {
+            mag = -self.dx;
+            result_dx = -1.0;
+        }
+    } else {
+        mag = math.hypot(self.dx, self.dy);
+        result_dx = self.dx / mag;
+        result_dy = self.dy / mag;
+    }
+
+    return .{
+        .dx = result_dx,
+        .dy = result_dy,
+    };
 }
