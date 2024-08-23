@@ -14,6 +14,7 @@ const nodepkg = @import("path_nodes.zig");
 const Face = @import("Face.zig");
 const Pen = @import("Pen.zig");
 const Point = @import("Point.zig");
+const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
@@ -303,9 +304,47 @@ const Iterator = struct {
         clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
     ) !?bool {
+        const Joiner = struct {
+            polygon: *Polygon,
+            plot_fn: *const fn (*anyopaque, *?anyerror, Point, ?*Polygon.CornerList.Node) void,
+
+            fn plot(self: *const @This(), point: Point, before: ?*Polygon.CornerList.Node) !void {
+                var err_: ?anyerror = null;
+                self.plot_fn(self.polygon, &err_, point, before);
+                if (err_) |err| return err;
+            }
+
+            fn plotOuter(
+                ctx: *anyopaque,
+                err_: *?anyerror,
+                point: Point,
+                before: ?*Polygon.CornerList.Node,
+            ) void {
+                const polygon: *Polygon = @ptrCast(@alignCast(ctx));
+                polygon.plot(point, before) catch |err| {
+                    err_.* = err;
+                    return;
+                };
+            }
+
+            fn plotInner(
+                ctx: *anyopaque,
+                err_: *?anyerror,
+                point: Point,
+                before: ?*Polygon.CornerList.Node,
+            ) void {
+                const polygon: *Polygon = @ptrCast(@alignCast(ctx));
+                _ = before;
+                polygon.plotReverse(point) catch |err| {
+                    err_.* = err;
+                    return;
+                };
+            }
+        };
+
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
-        const clockwise = if (clockwise_) |cw| cw else in.slope.compare(out.slope) < 0;
+        const clockwise = in.slope.compare(out.slope) < 0;
 
         // If our slopes are equal (co-linear), only plot the end of the
         // inbound face, regardless of join mode.
@@ -341,65 +380,55 @@ const Iterator = struct {
             inner.* = new_inner;
         }
 
-        // Calculate our inner join ahead of time as we may need it for miter limit
-        // calculation
-        const inner_join = if (clockwise) in.intersectInner(out) else in.intersectOuter(out);
+        // Calculate if we've changed direction from the original clockwise
+        // direction. If we have, we need to plot respective points on the
+        // opposite sides of what you would normally expect to preserve correct
+        // edge order and prevent twisting. We use vtables to avoid the
+        // constant need to branch while plotting.
+        const last_clockwise = if (clockwise_) |cw| cw else clockwise;
+        const direction_switched: bool = if (clockwise != last_clockwise) true else false;
+        const outer_joiner: Joiner = if (direction_switched) .{
+            .polygon = inner,
+            .plot_fn = Joiner.plotInner,
+        } else .{
+            .polygon = outer,
+            .plot_fn = Joiner.plotOuter,
+        };
+        const inner_joiner: Joiner = if (direction_switched) .{
+            .polygon = outer,
+            .plot_fn = Joiner.plotOuter,
+        } else .{
+            .polygon = inner,
+            .plot_fn = Joiner.plotInner,
+        };
+
         switch (it.plotter.join_mode) {
-            .miter => {
-                // Compare the miter length to the miter limit. This is the ratio,
-                // as per the definition for stroke-miterlimit in the SVG spec:
-                //
-                // miter-length / stroke-width
-                //
-                // Source:
-                // https://www.w3.org/TR/SVG11/painting.html#StrokeProperties
-                //
-                // Get our miter point (intersection) so that we can compare it.
-                const miter_point = if (clockwise) in.intersectOuter(out) else in.intersectInner(out);
-
-                // We do our comparison as per above, get distance as hypotenuse of
-                // dy and dx between miter point and the inner join point
-                const dx = miter_point.x - inner_join.x;
-                const dy = miter_point.y - inner_join.y;
-                const miter_length_squared = @sqrt(dx * dx + dy * dy);
-                const ratio = miter_length_squared / it.plotter.thickness;
-
-                // Now compare this against the miter limit, if it exceeds the
-                // limit, draw a bevel instead.
-                if (ratio > it.plotter.miter_limit) {
-                    try outer.plot(
+            .miter, .bevel => {
+                if (it.plotter.join_mode == .miter and
+                    Slope.compare_for_miter_limit(in.slope, out.slope, it.plotter.miter_limit))
+                {
+                    const miter_point = if (clockwise) in.intersectOuter(out) else in.intersectInner(out);
+                    try outer_joiner.plot(miter_point, before_outer);
+                } else {
+                    try outer_joiner.plot(
                         if (clockwise) in.p1_ccw else in.p1_cw,
                         before_outer,
                     );
-                    try outer.plot(
+                    try outer_joiner.plot(
                         if (clockwise) out.p0_ccw else out.p0_cw,
                         before_outer,
                     );
-                } else {
-                    // Under limit, we are OK to use our miter
-                    try outer.plot(miter_point, before_outer);
                 }
-            },
-
-            .bevel => {
-                try outer.plot(
-                    if (clockwise) in.p1_ccw else in.p1_cw,
-                    before_outer,
-                );
-                try outer.plot(
-                    if (clockwise) out.p0_ccw else out.p0_cw,
-                    before_outer,
-                );
             },
 
             .round => {
                 var vit = it.plotter.pen.vertexIteratorFor(in.slope, out.slope, clockwise);
-                try outer.plot(
+                try outer_joiner.plot(
                     if (clockwise) in.p1_ccw else in.p1_cw,
                     before_outer,
                 );
                 while (vit.next()) |v| {
-                    try outer.plot(
+                    try outer_joiner.plot(
                         .{
                             .x = p1.x + v.point.x,
                             .y = p1.y + v.point.y,
@@ -407,16 +436,19 @@ const Iterator = struct {
                         before_outer,
                     );
                 }
-                try outer.plot(
+                try outer_joiner.plot(
                     if (clockwise) out.p0_ccw else out.p0_cw,
                     before_outer,
                 );
             },
         }
 
-        // Plot the inner join in reverse order, this ensures we maintain the
-        // correct winding order.
-        try inner.plotReverse(inner_join);
+        // Inner join. We plot our ends depending on direction, going through
+        // the midpoint.
+        try inner_joiner.plot(if (clockwise) in.p1_cw else in.p1_ccw, before_outer);
+        try inner_joiner.plot(p1, before_outer);
+        try inner_joiner.plot(if (clockwise) out.p0_cw else out.p0_ccw, before_outer);
+
         return clockwise;
     }
 
