@@ -174,7 +174,7 @@ const Iterator = struct {
                             // the already plotted inner and outer polygons.
                             if (state.outer.corners.len == 0) return InternalError.InvalidState;
                             if (state.inner.corners.len == 0) return InternalError.InvalidState;
-                            if (state.start_clockwise_ == null) return InternalError.InvalidState;
+                            if (state.clockwise_ == null) return InternalError.InvalidState;
                             const outer_start_node = state.outer.corners.first;
                             _ = try it.join(
                                 &state.outer,
@@ -182,7 +182,7 @@ const Iterator = struct {
                                 current_point,
                                 initial_point,
                                 first_line_point,
-                                state.start_clockwise_,
+                                state.clockwise_,
                                 outer_start_node,
                             );
 
@@ -204,11 +204,8 @@ const Iterator = struct {
                                 it.plotter.pen,
                             );
 
-                            // Check our join directions so we know how to plot our cap points
-                            const start_clockwise = if (state.start_clockwise_) |cw| cw else false;
-                            const end_clockwise = if (state.start_clockwise_ == null)
-                                start_clockwise
-                            else if (state.end_clockwise_) |cw| cw else false;
+                            // Check our direction so we know how to plot our cap points
+                            const clockwise = if (state.clockwise_) |cw| cw else false;
 
                             // Start point
                             const outer_start_node = state.outer.corners.first;
@@ -222,7 +219,7 @@ const Iterator = struct {
                                     .line_to = CapPlotterCtx.line_to,
                                 },
                                 it.plotter.cap_mode,
-                                start_clockwise,
+                                clockwise,
                             );
 
                             // End point
@@ -233,7 +230,7 @@ const Iterator = struct {
                                     .line_to = CapPlotterCtx.line_to,
                                 },
                                 it.plotter.cap_mode,
-                                end_clockwise,
+                                clockwise,
                             );
 
                             // Now, concat the end of the inner polygon to the
@@ -293,7 +290,8 @@ const Iterator = struct {
     /// calculations, the lines are treated as traveling in the same direction
     /// (e.g., p0 -> p1, p1 -> p2).
     ///
-    /// Returns if the join was clockwise or not.
+    /// Returns either the existing polygon's clockwise direction, or an
+    /// initial direction if one is not passed in through poly_clockwise_.
     fn join(
         it: *Iterator,
         outer: *Polygon,
@@ -301,7 +299,7 @@ const Iterator = struct {
         p0: Point,
         p1: Point,
         p2: Point,
-        clockwise_: ?bool,
+        poly_clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
     ) !bool {
         const Joiner = struct {
@@ -344,15 +342,15 @@ const Iterator = struct {
 
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
-        const clockwise = in.slope.compare(out.slope) < 0;
+        const join_clockwise = in.slope.compare(out.slope) < 0;
 
-        // Calculate if we've changed direction from the original clockwise
-        // direction. If we have, we need to plot respective points on the
-        // opposite sides of what you would normally expect to preserve correct
-        // edge order and prevent twisting. We use vtables to avoid the
-        // constant need to branch while plotting.
-        const last_clockwise = if (clockwise_) |cw| cw else clockwise;
-        const direction_switched: bool = if (clockwise != last_clockwise) true else false;
+        // Calculate if the join direction is different from the larger
+        // polygon's clockwise direction. If it is, we need to plot respective
+        // points on the opposite sides of what you would normally expect to
+        // preserve correct edge order and prevent twisting. We use vtables to
+        // avoid the constant need to branch while plotting.
+        const poly_clockwise = if (poly_clockwise_) |cw| cw else join_clockwise;
+        const direction_switched: bool = if (join_clockwise != poly_clockwise) true else false;
         const outer_joiner: Joiner = if (direction_switched) .{
             .polygon = inner,
             .plot_fn = Joiner.plotInner,
@@ -372,14 +370,14 @@ const Iterator = struct {
         // inbound face, regardless of join mode.
         if (in.slope.compare(out.slope) == 0) {
             try outer_joiner.plot(
-                if (clockwise) in.p1_ccw else in.p1_cw,
+                if (join_clockwise) in.p1_ccw else in.p1_cw,
                 before_outer,
             );
             try inner_joiner.plot(
-                if (clockwise) in.p1_cw else in.p1_ccw,
+                if (join_clockwise) in.p1_cw else in.p1_ccw,
                 before_outer,
             );
-            return last_clockwise;
+            return poly_clockwise;
         }
 
         switch (it.plotter.join_mode) {
@@ -387,24 +385,24 @@ const Iterator = struct {
                 if (it.plotter.join_mode == .miter and
                     Slope.compare_for_miter_limit(in.slope, out.slope, it.plotter.miter_limit))
                 {
-                    const miter_point = if (clockwise) in.intersectOuter(out) else in.intersectInner(out);
+                    const miter_point = if (join_clockwise) in.intersectOuter(out) else in.intersectInner(out);
                     try outer_joiner.plot(miter_point, before_outer);
                 } else {
                     try outer_joiner.plot(
-                        if (clockwise) in.p1_ccw else in.p1_cw,
+                        if (join_clockwise) in.p1_ccw else in.p1_cw,
                         before_outer,
                     );
                     try outer_joiner.plot(
-                        if (clockwise) out.p0_ccw else out.p0_cw,
+                        if (join_clockwise) out.p0_ccw else out.p0_cw,
                         before_outer,
                     );
                 }
             },
 
             .round => {
-                var vit = it.plotter.pen.vertexIteratorFor(in.slope, out.slope, clockwise);
+                var vit = it.plotter.pen.vertexIteratorFor(in.slope, out.slope, join_clockwise);
                 try outer_joiner.plot(
-                    if (clockwise) in.p1_ccw else in.p1_cw,
+                    if (join_clockwise) in.p1_ccw else in.p1_cw,
                     before_outer,
                 );
                 while (vit.next()) |v| {
@@ -417,7 +415,7 @@ const Iterator = struct {
                     );
                 }
                 try outer_joiner.plot(
-                    if (clockwise) out.p0_ccw else out.p0_cw,
+                    if (join_clockwise) out.p0_ccw else out.p0_cw,
                     before_outer,
                 );
             },
@@ -425,11 +423,11 @@ const Iterator = struct {
 
         // Inner join. We plot our ends depending on direction, going through
         // the midpoint.
-        try inner_joiner.plot(if (clockwise) in.p1_cw else in.p1_ccw, before_outer);
+        try inner_joiner.plot(if (join_clockwise) in.p1_cw else in.p1_ccw, before_outer);
         try inner_joiner.plot(p1, before_outer);
-        try inner_joiner.plot(if (clockwise) out.p0_cw else out.p0_ccw, before_outer);
+        try inner_joiner.plot(if (join_clockwise) out.p0_cw else out.p0_ccw, before_outer);
 
-        return last_clockwise;
+        return poly_clockwise;
     }
 
     const State = struct {
@@ -443,8 +441,7 @@ const Iterator = struct {
         first_line_point_: ?Point = null,
         current_point_: ?Point = null,
         last_point_: ?Point = null,
-        start_clockwise_: ?bool = null,
-        end_clockwise_: ?bool = false,
+        clockwise_: ?bool = null,
 
         fn init(alloc: mem.Allocator, it: *Iterator) State {
             return .{
@@ -501,11 +498,10 @@ const Iterator = struct {
                             last_point,
                             current_point,
                             node.point,
-                            self.start_clockwise_,
+                            self.clockwise_,
                             null,
                         );
-                        if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
-                        self.end_clockwise_ = clockwise;
+                        if (self.clockwise_ == null) self.clockwise_ = clockwise;
                     }
                 } else return InternalError.InvalidState; // move_to always sets both initial and current points
                 if (self.first_line_point_ == null) {
@@ -584,11 +580,10 @@ const Iterator = struct {
                                 last_point,
                                 current_point,
                                 initial_point,
-                                self.start_clockwise_,
+                                self.clockwise_,
                                 null,
                             );
-                            if (self.start_clockwise_ == null) self.start_clockwise_ = clockwise;
-                            self.end_clockwise_ = clockwise;
+                            if (self.clockwise_ == null) self.clockwise_ = clockwise;
 
                             // Mark as closed and break.
                             //
