@@ -303,7 +303,7 @@ const Iterator = struct {
         p2: Point,
         clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
-    ) !?bool {
+    ) !bool {
         const Joiner = struct {
             polygon: *Polygon,
             plot_fn: *const fn (*anyopaque, *?anyerror, Point, ?*Polygon.CornerList.Node) void,
@@ -346,40 +346,6 @@ const Iterator = struct {
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
         const clockwise = in.slope.compare(out.slope) < 0;
 
-        // If our slopes are equal (co-linear), only plot the end of the
-        // inbound face, regardless of join mode.
-        if (in.slope.compare(out.slope) == 0) {
-            try outer.plot(
-                if (clockwise) in.p1_ccw else in.p1_cw,
-                before_outer,
-            );
-            try inner.plot(
-                if (clockwise) in.p1_cw else in.p1_ccw,
-                before_outer,
-            );
-            return clockwise_;
-        }
-
-        // If this is the first join where we've been able to determine a
-        // proper rotational direction due to co-linearity, and we've moved
-        // from counter-clockwise to clockwise (implicit as co-linear slopes
-        // are assumed counter-clockwise), we need to swap our polygons.
-        //
-        // NOTE: I'm not the biggest fan of this approach - it makes the
-        // assumption that every join done up until this point has been
-        // co-linear and thus using the same orientation. The assertions should
-        // help make sure this is correct, but I'd like keep a lookout out for
-        // a better way.
-        if (clockwise_ == null and
-            clockwise and
-            outer.corners.len != 0 and
-            outer.corners.len == inner.corners.len)
-        {
-            const new_inner = outer.*;
-            outer.* = inner.*;
-            inner.* = new_inner;
-        }
-
         // Calculate if we've changed direction from the original clockwise
         // direction. If we have, we need to plot respective points on the
         // opposite sides of what you would normally expect to preserve correct
@@ -401,6 +367,20 @@ const Iterator = struct {
             .polygon = inner,
             .plot_fn = Joiner.plotInner,
         };
+
+        // If our slopes are equal (co-linear), only plot the end of the
+        // inbound face, regardless of join mode.
+        if (in.slope.compare(out.slope) == 0) {
+            try outer_joiner.plot(
+                if (clockwise) in.p1_ccw else in.p1_cw,
+                before_outer,
+            );
+            try inner_joiner.plot(
+                if (clockwise) in.p1_cw else in.p1_ccw,
+                before_outer,
+            );
+            return last_clockwise;
+        }
 
         switch (it.plotter.join_mode) {
             .miter, .bevel => {
@@ -449,7 +429,7 @@ const Iterator = struct {
         try inner_joiner.plot(p1, before_outer);
         try inner_joiner.plot(if (clockwise) out.p0_cw else out.p0_ccw, before_outer);
 
-        return clockwise;
+        return last_clockwise;
     }
 
     const State = struct {

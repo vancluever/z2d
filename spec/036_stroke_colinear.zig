@@ -11,7 +11,7 @@ pub const filename = "036_stroke_colinear";
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 100;
-    const height = 200;
+    const height = 240;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
     var context: z2d.Context = .{
@@ -29,29 +29,29 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     defer path.deinit();
 
     // clockwise
-    try path.moveTo(10, 10);
-    try path.lineTo(20, 20);
-    try path.lineTo(30, 30);
-    try path.lineTo(40, 10);
-
-    // counter-clockwise
     try path.moveTo(40, 50);
     try path.lineTo(35, 60);
     try path.lineTo(30, 70);
     try path.lineTo(10, 50);
 
-    // clockwise, closed
-    try path.moveTo(60, 10);
-    try path.lineTo(70, 20);
-    try path.lineTo(80, 30);
-    try path.lineTo(90, 10);
-    try path.close();
+    // counter-clockwise
+    try path.moveTo(10, 10);
+    try path.lineTo(20, 20);
+    try path.lineTo(30, 30);
+    try path.lineTo(40, 10);
 
-    // counter-clockwise, closed
+    // clockwise, closed
     try path.moveTo(90, 50);
     try path.lineTo(85, 60);
     try path.lineTo(80, 70);
     try path.lineTo(60, 50);
+    try path.close();
+
+    // counter-clockwise, closed
+    try path.moveTo(60, 10);
+    try path.lineTo(70, 20);
+    try path.lineTo(80, 30);
+    try path.lineTo(90, 10);
     try path.close();
 
     // single line, UL -> DR
@@ -85,6 +85,18 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try path.lineTo(70, 190);
     try path.lineTo(80, 180);
     try path.lineTo(60, 170);
+
+    // clockwise after start
+    try path.moveTo(40, 210);
+    try path.lineTo(30, 230);
+    try path.lineTo(20, 220);
+    try path.lineTo(10, 210);
+
+    // counter-clockwise after start
+    try path.moveTo(60, 210);
+    try path.lineTo(70, 230);
+    try path.lineTo(80, 220);
+    try path.lineTo(90, 210);
 
     try context.stroke(alloc, path);
 
