@@ -11,7 +11,7 @@ pub const filename = "036_stroke_colinear";
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 100;
-    const height = 160;
+    const height = 200;
     const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
     var context: z2d.Context = .{
@@ -73,6 +73,18 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try path.moveTo(90, 150);
     try path.lineTo(75, 140);
     try path.lineTo(60, 130);
+
+    // switchback
+    try path.moveTo(10, 170);
+    try path.lineTo(30, 190);
+    try path.lineTo(20, 180);
+    try path.lineTo(40, 170);
+
+    // switchback, reflected on x-axis
+    try path.moveTo(90, 170);
+    try path.lineTo(70, 190);
+    try path.lineTo(80, 180);
+    try path.lineTo(60, 170);
 
     try context.stroke(alloc, path);
 
