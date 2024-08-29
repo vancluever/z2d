@@ -385,8 +385,7 @@ const Iterator = struct {
                 if (it.plotter.join_mode == .miter and
                     Slope.compare_for_miter_limit(in.slope, out.slope, it.plotter.miter_limit))
                 {
-                    const miter_point = if (join_clockwise) in.intersectOuter(out) else in.intersectInner(out);
-                    try outer_joiner.plot(miter_point, before_outer);
+                    try outer_joiner.plot(in.intersect(out, join_clockwise), before_outer);
                 } else {
                     try outer_joiner.plot(
                         if (join_clockwise) in.p1_ccw else in.p1_cw,

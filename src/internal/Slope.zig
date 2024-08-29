@@ -157,7 +157,7 @@ pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f
 /// Take care when using this method with any other comparison methods (e.g.,
 /// equal or compare); normalized slopes are only comparable with other slopes
 /// and vice versa.
-fn normalize(self: Slope) Slope {
+pub fn normalize(self: Slope) Slope {
     var result_dx: f64 = undefined;
     var result_dy: f64 = undefined;
     var mag: f64 = undefined;

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
+//   Copyright © 2002 University of Southern California
+//
+// Portions of the code in this file (where mentioned) have been derived and
+// adapted from the Cairo project (https://www.cairographics.org/), notably
+// cairo-path-stroke-polygon.c.
 
 //! A Face represents a hypothetically-computed polygon edge for a stroked
 //! line.
@@ -27,13 +32,6 @@ const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 
-const FaceType = enum {
-    horizontal,
-    vertical,
-    diagonal,
-};
-
-type: FaceType,
 p0: Point,
 p1: Point,
 width: f64,
@@ -50,44 +48,10 @@ pen: Pen,
 pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
     const slope = Slope.init(p0, p1);
     const half_width = thickness / 2;
-    if (slope.dy == 0) {
-        return .{
-            .type = .horizontal,
-            .p0 = p0,
-            .p1 = p1,
-            .width = thickness,
-            .slope = slope,
-            .offset_x = 0,
-            .offset_y = math.copysign(half_width, slope.dx),
-            .p0_cw = .{ .x = p0.x, .y = p0.y + math.copysign(half_width, slope.dx) },
-            .p0_ccw = .{ .x = p0.x, .y = p0.y - math.copysign(half_width, slope.dx) },
-            .p1_cw = .{ .x = p1.x, .y = p1.y + math.copysign(half_width, slope.dx) },
-            .p1_ccw = .{ .x = p1.x, .y = p1.y - math.copysign(half_width, slope.dx) },
-            .pen = pen,
-        };
-    }
-    if (slope.dx == 0) {
-        return .{
-            .type = .vertical,
-            .p0 = p0,
-            .p1 = p1,
-            .width = thickness,
-            .slope = slope,
-            .offset_x = math.copysign(half_width, slope.dy),
-            .offset_y = 0,
-            .p0_cw = .{ .x = p0.x - math.copysign(half_width, slope.dy), .y = p0.y },
-            .p0_ccw = .{ .x = p0.x + math.copysign(half_width, slope.dy), .y = p0.y },
-            .p1_cw = .{ .x = p1.x - math.copysign(half_width, slope.dy), .y = p1.y },
-            .p1_ccw = .{ .x = p1.x + math.copysign(half_width, slope.dy), .y = p1.y },
-            .pen = pen,
-        };
-    }
-
     const theta = math.atan2(slope.dy, slope.dx);
     const offset_x = half_width * @sin(theta);
     const offset_y = half_width * @cos(theta);
     return .{
-        .type = .diagonal,
         .p0 = p0,
         .p1 = p1,
         .width = thickness,
@@ -102,159 +66,24 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
     };
 }
 
-pub fn intersectOuter(in: Face, out: Face) Point {
-    return switch (in.type) {
-        .horizontal => intersectHorizontal(in, out, true),
-        .vertical => intersectVertical(in, out, true),
-        .diagonal => intersectDiagonal(in, out, true),
-    };
-}
+pub fn intersect(in: Face, out: Face, clockwise: bool) Point {
+    // Intersection taken from Cairo's miter join in
+    // cairo-path-stroke-polygon.c et al.
+    const in_point = if (clockwise) in.p1_ccw else in.p1_cw;
+    const out_point = if (clockwise) out.p0_ccw else out.p0_cw;
+    const in_slope = in.slope.normalize();
+    const out_slope = out.slope.normalize();
 
-pub fn intersectInner(in: Face, out: Face) Point {
-    return switch (in.type) {
-        .horizontal => intersectHorizontal(in, out, false),
-        .vertical => intersectVertical(in, out, false),
-        .diagonal => intersectDiagonal(in, out, false),
-    };
-}
+    const result_y = ((out_point.x - in_point.x) * in_slope.dy * out_slope.dy - out_point.y * out_slope.dx * in_slope.dy + in_point.y * in_slope.dx * out_slope.dy) / (in_slope.dx * out_slope.dy - out_slope.dx * in_slope.dy);
 
-fn intersectHorizontal(in: Face, out: Face, outer: bool) Point {
-    const points: struct {
-        in_p1: Point,
-        out_p1: Point,
-        in_p0: Point,
-    } = if (outer) .{
-        .in_p1 = in.p1_ccw,
-        .out_p1 = out.p1_ccw,
-        .in_p0 = in.p0_ccw,
-    } else .{
-        .in_p1 = in.p1_cw,
-        .out_p1 = out.p1_cw,
-        .in_p0 = in.p0_cw,
-    };
+    const result_x = if (@abs(in_slope.dy) >= @abs(out_slope.dy))
+        (result_y - in_point.y) * in_slope.dx / in_slope.dy + in_point.x
+    else
+        (result_y - out_point.y) * out_slope.dx / out_slope.dy + out_point.x;
 
-    switch (out.type) {
-        .horizontal => {
-            // We can just return our end-point outer
-            return points.in_p1;
-        },
-        .vertical => {
-            // Take the x/y intersection of our outer points.
-            return .{
-                .x = points.out_p1.x,
-                .y = points.in_p0.y,
-            };
-        },
-        .diagonal => {
-            // Take the x-intercept with the origin being the horizontal
-            // line outer point.
-            return .{
-                .x = points.out_p1.x - ((points.out_p1.y - points.in_p0.y) / out.slope.calculate()),
-                .y = points.in_p0.y,
-            };
-        },
-    }
-}
-
-fn intersectVertical(in: Face, out: Face, outer: bool) Point {
-    const points: struct {
-        in_p0: Point,
-        out_p1: Point,
-        in_p1: Point,
-    } = if (outer) .{
-        .in_p0 = in.p0_ccw,
-        .out_p1 = out.p1_ccw,
-        .in_p1 = in.p1_ccw,
-    } else .{
-        .in_p0 = in.p0_cw,
-        .out_p1 = out.p1_cw,
-        .in_p1 = in.p1_cw,
-    };
-
-    switch (out.type) {
-        .horizontal => {
-            // Take the x/y intersection of our outer points.
-            return .{
-                .x = points.in_p0.x,
-                .y = points.out_p1.y,
-            };
-        },
-        .vertical => {
-            // We can just return our end-point outer
-            return points.in_p1;
-        },
-        .diagonal => {
-            // Take the y-intercept with the origin being the vertical
-            // line outer point.
-            return .{
-                .x = points.in_p0.x,
-                .y = points.out_p1.y - (out.slope.calculate() * (points.out_p1.x - points.in_p0.x)),
-            };
-        },
-    }
-}
-
-fn intersectDiagonal(in: Face, out: Face, outer: bool) Point {
-    const points: struct {
-        in_p0: Point,
-        out_p1: Point,
-        in_p1: Point,
-    } = if (outer) .{
-        .in_p0 = in.p0_ccw,
-        .out_p1 = out.p1_ccw,
-        .in_p1 = in.p1_ccw,
-    } else .{
-        .in_p0 = in.p0_cw,
-        .out_p1 = out.p1_cw,
-        .in_p1 = in.p1_cw,
-    };
-
-    switch (out.type) {
-        .horizontal => {
-            // Take the x-intercept with the origin being the horizontal
-            // line outer point.
-            return .{
-                .x = points.in_p0.x + ((points.out_p1.y - points.in_p0.y) / in.slope.calculate()),
-                .y = points.out_p1.y,
-            };
-        },
-        .vertical => {
-            // Take the y-intercept with the origin being the vertical
-            // line outer point.
-            return .{
-                .x = points.out_p1.x,
-                .y = points.in_p0.y + (in.slope.calculate() * (points.out_p1.x - points.in_p0.x)),
-            };
-        },
-        .diagonal => {
-            return intersect(points.in_p0, points.out_p1, in.slope.calculate(), out.slope.calculate());
-        },
-    }
-}
-
-fn intersect(p0: Point, p1: Point, m0: f64, m1: f64) Point {
-    // We do line-line intersection, based on the following equation:
-    //
-    // self.dy/self.dx + self.p0.y == other.dy/other.dx + other.p0.y
-    //
-    // This is line-line intercept when both y positions are normalized at
-    // their y-intercepts (e.g. x=0).
-    //
-    // We take p0 at self as our reference origin, so normalize our other
-    // point based on the difference between the two points in x-position.
-    //
-    // Source: Line-line intersection, Wikipedia contributors:
-    // https://en.wikipedia.org/w/index.php?title=Line%E2%80%93line_intersection&oldid=1198068392.
-    // See link for further details.
-    const other_y_intercept = p1.y - (m1 * (p1.x - p0.x));
-
-    // We can now compute our intersections. Note that we have to add the x of
-    // p0 as an offset, as we have assumed this is the origin.
-    const intersect_x = (other_y_intercept - p0.y) / (m0 - m1) + p0.x;
-    const intersect_y = m0 * ((other_y_intercept - p0.y) / (m0 - m1)) + p0.y;
     return .{
-        .x = intersect_x,
-        .y = intersect_y,
+        .x = result_x,
+        .y = result_y,
     };
 }
 
