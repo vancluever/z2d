@@ -48,6 +48,7 @@ const _034_stroke_cross = @import("034_stroke_cross.zig");
 const _035_arc_command = @import("035_arc_command.zig");
 const _036_stroke_colinear = @import("036_stroke_colinear.zig");
 const _037_stroke_join_overlap = @import("037_stroke_join_overlap.zig");
+const _038_stroke_zero_length = @import("038_stroke_zero_length.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -92,6 +93,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _035_arc_command);
     try pathExportRun(alloc, _036_stroke_colinear);
     try pathExportRun(alloc, _037_stroke_join_overlap);
+    try pathExportRun(alloc, _038_stroke_zero_length);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -242,6 +244,10 @@ test "036_stroke_colinear" {
 
 test "037_stroke_join_overlap" {
     try pathTestRun(testing.allocator, _037_stroke_join_overlap);
+}
+
+test "038_stroke_zero_length" {
+    try pathTestRun(testing.allocator, _038_stroke_zero_length);
 }
 
 //////////////////////////////////////////////////////////////////////////////

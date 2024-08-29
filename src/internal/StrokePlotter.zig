@@ -153,15 +153,46 @@ const Iterator = struct {
         if (state.initial_point_) |initial_point| {
             if (state.current_point_) |current_point| {
                 if (initial_point.equal(current_point) and state.outer.corners.len == 0) {
-                    // This means that the line was never effectively moved to
-                    // another point from the initial point, so we should not
-                    // draw anything.
+                    if (state.closed) {
+                        // Closed degenerate line of a length == 0. This is
+                        // handled in special cases:
+                        //
+                        // * When the cap style is round, we draw a circle around
+                        // the point (as if both ends were round-capped).
+                        //
+                        // * (TODO) When the cap style is square, and we are in an
+                        // "on" segment in a dashed stroke, we draw a square,
+                        // oriented in the direction of the stroke.
+                        //
+                        // All other zero-length strokes draw nothing.
+                        if (state.it.plotter.cap_mode == .round) {
+                            // Just plot off all of the pen's vertices, no need to
+                            // determine a subset as we're doing a 360-degree plot.
+                            for (state.it.plotter.pen.vertices.items) |v| {
+                                try state.outer.plot(
+                                    .{
+                                        .x = current_point.x + v.point.x,
+                                        .y = current_point.y + v.point.y,
+                                    },
+                                    null,
+                                );
+                            }
+
+                            // Deinit inner here as it was never used
+                            state.inner.deinit();
+
+                            // Done
+                            return .{ .open = state.outer };
+                        }
+                    }
+
+                    // No special case applies, return empty polygon.
                     //
-                    // TODO: This currently happens on the end of a stroke path
-                    // due to the implicit move_to, we could probably fix this
-                    // so that we skip this part altogether by just advancing 2
-                    // versus 1 on the last close_path node. We could possibly
-                    // just change this to an assert afterwards.
+                    // TODO: This also currently happens on the end of a stroke
+                    // path due to the implicit move_to, we could probably fix
+                    // this so that we skip this part altogether by just
+                    // advancing 2 versus 1 on the last close_path node. We
+                    // could possibly just change this to an assert afterwards.
                     state.deinit();
                     return .{ .empty = .{} };
                 }
@@ -339,6 +370,9 @@ const Iterator = struct {
                 };
             }
         };
+
+        // Guard against no-op moves - if all 3 points are equal, just return.
+        if (p0.equal(p1) and p1.equal(p2)) return if (poly_clockwise_) |cw| cw else false;
 
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
@@ -583,19 +617,18 @@ const Iterator = struct {
                                 null,
                             );
                             if (self.clockwise_ == null) self.clockwise_ = clockwise;
-
-                            // Mark as closed and break.
-                            //
-                            // NOTE: We need to increment our iterator
-                            // too, as the break here means the while
-                            // loop does not do it. This is handled in
-                            // the iterator though as a special case,
-                            // versus in the state parser.
-                            self.closed = true;
-                            return false;
                         }
                     }
                 } else return InternalError.InvalidState; // move_to always sets both initial and current points
+
+                // Mark as closed and break.
+                //
+                // NOTE: We need to increment our iterator too, as the break
+                // here means the while loop does not do it. This is handled in
+                // the iterator though as a special case, versus in the state
+                // parser.
+                self.closed = true;
+                return false;
             }
 
             // close_path should never be called internally without move_to. This
