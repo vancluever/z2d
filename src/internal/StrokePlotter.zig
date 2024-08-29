@@ -7,6 +7,7 @@ const StrokePlotter = @This();
 const std = @import("std");
 const debug = @import("std").debug;
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 const options = @import("../options.zig");
 const nodepkg = @import("path_nodes.zig");
@@ -371,8 +372,8 @@ const Iterator = struct {
             }
         };
 
-        // Guard against no-op moves - if all 3 points are equal, just return.
-        if (p0.equal(p1) and p1.equal(p2)) return if (poly_clockwise_) |cw| cw else false;
+        // Guard against no-op joins - if one of our segments is degenerate, just return.
+        if (p0.equal(p1) or p1.equal(p2)) return if (poly_clockwise_) |cw| cw else false;
 
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
@@ -638,3 +639,53 @@ const Iterator = struct {
         }
     };
 };
+
+test "assert ok: degenerate moveto -> lineto, then good lineto" {
+    {
+        // p0 -> p1 is equal
+        const alloc = testing.allocator;
+        var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
+        defer nodes.deinit();
+        try nodes.append(.{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+
+        var plotter = try StrokePlotter.init(alloc, 2, .miter, 10, .butt, 1, 0.01);
+        defer plotter.deinit();
+
+        var result = try plotter.plot(alloc, nodes);
+        defer result.deinit();
+        try testing.expectEqual(1, result.polygons.items.len);
+        var corners_len: usize = 0;
+        var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+        while (next_) |n| {
+            corners_len += 1;
+            next_ = n.next;
+        }
+        try testing.expectEqual(4, corners_len);
+    }
+
+    {
+        // p1 -> p2 is equal
+        const alloc = testing.allocator;
+        var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
+        defer nodes.deinit();
+        try nodes.append(.{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+
+        var plotter = try StrokePlotter.init(alloc, 2, .miter, 10, .butt, 1, 0.01);
+        defer plotter.deinit();
+
+        var result = try plotter.plot(alloc, nodes);
+        defer result.deinit();
+        try testing.expectEqual(1, result.polygons.items.len);
+        var corners_len: usize = 0;
+        var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+        while (next_) |n| {
+            corners_len += 1;
+            next_ = n.next;
+        }
+        try testing.expectEqual(4, corners_len);
+    }
+}
