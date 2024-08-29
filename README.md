@@ -138,15 +138,14 @@ stroking operations. Additionally, surfaces can be interfaced with directly.
 Currently:
 
  * Basic rendering of lines and cubic Beziers.
-   - Additionally, examples exist in the [`spec/`](spec/) directory for
-     representing arcs and quadratic Beziers with current primitives. Dedicated
-     helpers for these are planned!
+   - Circular arc helpers now exist. Using these to draw ellipses are planned
+     with the addition of transformations. Additionally, examples exist in the
+     [`spec/`](spec/) directory for representing arcs and quadratic Beziers
+     with current primitives.
  * Filling and stroking:
    - Miter, bevel, and round join supported for stroking.
    - Butt, square, and round caps supported for stroking.
    - Dashed lines currently not supported (planned!)
-   - Certain edge cases (such as zero-length strokes) not supported, but
-     planned.
  * Simple composition:
    - Currently only opaque pixel sources supported, gradients/etc planned.
  * Pixel formats:
