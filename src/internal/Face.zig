@@ -21,6 +21,7 @@
 const Face = @This();
 
 const std = @import("std");
+const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -67,6 +68,8 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
 }
 
 pub fn intersect(in: Face, out: Face, clockwise: bool) Point {
+    debug.assert(in.slope.compare(out.slope) != 0);
+
     // Intersection taken from Cairo's miter join in
     // cairo-path-stroke-polygon.c et al.
     const in_point = if (clockwise) in.p1_ccw else in.p1_cw;
