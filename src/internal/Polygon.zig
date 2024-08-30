@@ -84,6 +84,9 @@ fn checkUpdateExtents(self: *Polygon, point: Point) void {
 pub fn concat(self: *Polygon, other: Polygon) !void {
     try self.concatenated_polygons.append(other);
     concatByCopying(&self.corners, &other.corners);
+
+    self.checkUpdateExtents(other.start);
+    self.checkUpdateExtents(other.end);
 }
 
 /// Re-implemented from stdlib to just strip the invalidation of the second
