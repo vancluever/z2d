@@ -1,3 +1,7 @@
+## 0.2.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.2.0 (August 30, 2024)
 
 FEATURES:
