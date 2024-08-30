@@ -1,4 +1,4 @@
-## 0.2.0 (Unreleased)
+## 0.2.0 (August 30, 2024)
 
 FEATURES:
 
