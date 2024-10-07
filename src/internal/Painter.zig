@@ -129,12 +129,12 @@ fn paintDirect(
     const arena_alloc = arena.allocator();
 
     const poly_start_y: i32 = math.clamp(
-        @as(i32, @intFromFloat(polygons.start.y)),
+        @as(i32, @intFromFloat(@floor(polygons.start.y))),
         0,
         self.context.surface.getHeight() - 1,
     );
     const poly_end_y: i32 = math.clamp(
-        @as(i32, @intFromFloat(polygons.end.y)),
+        @as(i32, @intFromFloat(@ceil(polygons.end.y))),
         0,
         self.context.surface.getHeight() - 1,
     );
