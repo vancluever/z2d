@@ -5,6 +5,7 @@
 const std = @import("std");
 const debug = @import("std").debug;
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 // const options = @import("../options.zig");
 const nodepkg = @import("path_nodes.zig");
@@ -59,8 +60,10 @@ pub fn plot(
                 if (current_point == null) return InternalError.InvalidState;
                 if (current_polygon == null) return InternalError.InvalidState;
 
-                try current_polygon.?.plot(n.point, null);
-                current_point = n.point;
+                if (!current_point.?.equal(n.point)) {
+                    try current_polygon.?.plot(n.point, null);
+                    current_point = n.point;
+                }
             },
             .curve_to => |n| {
                 if (initial_point == null) return InternalError.InvalidState;
@@ -114,3 +117,34 @@ const SplinePlotterCtx = struct {
         self.current_point.* = node.point;
     }
 };
+
+test "degenerate line_to" {
+    const alloc = testing.allocator;
+    var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
+    defer nodes.deinit();
+    try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+    try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+    try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+    try nodes.append(.{ .line_to = .{ .point = .{ .x = 0, .y = 10 } } });
+    try nodes.append(.{ .close_path = .{} });
+    try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+
+    var result = try plot(alloc, nodes, 1, 0.1);
+    defer result.deinit();
+    try testing.expectEqual(1, result.polygons.items.len);
+    var corners_len: usize = 0;
+    var corners = std.ArrayList(Point).init(alloc);
+    defer corners.deinit();
+    var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+    while (next_) |n| {
+        try corners.append(n.data);
+        corners_len += 1;
+        next_ = n.next;
+    }
+    try testing.expectEqual(3, corners_len);
+    try testing.expectEqualSlices(Point, &.{
+        .{ .x = 5, .y = 0 },
+        .{ .x = 10, .y = 10 },
+        .{ .x = 0, .y = 10 },
+    }, corners.items);
+}

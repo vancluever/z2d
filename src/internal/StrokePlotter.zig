@@ -522,27 +522,29 @@ const Iterator = struct {
         fn line_to(self: *State, node: nodepkg.PathLineTo) !bool {
             if (self.initial_point_ != null) {
                 if (self.current_point_) |current_point| {
-                    if (self.last_point_) |last_point| {
-                        // Join the lines last -> current -> node, with
-                        // the join points representing the points
-                        // around current.
-                        const clockwise = try self.it.join(
-                            &self.outer,
-                            &self.inner,
-                            last_point,
-                            current_point,
-                            node.point,
-                            self.clockwise_,
-                            null,
-                        );
-                        if (self.clockwise_ == null) self.clockwise_ = clockwise;
+                    if (!current_point.equal(node.point)) { // No-op on degenerate line_to
+                        if (self.last_point_) |last_point| {
+                            // Join the lines last -> current -> node, with
+                            // the join points representing the points
+                            // around current.
+                            const clockwise = try self.it.join(
+                                &self.outer,
+                                &self.inner,
+                                last_point,
+                                current_point,
+                                node.point,
+                                self.clockwise_,
+                                null,
+                            );
+                            if (self.clockwise_ == null) self.clockwise_ = clockwise;
+                        }
+                        if (self.first_line_point_ == null) {
+                            self.first_line_point_ = node.point;
+                        }
+                        self.last_point_ = self.current_point_;
+                        self.current_point_ = node.point;
                     }
                 } else return InternalError.InvalidState; // move_to always sets both initial and current points
-                if (self.first_line_point_ == null) {
-                    self.first_line_point_ = node.point;
-                }
-                self.last_point_ = self.current_point_;
-                self.current_point_ = node.point;
             } else return InternalError.InvalidState; // line_to should never be called internally without move_to
 
             return true;
