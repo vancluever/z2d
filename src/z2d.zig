@@ -62,5 +62,6 @@ pub const Surface = surface.Surface;
 
 test {
     @import("std").testing.refAllDecls(@This());
+    _ = @import("internal/FillPlotter.zig");
     _ = @import("internal/StrokePlotter.zig");
 }
