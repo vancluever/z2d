@@ -49,9 +49,11 @@ pen: Pen,
 pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
     const slope = Slope.init(p0, p1);
     const half_width = thickness / 2;
-    const theta = math.atan2(slope.dy, slope.dx);
-    const offset_x = half_width * @sin(theta);
-    const offset_y = half_width * @cos(theta);
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const factor = half_width / @sqrt(dx * dx + dy * dy);
+    const offset_x = dy * factor;
+    const offset_y = dx * factor;
     return .{
         .p0 = p0,
         .p1 = p1,

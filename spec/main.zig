@@ -50,6 +50,7 @@ const _036_stroke_colinear = @import("036_stroke_colinear.zig");
 const _037_stroke_join_overlap = @import("037_stroke_join_overlap.zig");
 const _038_stroke_zero_length = @import("038_stroke_zero_length.zig");
 const _039_stroke_paint_extent_dontclip = @import("039_stroke_paint_extent_dontclip.zig");
+const _040_stroke_corner_symmetrical = @import("040_stroke_corner_symmetrical.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -96,6 +97,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _037_stroke_join_overlap);
     try pathExportRun(alloc, _038_stroke_zero_length);
     try pathExportRun(alloc, _039_stroke_paint_extent_dontclip);
+    try pathExportRun(alloc, _040_stroke_corner_symmetrical);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -254,6 +256,10 @@ test "038_stroke_zero_length" {
 
 test "039_stroke_paint_extent_dontclip" {
     try pathTestRun(testing.allocator, _039_stroke_paint_extent_dontclip);
+}
+
+test "040_stroke_corner_symmetrical" {
+    try pathTestRun(testing.allocator, _040_stroke_corner_symmetrical);
 }
 
 //////////////////////////////////////////////////////////////////////////////
