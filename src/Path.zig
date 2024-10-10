@@ -15,6 +15,7 @@ const arcpkg = @import("internal/arc.zig");
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const Point = @import("internal/Point.zig");
 const PathError = @import("errors.zig").PathError;
+const Transformation = @import("Transformation.zig");
 
 /// The underlying node set. Do not edit or populate this directly, use the
 /// builder functions (e.g., moveTo, lineTo, curveTo, closePath, etc).
@@ -25,6 +26,17 @@ initial_point: ?Point = null,
 
 /// The current point when working with drawing operations.
 current_point: ?Point = null,
+
+/// The current transformation matrix (CTM) for this path.
+///
+/// When adding points to a path, the co-ordinates are mapped with whatever the
+/// CTM is set to at call-time. This allows for certain parts of a path to be
+/// drawn with a matrix, and then the matrix to be modified or restored to
+/// allow for normal drawing to continue.
+///
+/// The default CTM is the identity matrix (i.e., 1:1 with user space and
+/// device space).
+transformation: Transformation = Transformation.identity,
 
 /// Initializes the path set. Call deinit to release the node list when
 /// complete.
@@ -49,7 +61,10 @@ pub fn reset(self: *Path) void {
 
 /// Starts a new path, and moves the current point to it.
 pub fn moveTo(self: *Path, x: f64, y: f64) !void {
-    const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
+    const point: Point = (Point{
+        .x = clampI32(x),
+        .y = clampI32(y),
+    }).applyTransform(self.transformation);
     // If our last operation is a move_to to this point, this is a no-op.
     // This ensures that there's no duplicates on things like explicit
     // definitions on close_path -> move_to (versus the implicit add in the
@@ -80,7 +95,10 @@ pub fn relMoveTo(self: *Path, x: f64, y: f64) !void {
 /// the current point. Acts as a `moveTo` instead if there is no current point.
 pub fn lineTo(self: *Path, x: f64, y: f64) !void {
     if (self.current_point == null) return self.moveTo(x, y);
-    const point: Point = .{ .x = clampI32(x), .y = clampI32(y) };
+    const point: Point = (Point{
+        .x = clampI32(x),
+        .y = clampI32(y),
+    }).applyTransform(self.transformation);
     try self.nodes.append(.{ .line_to = .{ .point = point } });
     self.current_point = point;
 }
@@ -106,9 +124,18 @@ pub fn curveTo(
     y3: f64,
 ) !void {
     if (self.current_point == null) return PathError.NoCurrentPoint;
-    const p1: Point = .{ .x = clampI32(x1), .y = clampI32(y1) };
-    const p2: Point = .{ .x = clampI32(x2), .y = clampI32(y2) };
-    const p3: Point = .{ .x = clampI32(x3), .y = clampI32(y3) };
+    const p1: Point = (Point{
+        .x = clampI32(x1),
+        .y = clampI32(y1),
+    }).applyTransform(self.transformation);
+    const p2: Point = (Point{
+        .x = clampI32(x2),
+        .y = clampI32(y2),
+    }).applyTransform(self.transformation);
+    const p3: Point = (Point{
+        .x = clampI32(x3),
+        .y = clampI32(y3),
+    }).applyTransform(self.transformation);
     try self.nodes.append(.{ .curve_to = .{ .p1 = p1, .p2 = p2, .p3 = p3 } });
     self.current_point = p3;
 }
@@ -154,6 +181,23 @@ pub fn relCurveTo(
 /// tolerance will be used.
 ///
 /// After this operation, the current point will be the end of the arc.
+///
+/// ## Drawing an ellipse
+///
+/// In order to draw an ellipse, use `arc` along with a transformation. The
+/// following example will draw an elliptical arc at `(x, y)` bounded by the
+/// rectangle of `width` by `height` (i.e., the rectangle controls the lengths
+/// of the radii).
+///
+/// ```
+/// const saved_ctm = path.transformation;
+/// path.transformation = path.transformation
+///     .translate(x + width / 2, y + height / 2);
+///     .scale(width / 2, height / 2);
+/// try path.arc(0, 0, 1, 0, 2 + math.pi, false, null);
+/// path.transformation = saved_ctm;
+/// ```
+///
 pub fn arc(
     self: *Path,
     xc: f64,
@@ -179,6 +223,7 @@ pub fn arc(
             effective_angle2,
             angle1,
             .reverse,
+            self.transformation,
             tolerance,
         );
     } else {
@@ -196,6 +241,7 @@ pub fn arc(
             angle1,
             effective_angle2,
             .forward,
+            self.transformation,
             tolerance,
         );
     }

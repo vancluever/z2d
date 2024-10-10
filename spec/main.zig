@@ -52,6 +52,7 @@ const _038_stroke_zero_length = @import("038_stroke_zero_length.zig");
 const _039_stroke_paint_extent_dontclip = @import("039_stroke_paint_extent_dontclip.zig");
 const _040_stroke_corner_symmetrical = @import("040_stroke_corner_symmetrical.zig");
 const _041_stroke_noop_lineto = @import("041_stroke_noop_lineto.zig");
+const _042_arc_ellipses = @import("042_arc_ellipses.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -100,6 +101,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _039_stroke_paint_extent_dontclip);
     try pathExportRun(alloc, _040_stroke_corner_symmetrical);
     try pathExportRun(alloc, _041_stroke_noop_lineto);
+    try pathExportRun(alloc, _042_arc_ellipses);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -266,6 +268,10 @@ test "040_stroke_corner_symmetrical" {
 
 test "041_stroke_noop_lineto" {
     try pathTestRun(testing.allocator, _041_stroke_noop_lineto);
+}
+
+test "042_arc_ellipses" {
+    try pathTestRun(testing.allocator, _042_arc_ellipses);
 }
 
 //////////////////////////////////////////////////////////////////////////////

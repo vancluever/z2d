@@ -3,7 +3,8 @@
 //   Copyright © 2002 University of Southern California
 //
 // Portions of the code in this file have been derived and adapted from the
-// Cairo project (https://www.cairographics.org/), notably cairo-arc.c.
+// Cairo project (https://www.cairographics.org/), notably cairo-arc.c and
+// cairo-matrix.c.
 
 const math = @import("std").math;
 const debug = @import("std").debug;
@@ -11,6 +12,7 @@ const debug = @import("std").debug;
 const options = @import("../options.zig");
 
 const PathVTable = @import("PathVTable.zig");
+const Transformation = @import("../Transformation.zig");
 
 const max_full_circles: usize = 65536;
 
@@ -81,14 +83,188 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
     return angle;
 }
 
-fn arc_segments_needed(angle: f64, radius: f64, tolerance: f64) usize {
-    // TODO: Our arcs cannot do ellipses at this time due to the fact that we
-    // have not implemented transformation matrices yet. After that's done,
-    // this should be modified to transform the radius to the appropriate
-    // length of the major axis.
-    const max_angle = arc_max_angle_for_tolerance_normalized(tolerance / radius);
+fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: f64) usize {
+    // the error is amplified by at most the length of the circle.
+    const major_axis = transformed_circle_major_axis(ctm, radius);
+    const max_angle = arc_max_angle_for_tolerance_normalized(tolerance / major_axis);
 
     return @intFromFloat(@ceil(@abs(angle) / max_angle));
+}
+
+/// determine the length of the major axis of a circle of the given radius
+/// after applying the transformation matrix.
+fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
+    // This lengthy explanation was taken from the comments above the
+    // implementation of Cairo's _cairo_matrix_transformed_circle_major_axis in
+    // cairo-matrix.c. I've preserved it in its entirety just to have it close to
+    // the code as it's an important piece to understanding how we use the CTM to
+    // calculate the major axis.
+    //
+    // A circle in user space is transformed into an ellipse in device space.
+    //
+    // The following is a derivation of a formula to calculate the length of the
+    // major axis for this ellipse; this is useful for error bounds calculations.
+    //
+    // Thanks to Walter Brisken <wbrisken@aoc.nrao.edu> for this derivation:
+    //
+    // 1.  First some notation:
+    //
+    // All capital letters represent vectors in two dimensions.  A prime '
+    // represents a transformed coordinate.  Matrices are written in underlined
+    // form, ie _R_.  Lowercase letters represent scalar real values.
+    //
+    // 2.  The question has been posed:  What is the maximum expansion factor
+    // achieved by the linear transformation
+    //
+    // X' = X _R_
+    //
+    // where _R_ is a real-valued 2x2 matrix with entries:
+    //
+    // _R_ = [a b]
+    //       [c d]  .
+    //
+    // In other words, what is the maximum radius, MAX[ |X'| ], reached for any
+    // X on the unit circle ( |X| = 1 ) ?
+    //
+    // 3.  Some useful formulae
+    //
+    // (A) through (C) below are standard double-angle formulae.  (D) is a lesser
+    // known result and is derived below:
+    //
+    // (A)  sin²(θ) = (1 - cos(2*θ))/2
+    // (B)  cos²(θ) = (1 + cos(2*θ))/2
+    // (C)  sin(θ)*cos(θ) = sin(2*θ)/2
+    // (D)  MAX[a*cos(θ) + b*sin(θ)] = sqrt(a² + b²)
+    //
+    // Proof of (D):
+    //
+    // find the maximum of the function by setting the derivative to zero:
+    //
+    //      -a*sin(θ)+b*cos(θ) = 0
+    //
+    // From this it follows that
+    //
+    //      tan(θ) = b/a
+    //
+    // and hence
+    //
+    //      sin(θ) = b/sqrt(a² + b²)
+    //
+    // and
+    //
+    //      cos(θ) = a/sqrt(a² + b²)
+    //
+    // Thus the maximum value is
+    //
+    //      MAX[a*cos(θ) + b*sin(θ)] = (a² + b²)/sqrt(a² + b²)
+    //                                  = sqrt(a² + b²)
+    //
+    // 4.  Derivation of maximum expansion
+    //
+    // To find MAX[ |X'| ] we search brute force method using calculus.  The unit
+    // circle on which X is constrained is to be parameterized by t:
+    //
+    //      X(θ) = (cos(θ), sin(θ))
+    //
+    // Thus
+    //
+    //      X'(θ) = X(θ) * _R_ = (cos(θ), sin(θ)) * [a b]
+    //                                              [c d]
+    //            = (a*cos(θ) + c*sin(θ), b*cos(θ) + d*sin(θ)).
+    //
+    // Define
+    //
+    //      r(θ) = |X'(θ)|
+    //
+    // Thus
+    //
+    //      r²(θ) = (a*cos(θ) + c*sin(θ))² + (b*cos(θ) + d*sin(θ))²
+    //            = (a² + b²)*cos²(θ) + (c² + d²)*sin²(θ)
+    //                + 2*(a*c + b*d)*cos(θ)*sin(θ)
+    //
+    // Now apply the double angle formulae (A) to (C) from above:
+    //
+    //      r²(θ) = (a² + b² + c² + d²)/2
+    //         + (a² + b² - c² - d²)*cos(2*θ)/2
+    // 	     + (a*c + b*d)*sin(2*θ)
+    //            = f + g*cos(φ) + h*sin(φ)
+    //
+    // Where
+    //
+    //      f = (a² + b² + c² + d²)/2
+    //      g = (a² + b² - c² - d²)/2
+    //      h = (a*c + d*d)
+    //      φ = 2*θ
+    //
+    // It is clear that MAX[ |X'| ] = sqrt(MAX[ r² ]).  Here we determine MAX[ r² ]
+    // using (D) from above:
+    //
+    //      MAX[ r² ] = f + sqrt(g² + h²)
+    //
+    // And finally
+    //
+    //      MAX[ |X'| ] = sqrt( f + sqrt(g² + h²) )
+    //
+    // Which is the solution to this problem.
+    //
+    // Walter Brisken
+    // 2004/10/08
+    //
+    // (Note that the minor axis length is at the minimum of the above solution,
+    // which is just sqrt ( f - sqrt(g² + h²) ) given the symmetry of (D)).
+    //
+    //
+    // For another derivation of the same result, using Singular Value Decomposition,
+    // see doc/tutorial/src/singular.c.
+    const a: f64 = matrix.ax;
+    const b: f64 = matrix.by;
+    const c: f64 = matrix.cx;
+    const d: f64 = matrix.dy;
+    var f: f64 = undefined;
+    var g: f64 = undefined;
+    var h: f64 = undefined;
+    var i: f64 = undefined;
+    var j: f64 = undefined;
+
+    // Unrolled and abridged _cairo_matrix_has_unity_scale here. Checks if the
+    // matrix is only 90 degree rotations or flips.
+    const has_unity_scale: bool = _has_unity_scale: {
+        // Possible FIXME if things break here. This is derived from expanding
+        // Cairo's SCALING_EPSILON manually since we don't use fixed point;
+        // it's possible that "close to zero" in Cairo means "zero" for us due
+        // to this.
+        const scaling_epsilon: f64 = 0.003906;
+        // check that the determinant is near +/-1
+        const det: f64 = matrix.ax * matrix.dy - matrix.by * matrix.cx;
+        if (@abs(det * det - 1.0) < scaling_epsilon) {
+            // check that one axis is close to zero
+            if (@abs(matrix.by) < scaling_epsilon and
+                @abs(matrix.cx) < scaling_epsilon)
+                break :_has_unity_scale true;
+            if (@abs(matrix.ax) < scaling_epsilon and
+                @abs(matrix.dy) < scaling_epsilon)
+                break :_has_unity_scale true;
+            // If rotations are allowed then it must instead test for
+            // orthogonality. This is xx*xy+yx*yy ~= 0.
+        }
+        break :_has_unity_scale false;
+    };
+
+    if (has_unity_scale) return radius;
+
+    i = a * a + b * b;
+    j = c * c + d * d;
+
+    f = 0.5 * (i + j);
+    g = 0.5 * (i - j);
+    h = a * c + b * d;
+
+    return radius * @sqrt(f + math.hypot(g, h));
+
+    //
+    // we don't need the minor axis length, which is
+    // double min = radius * sqrt (f - sqrt (g*g+h*h));
+    //
 }
 
 // We want to draw a single spline approximating a circular arc radius
@@ -160,6 +336,7 @@ pub fn arc_in_direction(
     angle_min: f64,
     angle_max: f64,
     dir: Direction,
+    ctm: Transformation,
     tolerance_: ?f64,
 ) !void {
     var amin = angle_min;
@@ -180,14 +357,14 @@ pub fn arc_in_direction(
     if (amax - amin > math.pi) {
         const amid = amin + (amax - amin) / 2.0;
         if (dir == .forward) {
-            try arc_in_direction(path_impl, xc, yc, radius, amin, amid, dir, tolerance);
-            try arc_in_direction(path_impl, xc, yc, radius, amid, amax, dir, tolerance);
+            try arc_in_direction(path_impl, xc, yc, radius, amin, amid, dir, ctm, tolerance);
+            try arc_in_direction(path_impl, xc, yc, radius, amid, amax, dir, ctm, tolerance);
         } else {
-            try arc_in_direction(path_impl, xc, yc, radius, amid, amax, dir, tolerance);
-            try arc_in_direction(path_impl, xc, yc, radius, amin, amid, dir, tolerance);
+            try arc_in_direction(path_impl, xc, yc, radius, amid, amax, dir, ctm, tolerance);
+            try arc_in_direction(path_impl, xc, yc, radius, amin, amid, dir, ctm, tolerance);
         }
     } else if (amax != amin) {
-        var segments = arc_segments_needed(amax - amin, radius, tolerance);
+        var segments = arc_segments_needed(amax - amin, radius, ctm, tolerance);
         var step = (amax - amin) / @as(f64, @floatFromInt(segments));
         segments -= 1;
 
