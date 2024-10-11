@@ -19,6 +19,7 @@ const Surface = @import("../surface.zig").Surface;
 const FillRule = @import("../options.zig").FillRule;
 const StrokePlotter = @import("StrokePlotter.zig");
 const PolygonList = @import("PolygonList.zig");
+const Transformation = @import("../Transformation.zig");
 const InternalError = @import("../errors.zig").InternalError;
 const supersample_scale = @import("../surface.zig").supersample_scale;
 
@@ -100,6 +101,7 @@ pub fn stroke(
         if (self.context.line_width >= 2) self.context.line_cap_mode else .butt,
         scale,
         @max(self.context.tolerance, 0.001),
+        self.context.transformation,
     );
     defer plotter.deinit();
 

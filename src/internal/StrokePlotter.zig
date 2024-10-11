@@ -19,6 +19,8 @@ const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
+const Transformation = @import("../Transformation.zig");
+const TransformationError = @import("../errors.zig").TransformationError;
 const InternalError = @import("../errors.zig").InternalError;
 
 thickness: f64,
@@ -28,6 +30,7 @@ cap_mode: options.CapMode,
 pen: Pen,
 scale: f64,
 tolerance: f64,
+ctm: Transformation,
 
 pub fn init(
     alloc: mem.Allocator,
@@ -37,7 +40,10 @@ pub fn init(
     cap_mode: options.CapMode,
     scale: f64,
     tolerance: f64,
+    ctm: Transformation,
 ) !StrokePlotter {
+    // If our ctm cannot be inverted, return InvalidMatrix.
+    _ = ctm.inverse() catch return TransformationError.InvalidMatrix;
     return .{
         .thickness = thickness,
         .join_mode = join_mode,
@@ -46,6 +52,7 @@ pub fn init(
         .pen = try Pen.init(alloc, thickness, tolerance),
         .scale = scale,
         .tolerance = tolerance,
+        .ctm = ctm,
     };
 }
 
@@ -228,12 +235,14 @@ const Iterator = struct {
                                 first_line_point,
                                 it.plotter.thickness,
                                 it.plotter.pen,
+                                it.plotter.ctm,
                             );
                             const cap_points_end = Face.init(
                                 last_point,
                                 current_point,
                                 it.plotter.thickness,
                                 it.plotter.pen,
+                                it.plotter.ctm,
                             );
 
                             // Check our direction so we know how to plot our cap points
@@ -280,6 +289,7 @@ const Iterator = struct {
                                 current_point,
                                 it.plotter.thickness,
                                 it.plotter.pen,
+                                it.plotter.ctm,
                             );
                             var plotter_ctx: CapPlotterCtx = .{
                                 .polygon = &state.outer,
@@ -375,8 +385,8 @@ const Iterator = struct {
         // Guard against no-op joins - if one of our segments is degenerate, just return.
         if (p0.equal(p1) or p1.equal(p2)) return if (poly_clockwise_) |cw| cw else false;
 
-        const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen);
-        const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen);
+        const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
+        const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
         const join_clockwise = in.slope.compare(out.slope) < 0;
 
         // Calculate if the join direction is different from the larger
@@ -652,7 +662,16 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
         try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
 
-        var plotter = try StrokePlotter.init(alloc, 2, .miter, 10, .butt, 1, 0.01);
+        var plotter = try StrokePlotter.init(
+            alloc,
+            2,
+            .miter,
+            10,
+            .butt,
+            1,
+            0.01,
+            Transformation.identity,
+        );
         defer plotter.deinit();
 
         var result = try plotter.plot(alloc, nodes);
@@ -676,7 +695,16 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
         try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
 
-        var plotter = try StrokePlotter.init(alloc, 2, .miter, 10, .butt, 1, 0.01);
+        var plotter = try StrokePlotter.init(
+            alloc,
+            2,
+            .miter,
+            10,
+            .butt,
+            1,
+            0.01,
+            Transformation.identity,
+        );
         defer plotter.deinit();
 
         var result = try plotter.plot(alloc, nodes);

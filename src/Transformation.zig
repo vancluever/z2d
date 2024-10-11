@@ -40,6 +40,16 @@ pub const identity: Transformation = .{
     .ty = 0,
 };
 
+/// Checks to see if a point is equal to another point.
+pub fn equal(a: Transformation, b: Transformation) bool {
+    return a.ax == b.ax and
+        a.by == b.by and
+        a.cx == b.cx and
+        a.dy == b.dy and
+        a.tx == b.tx and
+        a.ty == b.ty;
+}
+
 /// Multiplies a transformation matrix with another.
 pub fn mul(a: Transformation, b: Transformation) Transformation {
     // [ a.ax a.by a.tx ] [ b.ax b.by b.tx ]
@@ -191,6 +201,29 @@ pub fn deviceToUserDistance(a: Transformation, x: *f64, y: *f64) !void {
 /// `y`.
 pub fn deviceToUser(a: Transformation, x: *f64, y: *f64) !void {
     (try a.inverse()).userToDevice(x, y);
+}
+
+test "equal" {
+    const a: Transformation = .{
+        .ax = 1,
+        .by = 2,
+        .cx = 3,
+        .dy = 4,
+        .tx = 5,
+        .ty = 6,
+    };
+
+    const b: Transformation = .{
+        .ax = 7,
+        .by = 8,
+        .cx = 9,
+        .dy = 10,
+        .tx = 11,
+        .ty = 12,
+    };
+
+    try testing.expect(a.equal(a));
+    try testing.expect(!a.equal(b));
 }
 
 test "mul" {

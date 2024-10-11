@@ -13,6 +13,7 @@ const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Painter = @import("internal/Painter.zig");
 const Surface = @import("surface.zig").Surface;
+const Transformation = @import("Transformation.zig");
 const PathError = @import("errors.zig").PathError;
 
 /// The underlying surface.
@@ -72,6 +73,18 @@ anti_aliasing_mode: options.AntiAliasMode = .default,
 /// marked artifacts at relatively low tolerance settings, so take care when
 /// changing under these scenarios.
 tolerance: f64 = options.default_tolerance,
+
+/// The current transformation matrix (CTM) for this path.
+///
+/// The transformation matrix in a context is separate from the CTM in any
+/// given `Path`. It has more subtle influences on drawing: in stroking, it
+/// influences line width respective to scale, warping due to a warped scale
+/// (e.g., different x and y scale), and any respective capping. In filling, it
+/// is (currently) ignored.
+///
+/// Synchronization of CTM between here and `Path`, if desired, is currently an
+/// exercise left to the consumer.
+transformation: Transformation = Transformation.identity,
 
 /// Runs a fill operation on the path(s) in the supplied set. All paths in the
 /// set must be closed.

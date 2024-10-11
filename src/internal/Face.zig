@@ -32,6 +32,7 @@ const Pen = @import("Pen.zig");
 const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
+const Transformation = @import("../Transformation.zig");
 
 p0: Point,
 p1: Point,
@@ -44,16 +45,34 @@ p0_ccw: Point,
 p1_cw: Point,
 p1_ccw: Point,
 pen: Pen,
+ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
+pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation) Face {
     const slope = Slope.init(p0, p1);
     const half_width = thickness / 2;
-    const dx = p1.x - p0.x;
-    const dy = p1.y - p0.y;
-    const factor = half_width / @sqrt(dx * dx + dy * dy);
-    const offset_x = dy * factor;
-    const offset_y = dx * factor;
+    var offset_x: f64 = undefined;
+    var offset_y: f64 = undefined;
+    if (!ctm.equal(Transformation.identity)) {
+        // If we're transforming we need to transform our offsets for purposes
+        // of correctly plotting joins and end cap points. Direction is mostly
+        // already accounted for as our path is already assumed to be in device
+        // space, but we need to warp our thickness and possibly reflect if the
+        // ctm does that too.
+        var dx = slope.dx;
+        var dy = slope.dy;
+        ctm.deviceToUserDistance(&dx, &dy) catch unreachable; // ctm should be validated before
+        const slope_normalized = (Slope{ .dx = dx, .dy = dy }).normalize();
+        const inv = math.sign(ctm.ax * ctm.dy - ctm.by * ctm.cx);
+        offset_x = slope_normalized.dy * half_width * inv;
+        offset_y = slope_normalized.dx * half_width * inv;
+        ctm.userToDeviceDistance(&offset_x, &offset_y);
+    } else {
+        const factor = half_width / math.hypot(slope.dx, slope.dy);
+        offset_x = slope.dy * factor;
+        offset_y = slope.dx * factor;
+    }
+
     return .{
         .p0 = p0,
         .p1 = p1,
@@ -66,6 +85,7 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen) Face {
         .p1_cw = .{ .x = p1.x - offset_x, .y = p1.y + offset_y },
         .p1_ccw = .{ .x = p1.x + offset_x, .y = p1.y - offset_y },
         .pen = pen,
+        .ctm = ctm,
     };
 }
 
@@ -98,7 +118,7 @@ pub fn cap_p0(
     cap_mode: options.CapMode,
     clockwise: bool,
 ) !void {
-    const reversed = init(self.p1, self.p0, self.width, self.pen);
+    const reversed = init(self.p1, self.p0, self.width, self.pen, self.ctm);
     return reversed.cap(
         plotter_impl,
         cap_mode,
