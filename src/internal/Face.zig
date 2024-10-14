@@ -49,7 +49,8 @@ ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
 pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation) Face {
-    const slope = Slope.init(p0, p1);
+    const dev_slope = Slope.init(p0, p1);
+    const dev_slope_normalized = dev_slope.normalize();
     const half_width = thickness / 2;
     var offset_x: f64 = undefined;
     var offset_y: f64 = undefined;
@@ -59,31 +60,38 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation)
         // already accounted for as our path is already assumed to be in device
         // space, but we need to warp our thickness and possibly reflect if the
         // ctm does that too.
-        var dx = slope.dx;
-        var dy = slope.dy;
+        var dx = dev_slope_normalized.dx;
+        var dy = dev_slope_normalized.dy;
         ctm.deviceToUserDistance(&dx, &dy) catch unreachable; // ctm should be validated before
-        const slope_normalized = (Slope{ .dx = dx, .dy = dy }).normalize();
-        const inv = math.sign(ctm.ax * ctm.dy - ctm.by * ctm.cx);
-        offset_x = slope_normalized.dy * half_width * inv;
-        offset_y = slope_normalized.dx * half_width * inv;
+        const user_slope_normalized = (Slope{ .dx = dx, .dy = dy }).normalize();
+        if (ctm.ax * ctm.dy - ctm.by * ctm.cx >= 0) {
+            offset_x = -user_slope_normalized.dy * half_width;
+            offset_y = user_slope_normalized.dx * half_width;
+        } else {
+            offset_x = user_slope_normalized.dy * half_width;
+            offset_y = -user_slope_normalized.dx * half_width;
+        }
         ctm.userToDeviceDistance(&offset_x, &offset_y);
     } else {
-        const factor = half_width / math.hypot(slope.dx, slope.dy);
-        offset_x = slope.dy * factor;
-        offset_y = slope.dx * factor;
+        offset_x = -dev_slope_normalized.dy * half_width;
+        offset_y = dev_slope_normalized.dx * half_width;
     }
+    const offset_cw_x = offset_x;
+    const offset_cw_y = offset_y;
+    const offset_ccw_x = -offset_cw_x;
+    const offset_ccw_y = -offset_cw_y;
 
     return .{
         .p0 = p0,
         .p1 = p1,
         .width = thickness,
-        .slope = slope,
-        .offset_x = offset_x,
-        .offset_y = offset_y,
-        .p0_cw = .{ .x = p0.x - offset_x, .y = p0.y + offset_y },
-        .p0_ccw = .{ .x = p0.x + offset_x, .y = p0.y - offset_y },
-        .p1_cw = .{ .x = p1.x - offset_x, .y = p1.y + offset_y },
-        .p1_ccw = .{ .x = p1.x + offset_x, .y = p1.y - offset_y },
+        .slope = dev_slope,
+        .offset_x = @abs(offset_x),
+        .offset_y = @abs(offset_y),
+        .p0_cw = .{ .x = p0.x + offset_cw_x, .y = p0.y + offset_cw_y },
+        .p0_ccw = .{ .x = p0.x + offset_ccw_x, .y = p0.y + offset_ccw_y },
+        .p1_cw = .{ .x = p1.x + offset_cw_x, .y = p1.y + offset_cw_y },
+        .p1_ccw = .{ .x = p1.x + offset_ccw_x, .y = p1.y + offset_ccw_y },
         .pen = pen,
         .ctm = ctm,
     };

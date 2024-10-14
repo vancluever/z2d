@@ -293,7 +293,9 @@ pub fn close(self: *Path) !void {
         // Add a move_to immediately after the close_path node. This is
         // explicit, to ensure that the state machine for draw operations
         // (fill, stroke) do not get put into an unreachable state.
-        try self.moveTo(initial_point.x, initial_point.y);
+        try self.nodes.append(.{ .move_to = .{
+            .point = .{ .x = initial_point.x, .y = initial_point.y },
+        } });
     } else return PathError.NoInitialPoint;
 }
 
