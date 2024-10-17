@@ -234,6 +234,19 @@ test "equal" {
     try testing.expect(!a.equal(b));
 }
 
+test "determinant" {
+    const a: Transformation = .{
+        .ax = 1,
+        .by = 2,
+        .cx = 3,
+        .dy = 4,
+        .tx = 5,
+        .ty = 6,
+    };
+
+    try testing.expectEqual(-2, a.determinant());
+}
+
 test "mul" {
     const a: Transformation = .{
         .ax = 1,
