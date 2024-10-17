@@ -719,3 +719,23 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         try testing.expectEqual(4, corners_len);
     }
 }
+
+test "init uninvertible matrix error" {
+    try testing.expectError(TransformationError.InvalidMatrix, init(
+        testing.allocator,
+        2,
+        .miter,
+        10,
+        .butt,
+        1,
+        0.01,
+        .{
+            .ax = 1,
+            .by = 1,
+            .cx = 2,
+            .dy = 2,
+            .tx = 5,
+            .ty = 6,
+        },
+    ));
+}
