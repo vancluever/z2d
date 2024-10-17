@@ -29,6 +29,9 @@
 //! * `Pixel` - A single pixel of varying format. Underlying formats are
 //! represented as `packed struct`s for guaranteed memory layout.
 //!
+//! * `Transformation` - An affine transformation matrix that transforms
+//! co-ordinates between user space and device space in `Context` and `Path`.
+//!
 //! ## Packages
 //!
 //! * `surface` - The package `Surface` resides in, exposes additional types
