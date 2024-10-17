@@ -55,6 +55,7 @@ const _041_stroke_noop_lineto = @import("041_stroke_noop_lineto.zig");
 const _042_arc_ellipses = @import("042_arc_ellipses.zig");
 const _043_rect_transforms = @import("043_rect_transforms.zig");
 const _044_line_transforms = @import("044_line_transforms.zig");
+const _045_round_join_transforms = @import("045_round_join_transforms.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -106,6 +107,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _042_arc_ellipses);
     try pathExportRun(alloc, _043_rect_transforms);
     try pathExportRun(alloc, _044_line_transforms);
+    try pathExportRun(alloc, _045_round_join_transforms);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -284,6 +286,10 @@ test "043_rect_transforms" {
 
 test "044_line_transforms" {
     try pathTestRun(testing.allocator, _044_line_transforms);
+}
+
+test "045_round_join_transforms" {
+    try pathTestRun(testing.allocator, _045_round_join_transforms);
 }
 
 //////////////////////////////////////////////////////////////////////////////
