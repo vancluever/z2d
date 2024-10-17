@@ -146,6 +146,8 @@ Currently:
    - Miter, bevel, and round join supported for stroking.
    - Butt, square, and round caps supported for stroking.
    - Dashed lines currently not supported (planned!)
+ * Transformations: rotate, scale, translate, and other operations via direct
+   manipulations of the affine matrix.
  * Simple composition:
    - Currently only opaque pixel sources supported, gradients/etc planned.
  * Pixel formats:
