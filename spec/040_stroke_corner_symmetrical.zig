@@ -4,7 +4,6 @@
 //! Case: ensures proper alignment of a line spanning the whole box diagonally.
 //! The line should be symmetrical on both the upper left and bottom right
 //! corners of the box.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

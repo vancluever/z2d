@@ -4,7 +4,6 @@
 //! Case: Renders and fills a triangle on a 300x300 surface, but with different
 //! pixel types (RGBA on RGB surface) We expect compositing to work on both
 //! main AA modes (no AA, default AA).
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

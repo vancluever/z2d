@@ -3,7 +3,6 @@
 
 //! Case: Renders and fills multiple shapes using a single path operation, used
 //! to ensure we can do this without having to fill each polygon individually.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

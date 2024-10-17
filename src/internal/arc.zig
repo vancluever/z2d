@@ -93,7 +93,7 @@ fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: 
 
 /// determine the length of the major axis of a circle of the given radius
 /// after applying the transformation matrix.
-fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
+pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
     // This lengthy explanation was taken from the comments above the
     // implementation of Cairo's _cairo_matrix_transformed_circle_major_axis in
     // cairo-matrix.c. I've preserved it in its entirety just to have it close to
@@ -233,7 +233,10 @@ fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
         // Cairo's SCALING_EPSILON manually since we don't use fixed point;
         // it's possible that "close to zero" in Cairo means "zero" for us due
         // to this.
-        const scaling_epsilon: f64 = 0.003906;
+        //
+        // This is ultimately the minimum value within Cairo's 24.8 fixed-point
+        // notation (1/256).
+        const scaling_epsilon: f64 = 0.00390625;
         // check that the determinant is near +/-1
         const det: f64 = matrix.ax * matrix.dy - matrix.by * matrix.cx;
         if (@abs(det * det - 1.0) < scaling_epsilon) {

@@ -3,7 +3,6 @@
 
 //! Case: Ensures that certain extents don't get clipped on the larger
 //! y-boundary.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

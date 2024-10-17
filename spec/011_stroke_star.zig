@@ -6,7 +6,6 @@
 //! Note that this test also validates that we always fill strokes using the
 //! non-zero rule, since drawing a star means tracing a path that overlaps as
 //! you move from point to point.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

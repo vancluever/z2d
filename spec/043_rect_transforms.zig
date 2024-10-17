@@ -2,7 +2,6 @@
 //   Copyright © 2024 Chris Marchesi
 
 //! Case: Renders rectangles (fill and stroke) using transformation matrices.
-const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 

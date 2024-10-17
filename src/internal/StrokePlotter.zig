@@ -49,7 +49,7 @@ pub fn init(
         .join_mode = join_mode,
         .miter_limit = miter_limit,
         .cap_mode = cap_mode,
-        .pen = try Pen.init(alloc, thickness, tolerance),
+        .pen = try Pen.init(alloc, thickness, tolerance, ctm),
         .scale = scale,
         .tolerance = tolerance,
         .ctm = ctm,
@@ -387,7 +387,7 @@ const Iterator = struct {
 
         const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
         const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
-        const join_clockwise = in.slope.compare(out.slope) < 0;
+        const join_clockwise = in.dev_slope.compare(out.dev_slope) < 0;
 
         // Calculate if the join direction is different from the larger
         // polygon's clockwise direction. If it is, we need to plot respective
@@ -413,7 +413,7 @@ const Iterator = struct {
 
         // If our slopes are equal (co-linear), only plot the end of the
         // inbound face, regardless of join mode.
-        if (in.slope.compare(out.slope) == 0) {
+        if (in.dev_slope.compare(out.dev_slope) == 0) {
             try outer_joiner.plot(
                 if (join_clockwise) in.p1_ccw else in.p1_cw,
                 before_outer,
@@ -428,7 +428,7 @@ const Iterator = struct {
         switch (it.plotter.join_mode) {
             .miter, .bevel => {
                 if (it.plotter.join_mode == .miter and
-                    Slope.compare_for_miter_limit(in.slope, out.slope, it.plotter.miter_limit))
+                    Slope.compare_for_miter_limit(in.dev_slope, out.dev_slope, it.plotter.miter_limit))
                 {
                     try outer_joiner.plot(in.intersect(out, join_clockwise), before_outer);
                 } else {
@@ -444,7 +444,7 @@ const Iterator = struct {
             },
 
             .round => {
-                var vit = it.plotter.pen.vertexIteratorFor(in.slope, out.slope, join_clockwise);
+                var vit = it.plotter.pen.vertexIteratorFor(in.dev_slope, out.dev_slope, join_clockwise);
                 try outer_joiner.plot(
                     if (join_clockwise) in.p1_ccw else in.p1_cw,
                     before_outer,

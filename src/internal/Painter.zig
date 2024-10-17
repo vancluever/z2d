@@ -93,9 +93,14 @@ pub fn stroke(
     // stroking, I'm expecting that some of these restrictions will be lifted
     // and/or moved to specific places where they can be used to address the
     // artifacts related to particular edge cases.
+    //
+    // Not a stop gap more than likely: minimum line width. This is value is
+    // sort of arbitrarily chosen as Cairo's minimum 24.8 fixed-point value (so
+    // 1/256).
+    const minimum_line_width: f64 = 0.00390625;
     var plotter = try StrokePlotter.init(
         alloc,
-        self.context.line_width,
+        if (self.context.line_width >= minimum_line_width) self.context.line_width else minimum_line_width,
         if (self.context.line_width >= 2) self.context.line_join_mode else .miter,
         if (self.context.line_width >= 2) self.context.miter_limit else 10.0,
         if (self.context.line_width >= 2) self.context.line_cap_mode else .butt,

@@ -50,6 +50,14 @@ pub fn equal(a: Transformation, b: Transformation) bool {
         a.ty == b.ty;
 }
 
+/// Computes the determinant of the matrix.
+///
+/// Note that the determinant of an affine transformation matrix reduces to a
+/// simple ad - bc.
+pub fn determinant(a: Transformation) f64 {
+    return a.ax * a.dy - a.by * a.cx;
+}
+
 /// Multiplies a transformation matrix with another.
 pub fn mul(a: Transformation, b: Transformation) Transformation {
     // [ a.ax a.by a.tx ] [ b.ax b.by b.tx ]
@@ -123,7 +131,7 @@ pub fn inverse(a: Transformation) !Transformation {
     // simplified from the general case quite a bit.
     //
     // For example, the determinant reduces to the standard ad - bc, so let's do that first.
-    const det = a.ax * a.dy - a.by * a.cx;
+    const det = a.determinant();
     if (det == 0) {
         return TransformationError.InvalidMatrix; // We can't invert the determinant
     }

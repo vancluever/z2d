@@ -3,7 +3,6 @@
 
 //! Case: Renders ellipses (fill and stroke) using arc commands and
 //! transformation matrices.
-const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 

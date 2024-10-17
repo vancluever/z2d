@@ -3,7 +3,6 @@
 
 //! Case: Ensure no-op (degenerate) lineto operations are accounted for
 //! properly and do not break strokes.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

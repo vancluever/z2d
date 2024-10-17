@@ -6,7 +6,6 @@
 //!
 //! The [Zig logo](https://github.com/ziglang/logo) and logomark are licensed
 //! CC-BY-SA 4.0.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

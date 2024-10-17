@@ -5,7 +5,6 @@
 //!
 //! NOTE: This star explicitly fills with non-zero rule, so it's expected for
 //! there to NOT be a gap in the middle.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

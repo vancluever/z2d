@@ -3,7 +3,6 @@
 
 //! Case: Draws overlapping strokes in different directions to test that joins
 //! with extremely acute angles overlap properly.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

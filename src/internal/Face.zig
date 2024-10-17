@@ -37,9 +37,9 @@ const Transformation = @import("../Transformation.zig");
 p0: Point,
 p1: Point,
 width: f64,
-slope: Slope,
-offset_x: f64,
-offset_y: f64,
+dev_slope: Slope, // Device-space slope (normalized)
+user_slope: Slope, // User-space slope (normalized)
+half_width: f64, // Half-width of thickness on init
 p0_cw: Point,
 p0_ccw: Point,
 p1_cw: Point,
@@ -49,32 +49,32 @@ ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
 pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation) Face {
-    const dev_slope = Slope.init(p0, p1);
-    const dev_slope_normalized = dev_slope.normalize();
+    const dev_slope = Slope.init(p0, p1).normalize();
     const half_width = thickness / 2;
     var offset_x: f64 = undefined;
     var offset_y: f64 = undefined;
+    var user_slope = dev_slope;
     if (!ctm.equal(Transformation.identity)) {
         // If we're transforming we need to transform our offsets for purposes
         // of correctly plotting joins and end cap points. Direction is mostly
         // already accounted for as our path is already assumed to be in device
         // space, but we need to warp our thickness and possibly reflect if the
         // ctm does that too.
-        var dx = dev_slope_normalized.dx;
-        var dy = dev_slope_normalized.dy;
-        ctm.deviceToUserDistance(&dx, &dy) catch unreachable; // ctm should be validated before
-        const user_slope_normalized = (Slope{ .dx = dx, .dy = dy }).normalize();
-        if (ctm.ax * ctm.dy - ctm.by * ctm.cx >= 0) {
-            offset_x = -user_slope_normalized.dy * half_width;
-            offset_y = user_slope_normalized.dx * half_width;
+        var dx = dev_slope.dx;
+        var dy = dev_slope.dy;
+        ctm.deviceToUserDistance(&dx, &dy) catch unreachable; // ctm is pre-validated
+        user_slope = (Slope{ .dx = dx, .dy = dy }).normalize(); // Save user slope for future calcs
+        if (ctm.determinant() >= 0) {
+            offset_x = -user_slope.dy * half_width;
+            offset_y = user_slope.dx * half_width;
         } else {
-            offset_x = user_slope_normalized.dy * half_width;
-            offset_y = -user_slope_normalized.dx * half_width;
+            offset_x = user_slope.dy * half_width;
+            offset_y = -user_slope.dx * half_width;
         }
         ctm.userToDeviceDistance(&offset_x, &offset_y);
     } else {
-        offset_x = -dev_slope_normalized.dy * half_width;
-        offset_y = dev_slope_normalized.dx * half_width;
+        offset_x = -dev_slope.dy * half_width;
+        offset_y = dev_slope.dx * half_width;
     }
     const offset_cw_x = offset_x;
     const offset_cw_y = offset_y;
@@ -85,9 +85,9 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation)
         .p0 = p0,
         .p1 = p1,
         .width = thickness,
-        .slope = dev_slope,
-        .offset_x = -offset_x,
-        .offset_y = offset_y,
+        .dev_slope = dev_slope,
+        .user_slope = user_slope,
+        .half_width = half_width,
         .p0_cw = .{ .x = p0.x + offset_cw_x, .y = p0.y + offset_cw_y },
         .p0_ccw = .{ .x = p0.x + offset_ccw_x, .y = p0.y + offset_ccw_y },
         .p1_cw = .{ .x = p1.x + offset_cw_x, .y = p1.y + offset_cw_y },
@@ -98,14 +98,14 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation)
 }
 
 pub fn intersect(in: Face, out: Face, clockwise: bool) Point {
-    debug.assert(in.slope.compare(out.slope) != 0);
+    debug.assert(in.dev_slope.compare(out.dev_slope) != 0);
 
     // Intersection taken from Cairo's miter join in
     // cairo-path-stroke-polygon.c et al.
     const in_point = if (clockwise) in.p1_ccw else in.p1_cw;
     const out_point = if (clockwise) out.p0_ccw else out.p0_cw;
-    const in_slope = in.slope.normalize();
-    const out_slope = out.slope.normalize();
+    const in_slope = in.dev_slope.normalize();
+    const out_slope = out.dev_slope.normalize();
 
     const result_y = ((out_point.x - in_point.x) * in_slope.dy * out_slope.dy - out_point.y * out_slope.dx * in_slope.dy + in_point.y * in_slope.dx * out_slope.dy) / (in_slope.dx * out_slope.dy - out_slope.dx * in_slope.dy);
 
@@ -185,26 +185,29 @@ fn capSquare(
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
 ) !void {
+    var offset_x = self.user_slope.dx * self.half_width;
+    var offset_y = self.user_slope.dy * self.half_width;
+    self.ctm.userToDeviceDistance(&offset_x, &offset_y);
     if (clockwise) {
         try plotter_impl.lineTo(.{ .point = self.p1_ccw });
         try plotter_impl.lineTo(.{ .point = .{
-            .x = self.p1_ccw.x + self.offset_y,
-            .y = self.p1_ccw.y + self.offset_x,
+            .x = self.p1_ccw.x + offset_x,
+            .y = self.p1_ccw.y + offset_y,
         } });
         try plotter_impl.lineTo(.{ .point = .{
-            .x = self.p1_cw.x + self.offset_y,
-            .y = self.p1_cw.y + self.offset_x,
+            .x = self.p1_cw.x + offset_x,
+            .y = self.p1_cw.y + offset_y,
         } });
         try plotter_impl.lineTo(.{ .point = self.p1_cw });
     } else {
         try plotter_impl.lineTo(.{ .point = self.p1_cw });
         try plotter_impl.lineTo(.{ .point = .{
-            .x = self.p1_cw.x + self.offset_y,
-            .y = self.p1_cw.y + self.offset_x,
+            .x = self.p1_cw.x + offset_x,
+            .y = self.p1_cw.y + offset_y,
         } });
         try plotter_impl.lineTo(.{ .point = .{
-            .x = self.p1_ccw.x + self.offset_y,
-            .y = self.p1_ccw.y + self.offset_x,
+            .x = self.p1_ccw.x + offset_x,
+            .y = self.p1_ccw.y + offset_y,
         } });
         try plotter_impl.lineTo(.{ .point = self.p1_ccw });
     }
@@ -220,8 +223,8 @@ fn capRound(
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
     var vit = self.pen.vertexIteratorFor(
-        self.slope,
-        .{ .dx = -self.slope.dx, .dy = -self.slope.dy },
+        self.dev_slope,
+        .{ .dx = -self.dev_slope.dx, .dy = -self.dev_slope.dy },
         clockwise,
     );
     if (clockwise) {

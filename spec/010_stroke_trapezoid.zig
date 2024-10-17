@@ -2,7 +2,6 @@
 //   Copyright © 2024 Chris Marchesi
 
 //! Case: Renders and strokes a trapezoid on a 300x300 surface.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
