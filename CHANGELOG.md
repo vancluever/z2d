@@ -1,6 +1,61 @@
-## 0.2.1-pre (Unreleased)
+## 0.3.0 (Unreleased)
 
-Bumped version for dev.
+TRANSFORMATION SUPPORT
+
+0.3.0 adds support for transformations, both for `Path` and `Context`.
+
+Transformations are represented by the traditional affine transformation matrix:
+
+```
+[ ax by tx ]
+[ cx dy ty ]
+[  0  0  1 ]
+```
+
+Where the `ax`, `by`, `cx`, and `dy` values represent rotate, scale, and skew,
+and `tx` and `ty` represent translation.
+
+We currently offer operations for `rotate`, `scale`, and `translate` via
+methods on the transformation, other operations need to be composed on the
+existing transformation via the `mul` and `inverse` methods. Additional methods
+exist for converting co-ordinates from provided, un-transformed units (hereby
+referred to as being in _user space_) into transformed ones (hereby referred to
+as being in _device space_).
+
+Transformations affect drawing in different ways depending on where they are
+applied:
+
+* When set in a `Path`, transformations affect co-ordinates being plotted.
+  Co-ordinates passed in to `moveTo`, `lineTo`, etc., are expected to be passed
+  in as user space and are transformed and recorded in device space. The
+  transformation can be changed in the middle of setting points; this changes
+  the device space for recorded points going forward, not the ones already
+  recorded. This is ultimately how you will draw ellipses with the `arc`
+  command, and an abridged example now exists for drawing an ellipse by saving
+  the current transformation matrix (CTM) for a path, adding `translate` and
+  `scale`, executing `arc`, and restoring the saved CTM.
+* When set in a `Context`, transformations mainly affect scaling and warping of
+  strokes according to the set `line_width` (which needs to be scaled with
+  `deviceToUserDistance` prior to stroking in order to get the expected line
+  width). This will be mostly obvious when working with a warping scale where
+  the major axis will look thicker. Transformations currently _do not_ affect
+  filling.
+* Currently, synchronization of a `Context` and `Path` transformation is an
+  exercise left to the consumer.
+
+Eventually, transformations will be extended to patterns when we implement more
+than the simple single-pixel pattern, likely being simple raster
+transformations on the source w/appropriate filtering/interpolation.
+Additionally, it's expected that a transformation set in the `Context` will
+also affect line dashing when it is implemented, through transformation of the
+dash pattern, and also affecting the capping as per normal stroking.
+
+BUG FIXES:
+
+* internal: fix offset calculations for AA composition
+  [#46](https://github.com/vancluever/z2d/pull/46)
+* internal: ignore degenerate line_to when filling/stroking
+  [#47](https://github.com/vancluever/z2d/pull/47)
 
 ## 0.2.0 (August 30, 2024)
 
