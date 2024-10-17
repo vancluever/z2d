@@ -32,6 +32,12 @@ pub const PathError = error{
     PathNotClosed,
 };
 
+/// Errors associated with matrix transformation operations.
+pub const TransformationError = error{
+    /// The matrix is invalid for the specific operation.
+    InvalidMatrix,
+};
+
 /// Errors associated with exporting (e.g., to PNG et al).
 pub const ExportError = error{
     /// Error during streaming graphical data.

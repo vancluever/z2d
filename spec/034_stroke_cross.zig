@@ -3,7 +3,6 @@
 
 //! Case: Renders a stroked cross (used to validate correct join direction for
 //! strokes when changing direction (clockwise -> counter-clockwise and vice versa).
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

@@ -3,7 +3,6 @@
 
 //! Case: Renders and fills a triangle on a 300x300 surface, extended to the
 //! full canvas.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

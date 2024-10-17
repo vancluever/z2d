@@ -14,7 +14,6 @@
 //! the one that you'd set with moveTo) and the final point are technically the
 //! start and end points. Thus, to get a proper quadratic to what you'd expect,
 //! you need the *control* points (so (x1, y1), (x2, y2)) to be equal.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

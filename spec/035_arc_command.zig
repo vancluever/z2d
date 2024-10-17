@@ -7,7 +7,6 @@
 //! https://www.w3.org/TR/SVG11/paths.html#PathDataEllipticalArcCommands.
 //! Copyright © 2011 World Wide Web Consortium.
 //! https://www.w3.org/copyright/software-license-2023/
-const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 

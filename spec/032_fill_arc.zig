@@ -3,7 +3,6 @@
 
 //! Case: Renders arcs as a demonstration of how this can be done with bezier
 //! primitives.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

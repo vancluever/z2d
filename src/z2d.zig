@@ -59,6 +59,7 @@ pub const Path = @import("Path.zig");
 pub const Pattern = pattern.Pattern;
 pub const Pixel = pixel.Pixel;
 pub const Surface = surface.Surface;
+pub const Transformation = @import("Transformation.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

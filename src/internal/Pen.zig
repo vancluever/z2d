@@ -13,9 +13,11 @@ const std = @import("std");
 const math = @import("std").math;
 const mem = @import("std").mem;
 
+const arc = @import("arc.zig");
 const Face = @import("Face.zig");
 const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
+const Transformation = @import("../Transformation.zig");
 
 const PenVertex = struct {
     point: Point,
@@ -32,7 +34,7 @@ vertices: std.ArrayList(PenVertex),
 /// Initializes a pen at radius thickness / 2, with point distribution
 /// based on the maximum error along the radius, being equal to or less
 /// than tolerance.
-pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
+pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64, ctm: Transformation) !Pen {
     // You can find the proof for our calculation here in cairo-pen.c in the
     // Cairo project. It shows that ultimately, the maximum error of an ellipse
     // is along its major axis, and to get our needed number of vertices, we
@@ -41,21 +43,17 @@ pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
     // ceil(2 * Π / acos(1 - tolerance / M))
     //
     // Where M is the major axis.
-    //
-    // Note that since we haven't implemented transformations yet, our only
-    // axis is the radius of the circular pen (thickness / 2). Once we
-    // implement transformations (TODO btw), we can adjust this to be the
-    // ellipse major axis.
     const radius = thickness / 2;
     const num_vertices: usize = verts: {
+        const major_axis: f64 = arc.transformed_circle_major_axis(ctm, radius);
         // Note that our minimum number of vertices is always 4. There are
         // also situations where our tolerance may be so high that we'd
         // have a degenerate pen, so we just return 1 in that case.
-        if (tolerance >= radius * 4) {
+        if (tolerance >= major_axis * 4) {
             // Degenerate pen when our tolerance is higher than what would
             // be represented by the circle itself.
             break :verts 1;
-        } else if (tolerance >= radius) {
+        } else if (tolerance >= major_axis) {
             // Not degenerate, but can fast-path here as the tolerance is
             // so high we are going to need to represent it with the
             // minimum points anyway.
@@ -64,7 +62,7 @@ pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
 
         // Calculate our delta first just in case we fall on zero for some
         // reason, and break on the minimum if it is.
-        const delta = math.acos(1 - tolerance / radius);
+        const delta = math.acos(1 - tolerance / major_axis);
         if (delta == 0) {
             break :verts 4;
         }
@@ -86,11 +84,19 @@ pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64) !Pen {
     var vertices = try std.ArrayList(PenVertex).initCapacity(alloc, num_vertices);
     errdefer vertices.deinit();
 
-    // Add the points in a first pass
+    // Add the points in a first pass. Note our baseline for determining points
+    // is user space (as we're just plotting a circle, so we need to transform
+    // off our ctm to get the correct ellipse for the pen.
+    const reflect = ctm.determinant() < 0;
     for (0..num_vertices) |i| {
-        const theta: f64 = 2 * math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
-        const dx = radius * @cos(theta);
-        const dy = radius * @sin(theta);
+        const theta: f64 = th: {
+            var t = 2 * math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
+            if (reflect) t = -t;
+            break :th t;
+        };
+        var dx = radius * @cos(theta);
+        var dy = radius * @sin(theta);
+        ctm.userToDeviceDistance(&dx, &dy);
         try vertices.append(.{
             .point = .{ .x = dx, .y = dy },
             .slope_cw = undefined,

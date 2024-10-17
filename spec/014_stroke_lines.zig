@@ -3,7 +3,6 @@
 
 //! Case: Renders multiple lines with the default thickness in different
 //! directions, unclosed.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");

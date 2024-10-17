@@ -3,7 +3,6 @@
 
 //! Case: Renders and strokes stars on a 900x300 surface with rounded corners,
 //! and varying tolerance.
-const debug = @import("std").debug;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
