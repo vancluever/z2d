@@ -100,23 +100,13 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
-    /// Downsamples the image, using simple pixel averaging. The original
-    /// surface is not altered.
+    /// Downsamples the image, using simple pixel averaging.
     ///
-    /// Uses the same allocator as the original surface. deinit should be
-    /// called when finished with the surface, which invalidates it, after
-    /// which it should not be used.
-    pub fn downsample(self: Surface) !Surface {
-        // Our initialization process is the same here as init, since we are
-        // creating a new surface for the downsampled copy.
+    /// The surface is downsampled in-place. After downsampling, dimensions are
+    /// altered and memory is freed.
+    pub fn downsample(self: Surface) void {
         switch (self) {
-            inline else => |s, tag| {
-                const pt = try tag.toPixelType();
-                const sfc = try s.alloc.create(ImageSurface(pt));
-                errdefer s.alloc.destroy(sfc);
-                sfc.* = try s.downsample();
-                return sfc.asSurfaceInterface();
-            },
+            inline else => |s| s.downsample(),
         }
     }
 
@@ -285,18 +275,14 @@ pub fn ImageSurface(comptime T: type) type {
             self.alloc.free(self.buf);
         }
 
-        /// Downsamples the image, using simple pixel averaging. The original
-        /// surface is not altered.
+        /// Downsamples the image, using simple pixel averaging.
         ///
-        /// Uses the same allocator as the original surface. deinit should be
-        /// called when finished with the surface, which invalidates it, after
-        /// which it should not be used.
-        pub fn downsample(self: *ImageSurface(T)) !ImageSurface(T) {
+        /// The surface is downsampled in-place. After downsampling, dimensions
+        /// are altered and memory is freed.
+        pub fn downsample(self: *ImageSurface(T)) void {
             const scale = supersample_scale;
             const height: usize = @intCast(@divFloor(self.height, scale));
             const width: usize = @intCast(@divFloor(self.width, scale));
-            const buf = try self.alloc.alloc(T, height * width);
-            @memset(buf, mem.zeroes(T));
 
             for (0..@intCast(height)) |y| {
                 for (0..@intCast(width)) |x| {
@@ -307,16 +293,14 @@ pub fn ImageSurface(comptime T: type) type {
                             pixels[i * scale + j] = self.buf[idx];
                         }
                     }
-                    buf[y * width + x] = T.average(&pixels);
+                    self.buf[y * width + x] = T.average(&pixels);
                 }
             }
-
-            return .{
-                .alloc = self.alloc,
-                .width = @intCast(width),
-                .height = @intCast(height),
-                .buf = buf,
-            };
+            self.height = @intCast(height);
+            self.width = @intCast(width);
+            if (self.alloc.resize(self.buf, height * width)) {
+                self.buf = self.buf.ptr[0 .. height * width];
+            }
         }
 
         /// Composites the source surface onto this surface using the
