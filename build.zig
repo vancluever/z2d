@@ -115,10 +115,16 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Unit tests
     /////////////////////////////////////////////////////////////////////////
+    const test_filters = b.option(
+        [][]const u8,
+        "filter",
+        "Test filter for \"test\" or \"spec\" target (repeat for multiple filters)",
+    ) orelse &[0][]const u8{};
     const test_run = b.addRunArtifact(b.addTest(.{
         .root_source_file = b.path("src/z2d.zig"),
         .target = target,
         .optimize = .Debug,
+        .filters = test_filters,
     }));
     b.step("test", "Run unit tests").dependOn(&test_run.step);
 
@@ -135,16 +141,21 @@ pub fn build(b: *std.Build) void {
         "Update spec (E2E) tests (needs to be run with the \"spec\" target)",
     );
     const spec_test = spec: {
-        const opts = .{
-            .name = "spec",
-            .root_source_file = b.path("spec/main.zig"),
-            .target = target,
-            .optimize = .Debug,
-        };
         if (spec_update orelse false)
-            break :spec b.addExecutable(opts)
+            break :spec b.addExecutable(.{
+                .name = "spec",
+                .root_source_file = b.path("spec/main.zig"),
+                .target = target,
+                .optimize = .Debug,
+            })
         else
-            break :spec b.addTest(opts);
+            break :spec b.addTest(.{
+                .name = "spec",
+                .root_source_file = b.path("spec/main.zig"),
+                .target = target,
+                .optimize = .Debug,
+                .filters = test_filters,
+            });
     };
     spec_test.root_module.addImport("z2d", z2d);
     const spec_run = b.addRunArtifact(spec_test);
