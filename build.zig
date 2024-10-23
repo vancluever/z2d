@@ -115,6 +115,7 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Unit tests
     /////////////////////////////////////////////////////////////////////////
+    const optimize = b.standardOptimizeOption(.{});
     const test_filters = b.option(
         [][]const u8,
         "filter",
@@ -123,7 +124,7 @@ pub fn build(b: *std.Build) void {
     const test_run = b.addRunArtifact(b.addTest(.{
         .root_source_file = b.path("src/z2d.zig"),
         .target = target,
-        .optimize = .Debug,
+        .optimize = optimize,
         .filters = test_filters,
     }));
     b.step("test", "Run unit tests").dependOn(&test_run.step);
@@ -146,14 +147,14 @@ pub fn build(b: *std.Build) void {
                 .name = "spec",
                 .root_source_file = b.path("spec/main.zig"),
                 .target = target,
-                .optimize = .Debug,
+                .optimize = optimize,
             })
         else
             break :spec b.addTest(.{
                 .name = "spec",
                 .root_source_file = b.path("spec/main.zig"),
                 .target = target,
-                .optimize = .Debug,
+                .optimize = optimize,
                 .filters = test_filters,
             });
     };
