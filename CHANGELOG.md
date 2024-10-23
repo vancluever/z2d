@@ -54,9 +54,10 @@ IMPROVEMENTS:
 
 * internal: memory optimizations for the painter (mostly AA).
    - [#50](https://github.com/vancluever/z2d/pull/50)
-   - Depending on the pixel source being used, this PR results in between 12%-55%
-     less RAM used by AA rasterization, based on the lack of extra allocations
-     alone!
+   - Depending on the pixel source being used, this PR results in between 11%-55%
+     less RAM used by AA rasterization based on the lack of extra allocations.
+     Note that this is a theoretical estimate. YMMV, see the PR for more
+     details and benchmarks.
 
 BUG FIXES:
 
