@@ -77,13 +77,16 @@ pub const RGB = packed struct(u32) {
         return switch (p) {
             .rgb => |q| q,
             .rgba => |q| .{
+                // Fully opaque since we drop alpha channel
                 .r = q.r,
                 .g = q.g,
                 .b = q.b,
-                .a = 255,
             },
             .alpha8 => .{
-                .a = 255,
+                // No color channel data, opaque black
+                .r = 0,
+                .g = 0,
+                .b = 0,
             },
         };
     }
@@ -221,17 +224,19 @@ pub const RGBA = packed struct(u32) {
     pub fn copySrc(p: Pixel) RGBA {
         return switch (p) {
             .rgb => |q| .{
+                // Special case: we assume that RGB pixels are always opaque
                 .r = q.r,
                 .g = q.g,
                 .b = q.b,
                 .a = 255,
             },
             .rgba => |q| q,
-            .alpha8 => .{
+            .alpha8 => |q| .{
+                // No color channel data, so opaque black
                 .r = 0,
                 .g = 0,
                 .b = 0,
-                .a = 255,
+                .a = q.a,
             },
         };
     }
@@ -383,6 +388,7 @@ pub const Alpha8 = packed struct(u8) {
     pub fn copySrc(p: Pixel) Alpha8 {
         return switch (p) {
             .rgb => .{
+                // Special case: we assume that RGB pixels are always opaque
                 .a = 255,
             },
             .rgba => |q| .{
@@ -561,5 +567,49 @@ test "RGBA, fromClamped" {
     try testing.expectEqual(
         RGBA{ .r = 127, .g = 127, .b = 127, .a = 127 },
         RGBA.fromClamped(2, 2, 2, 0.5),
+    );
+}
+
+test "copySrc" {
+    // RGB
+    try testing.expectEqual(
+        RGB{ .r = 11, .g = 22, .b = 33 },
+        RGB.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+    );
+    try testing.expectEqual(
+        RGB{ .r = 11, .g = 22, .b = 33 },
+        RGB.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+    );
+    try testing.expectEqual(
+        RGB{ .r = 0, .g = 0, .b = 0 },
+        RGB.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+    );
+
+    // RGBA
+    try testing.expectEqual(
+        RGBA{ .r = 11, .g = 22, .b = 33, .a = 255 },
+        RGBA.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 11, .g = 22, .b = 33, .a = 128 },
+        RGBA.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+    );
+    try testing.expectEqual(
+        RGBA{ .r = 0, .g = 0, .b = 0, .a = 128 },
+        RGBA.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+    );
+
+    // Alpha8
+    try testing.expectEqual(
+        Alpha8{ .a = 255 },
+        Alpha8.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+    );
+    try testing.expectEqual(
+        Alpha8{ .a = 128 },
+        Alpha8.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+    );
+    try testing.expectEqual(
+        Alpha8{ .a = 128 },
+        Alpha8.copySrc(.{ .alpha8 = .{ .a = 128 } }),
     );
 }

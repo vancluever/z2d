@@ -45,12 +45,58 @@ pub fn append(self: *PolygonList, poly: Polygon) !void {
     }
 }
 
+pub const EdgeListIterator = struct {
+    index: usize = 0,
+    edges: []Polygon.Edge,
+    fill_rule: FillRule,
+
+    pub const EdgePair = struct {
+        start: i32,
+        end: i32,
+    };
+
+    pub fn next(it: *EdgeListIterator) ?EdgePair {
+        debug.assert(it.index <= it.edges.len);
+        if (it.edges.len == 0 or it.index >= it.edges.len - 1) return null;
+        if (it.fill_rule == .even_odd) {
+            const start = it.edges[it.index].x;
+            const end = it.edges[it.index + 1].x;
+            it.index += 2;
+            return .{
+                .start = start,
+                .end = end,
+            };
+        } else {
+            var winding_number: i32 = 0;
+            var start: i32 = undefined;
+            while (it.index < it.edges.len) : (it.index += 1) {
+                if (winding_number == 0) {
+                    start = it.edges[it.index].x;
+                }
+                winding_number += @intCast(it.edges[it.index].dir);
+                if (winding_number == 0) {
+                    const end = it.edges[it.index].x;
+                    it.index += 1;
+                    return .{
+                        .start = start,
+                        .end = end,
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+};
+
+/// WARNING: Caller is expected to free the edges returned here manually
+/// somehow
 pub fn edgesForY(
     self: *const PolygonList,
     alloc: mem.Allocator,
     line_y: f64,
     fill_rule: FillRule,
-) !std.ArrayList(i32) {
+) !EdgeListIterator {
     var edge_list = std.ArrayList(Polygon.Edge).init(alloc);
     defer edge_list.deinit();
 
@@ -62,42 +108,8 @@ pub fn edgesForY(
 
     const edge_list_sorted = try edge_list.toOwnedSlice();
     mem.sort(Polygon.Edge, edge_list_sorted, {}, Polygon.Edge.sort_asc);
-    defer alloc.free(edge_list_sorted);
-
-    // We need to now process our edge list, particularly in the case of
-    // non-zero fill rules.
-    //
-    // TODO: This could probably be optimized by simply returning the edge
-    // list directly and having the filler work off of that, which would
-    // remove the need to O(N) copy the edge X-coordinates for even-odd.
-    // Conversely, orderedRemove in an ArrayList is O(N) and would need to
-    // be run each time an edge needs to be removed during non-zero rule
-    // processing. Currently, at the very least, we pre-allocate capacity
-    // to the incoming sorted edge list.
-    var final_edge_list = try std.ArrayList(i32).initCapacity(alloc, edge_list_sorted.len);
-    errdefer final_edge_list.deinit();
-    var winding_number: i32 = 0;
-    var start: i32 = undefined;
-    if (fill_rule == .even_odd) {
-        // Just copy all of our edges - the outer filler fills by
-        // even-odd rule naively, so this is the correct set for that
-        // method.
-        for (edge_list_sorted) |e| {
-            try final_edge_list.append(e.x);
-        }
-    } else {
-        // Go through our edges and filter based on the winding number.
-        for (edge_list_sorted) |e| {
-            if (winding_number == 0) {
-                start = e.x;
-            }
-            winding_number += @intCast(e.dir);
-            if (winding_number == 0) {
-                try final_edge_list.append(start);
-                try final_edge_list.append(e.x);
-            }
-        }
-    }
-
-    return final_edge_list;
+    return .{
+        .edges = edge_list_sorted,
+        .fill_rule = fill_rule,
+    };
 }

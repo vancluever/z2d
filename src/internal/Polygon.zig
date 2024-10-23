@@ -106,8 +106,18 @@ fn concatByCopying(list1: *CornerList, list2: *const CornerList) void {
 }
 
 /// Represents an edge on a polygon for a particular y-scanline.
-pub const Edge = struct {
-    x: i32,
+pub const Edge = packed struct {
+    // The size of our x-edge.
+    //
+    // TODO: This ultimately places a limit on our edge size to i30 currently
+    // (approx. +/- 536870912). This is set up to ensure this struct fits in a
+    // u32 as this our edges are stored in a very small buffer.
+    //
+    // Note that our internal numerics are not 100% yet decided on, so this
+    // limit may change (and will likely decrease versus increase).
+    pub const X = i30;
+
+    x: X,
     dir: i2,
 
     pub fn sort_asc(_: void, a: Edge, b: Edge) bool {
@@ -154,7 +164,7 @@ pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.A
                     (line_y_middle - cur_y) / (last_y - cur_y) * (last_x - cur_x) + cur_x,
                 );
                 break :edge .{
-                    .x = math.clamp(@as(i32, @intFromFloat(edge_x)), 0, math.maxInt(i32)),
+                    .x = math.clamp(@as(Edge.X, @intFromFloat(edge_x)), 0, math.maxInt(Edge.X)),
                     // Apply the edge direction to the winding number.
                     // Down-up is +1, up-down is -1.
                     .dir = if (cur_y > last_y)

@@ -8,13 +8,22 @@ const Context = @This();
 const mem = @import("std").mem;
 
 const options = @import("options.zig");
+const paintpkg = @import("internal/Painter.zig");
 
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
-const Painter = @import("internal/Painter.zig");
 const Surface = @import("surface.zig").Surface;
 const Transformation = @import("Transformation.zig");
 const PathError = @import("errors.zig").PathError;
+
+/// The default value to use for the edge cache during rasterization, in number
+/// of edges that can be stored per scanline.
+///
+/// Note that this cannot be modified in the context. If you require a
+/// different value, either due to OOM issues due to a large number of edges,
+/// or if you want a smaller buffer, see internal/Painter.zig. Note that this
+/// API is currently unstable.
+comptime default_edge_cache_size: usize = 1024,
 
 /// The underlying surface.
 surface: Surface,
@@ -91,9 +100,7 @@ transformation: Transformation = Transformation.identity,
 ///
 /// This is a no-op if there are no nodes.
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    if (path.nodes.items.len == 0) return;
-    if (!path.isClosed()) return PathError.PathNotClosed;
-    try (Painter{ .context = self }).fill(alloc, path.nodes);
+    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).fill(alloc, path.nodes);
 }
 
 /// Strokes a line for the path(s) in the supplied set.
@@ -108,6 +115,5 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    if (path.nodes.items.len == 0) return;
-    try (Painter{ .context = self }).stroke(alloc, path.nodes);
+    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).stroke(alloc, path.nodes);
 }

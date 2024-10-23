@@ -56,6 +56,8 @@ const _042_arc_ellipses = @import("042_arc_ellipses.zig");
 const _043_rect_transforms = @import("043_rect_transforms.zig");
 const _044_line_transforms = @import("044_line_transforms.zig");
 const _045_round_join_transforms = @import("045_round_join_transforms.zig");
+const _046_fill_triangle_alpha = @import("046_fill_triangle_alpha.zig");
+const _047_fill_triangle_alpha_gray = @import("047_fill_triangle_alpha_gray.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -108,6 +110,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _043_rect_transforms);
     try pathExportRun(alloc, _044_line_transforms);
     try pathExportRun(alloc, _045_round_join_transforms);
+    try pathExportRun(alloc, _046_fill_triangle_alpha);
+    try pathExportRun(alloc, _047_fill_triangle_alpha_gray);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -290,6 +294,14 @@ test "044_line_transforms" {
 
 test "045_round_join_transforms" {
     try pathTestRun(testing.allocator, _045_round_join_transforms);
+}
+
+test "046_fill_triangle_alpha" {
+    try pathTestRun(testing.allocator, _046_fill_triangle_alpha);
+}
+
+test "047_fill_triangle_alpha_gray" {
+    try pathTestRun(testing.allocator, _047_fill_triangle_alpha_gray);
 }
 
 //////////////////////////////////////////////////////////////////////////////
