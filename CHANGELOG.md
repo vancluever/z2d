@@ -1,3 +1,7 @@
+## 0.3.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.3.0 (October 25, 2024)
 
 TRANSFORMATION SUPPORT
