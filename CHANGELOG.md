@@ -1,4 +1,4 @@
-## 0.3.0 (Unreleased)
+## 0.3.0 (October 25, 2024)
 
 TRANSFORMATION SUPPORT
 
