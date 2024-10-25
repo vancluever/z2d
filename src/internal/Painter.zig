@@ -167,8 +167,8 @@ pub fn Painter(comptime edge_cache_size: usize) type {
                     var x = start_x;
                     while (x <= end_x) : (x += 1) {
                         const src = try self.context.pattern.getPixel(x, y);
-                        const dst = try self.context.surface.getPixel(x, y);
-                        try self.context.surface.putPixel(x, y, dst.srcOver(src));
+                        const dst = self.context.surface.getPixel(x, y) orelse unreachable;
+                        self.context.surface.putPixel(x, y, dst.srcOver(src));
                     }
                 }
             }
@@ -195,7 +195,7 @@ pub fn Painter(comptime edge_cache_size: usize) type {
             const x1: i32 = @intFromFloat(@floor(polygons.end.x / scale) + 1);
             const y1: i32 = @intFromFloat(@floor(polygons.end.y / scale) + 1);
 
-            const mask_sfc = sfc_m: {
+            var mask_sfc = sfc_m: {
                 // We calculate a scaled up version of the
                 // extents for our supersampled drawing.
                 const box_x0: i32 = x0 * i_scale;
@@ -207,13 +207,13 @@ pub fn Painter(comptime edge_cache_size: usize) type {
                 const offset_x: i32 = box_x0;
                 const offset_y: i32 = box_y0;
 
-                const scaled_sfc = try Surface.init(
+                var scaled_sfc = try Surface.init(
                     .image_surface_alpha8,
                     alloc,
                     mask_width,
                     mask_height,
                 );
-                errdefer scaled_sfc.deinit();
+                errdefer scaled_sfc.deinit(alloc);
 
                 const poly_y0: i32 = box_y0;
                 const poly_y1: i32 = box_y1;
@@ -230,7 +230,7 @@ pub fn Painter(comptime edge_cache_size: usize) type {
                         var x = start_x;
                         // We fill up to, but not including, the end point.
                         while (x < end_x) : (x += 1) {
-                            try scaled_sfc.putPixel(
+                            scaled_sfc.putPixel(
                                 @intCast(x - offset_x),
                                 @intCast(y - offset_y),
                                 .{ .alpha8 = .{ .a = 255 } },
@@ -239,17 +239,17 @@ pub fn Painter(comptime edge_cache_size: usize) type {
                     }
                 }
 
-                scaled_sfc.downsample();
+                scaled_sfc.downsample(alloc);
                 break :sfc_m scaled_sfc;
             };
-            defer mask_sfc.deinit();
+            defer mask_sfc.deinit(alloc);
 
             // Surface.deinit is not currently idempotent. Given that this is the only
             // place where we might double-call deinit at this point, we can just track
             // whether or not we need the extra de-init here, versus update the
             // interface unnecessarily.
             var deinit_fg = false;
-            const foreground_sfc = sfc_f: {
+            var foreground_sfc = sfc_f: {
                 switch (self.context.pattern) {
                     // This is the surface that we composite our mask on to get the
                     // final image that in turn gets composited to the main surface. To
@@ -280,27 +280,27 @@ pub fn Painter(comptime edge_cache_size: usize) type {
                             break :sfc_f mask_sfc;
                         }
 
-                        const fg_sfc = try Surface.initPixel(
+                        var fg_sfc = try Surface.initPixel(
                             RGBA.copySrc(try self.context.pattern.getPixel(0, 0)).asPixel(),
                             alloc,
                             mask_sfc.getWidth(),
                             mask_sfc.getHeight(),
                         );
-                        errdefer fg_sfc.deinit();
+                        errdefer fg_sfc.deinit(alloc);
 
                         // Image fully rendered here
-                        try fg_sfc.dstIn(mask_sfc, 0, 0);
+                        fg_sfc.dstIn(&mask_sfc, 0, 0);
                         deinit_fg = true; // Mark foreground for deinit when done
                         break :sfc_f fg_sfc;
                     },
                 }
             };
             defer {
-                if (deinit_fg) foreground_sfc.deinit();
+                if (deinit_fg) foreground_sfc.deinit(alloc);
             }
 
             // Final compositing to main surface
-            try self.context.surface.srcOver(foreground_sfc, x0, y0);
+            self.context.surface.srcOver(&foreground_sfc, x0, y0);
         }
     };
 }

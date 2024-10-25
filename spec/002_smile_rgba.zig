@@ -34,13 +34,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         }
 
         const px: z2d.Pixel = if (c == '0') foregrounds[0] else backgrounds[0];
-        sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at image 1, pixel (x, y): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
-            );
-            return err;
-        };
+        sfc.putPixel(x, y, px);
         x += 1;
     }
 
@@ -56,13 +50,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         }
 
         const px: z2d.Pixel = if (c == '0') foregrounds[1] else backgrounds[1];
-        sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at image 2, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
-            );
-            return err;
-        };
+        sfc.putPixel(x, y, px);
         x += 1;
     }
 
@@ -78,13 +66,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         }
 
         const px: z2d.Pixel = if (c == '0') foregrounds[2] else backgrounds[2];
-        sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at image 3, pixel (x, y), (h, w): ({}, {}), ({}, {})\n",
-                .{ x, y, h, w },
-            );
-            return err;
-        };
+        sfc.putPixel(x, y, px);
         x += 1;
     }
 

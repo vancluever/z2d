@@ -35,11 +35,13 @@ pub const SurfaceType = enum {
     }
 };
 
-/// Represents an interface as a union of the pixel formats.
+/// Represents an interface as a union of the pixel formats. Any methods that
+/// require an allocator must use the same allocator for the life of the
+/// surface.
 pub const Surface = union(SurfaceType) {
-    image_surface_rgb: *ImageSurface(pixel.RGB),
-    image_surface_rgba: *ImageSurface(pixel.RGBA),
-    image_surface_alpha8: *ImageSurface(pixel.Alpha8),
+    image_surface_rgb: ImageSurface(pixel.RGB),
+    image_surface_rgba: ImageSurface(pixel.RGBA),
+    image_surface_alpha8: ImageSurface(pixel.Alpha8),
 
     /// Initializes a surface of the specific type. The surface buffer is
     /// initialized with the zero value for the pixel type (typically black or
@@ -55,10 +57,12 @@ pub const Surface = union(SurfaceType) {
         switch (surface_type) {
             inline else => |t| {
                 const pt = try t.toPixelType();
-                const sfc = try alloc.create(ImageSurface(pt));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(pt).init(alloc, width, height, null);
-                return sfc.asSurfaceInterface();
+                return (try ImageSurface(pt).init(
+                    alloc,
+                    width,
+                    height,
+                    null,
+                )).asSurfaceInterface();
             },
         }
     }
@@ -75,27 +79,22 @@ pub const Surface = union(SurfaceType) {
     ) !Surface {
         switch (initial_px) {
             inline else => |px| {
-                const sfc = try alloc.create(ImageSurface(@TypeOf(px)));
-                errdefer alloc.destroy(sfc);
-                sfc.* = try ImageSurface(@TypeOf(px)).init(alloc, width, height, px);
-                return sfc.asSurfaceInterface();
+                return (try ImageSurface(@TypeOf(px)).init(
+                    alloc,
+                    width,
+                    height,
+                    px,
+                )).asSurfaceInterface();
             },
         }
     }
 
     /// Releases the underlying surface memory. The surface is invalid to use
     /// after calling this.
-    pub fn deinit(self: Surface) void {
-        // NOTE: We use the allocator bound to the surface to free the surface
-        // instance itself (not just the buffer) ONLY in the interface. This
-        // ensures the generic type value does not get invalidated by a deinit
-        // when used outside of the interface (likely, we would only be doing
-        // this internally, but I think it's important to make the
-        // distinction).
-        switch (self) {
-            inline else => |s| {
-                s.deinit();
-                s.alloc.destroy(s);
+    pub fn deinit(self: *Surface, alloc: mem.Allocator) void {
+        switch (self.*) {
+            inline else => |*s| {
+                s.deinit(alloc);
             },
         }
     }
@@ -104,27 +103,37 @@ pub const Surface = union(SurfaceType) {
     ///
     /// The surface is downsampled in-place. After downsampling, dimensions are
     /// altered and memory is freed.
-    pub fn downsample(self: Surface) void {
-        switch (self) {
-            inline else => |s| s.downsample(),
+    pub fn downsample(self: *Surface, alloc: mem.Allocator) void {
+        switch (self.*) {
+            inline else => |*s| s.downsample(alloc),
+        }
+    }
+
+    /// Downsamples the image buffer, using simple pixel averaging.
+    ///
+    /// The surface is downsampled in-place. After downsampling, dimensions are
+    /// altered. Memory must be freed from the underlying buffer manually if desired.
+    pub fn downsampleBuffer(self: *Surface) void {
+        switch (self.*) {
+            inline else => |*s| s.downsampleBuffer(),
         }
     }
 
     /// Composites the source surface onto this surface using the Porter-Duff
     /// src-over operation at the destination. Any parts of the source outside
     /// of the destination are ignored.
-    pub fn srcOver(dst: Surface, src: Surface, dst_x: i32, dst_y: i32) !void {
-        return switch (dst) {
-            inline else => |s| s.srcOver(src, dst_x, dst_y),
+    pub fn srcOver(dst: *Surface, src: *const Surface, dst_x: i32, dst_y: i32) void {
+        return switch (dst.*) {
+            inline else => |*s| s.srcOver(src, dst_x, dst_y),
         };
     }
 
     /// Composites the source surface onto this surface using the Porter-Duff
     /// dst-in operation at the destination. Any parts of the source outside
     /// of the destination are ignored.
-    pub fn dstIn(dst: Surface, src: Surface, dst_x: i32, dst_y: i32) !void {
-        return switch (dst) {
-            inline else => |s| s.dstIn(src, dst_x, dst_y),
+    pub fn dstIn(dst: *Surface, src: *const Surface, dst_x: i32, dst_y: i32) void {
+        return switch (dst.*) {
+            inline else => |*s| s.dstIn(src, dst_x, dst_y),
         };
     }
 
@@ -145,85 +154,41 @@ pub const Surface = union(SurfaceType) {
     /// Gets the pixel format of the surface.
     pub fn getFormat(self: Surface) pixel.Format {
         return switch (self) {
-            inline else => |s| @TypeOf(s.*).format,
+            inline else => |s| @TypeOf(s).format,
         };
     }
 
-    /// Gets the pixel data at the co-ordinates specified.
-    pub fn getPixel(self: Surface, x: i32, y: i32) !pixel.Pixel {
+    /// Gets the pixel data at the co-ordinates specified. Returns null if
+    /// co-ordinates are out of range.
+    pub fn getPixel(self: Surface, x: i32, y: i32) ?pixel.Pixel {
         return switch (self) {
             inline else => |s| s.getPixel(x, y),
         };
     }
 
-    /// Puts a single pixel at the x and y co-ordinates.
-    pub fn putPixel(self: Surface, x: i32, y: i32, px: pixel.Pixel) !void {
-        return switch (self) {
-            inline else => |s| s.putPixel(x, y, px),
+    /// Puts a single pixel at the x and y co-ordinates. This is a no-op if the
+    /// co-ordinates are out of range.
+    pub fn putPixel(self: *Surface, x: i32, y: i32, px: pixel.Pixel) void {
+        return switch (self.*) {
+            inline else => |*s| s.putPixel(x, y, px),
         };
     }
 
     /// Replaces the surface with the supplied pixel.
-    pub fn paintPixel(self: Surface, px: pixel.Pixel) !void {
-        return switch (self) {
-            inline else => |s| s.paintPixel(px),
+    pub fn paintPixel(self: *Surface, px: pixel.Pixel) void {
+        return switch (self.*) {
+            inline else => |*s| s.paintPixel(px),
         };
     }
 };
 
-test "Surface interface" {
-    {
-        // RGB
-        const sfc_if = try Surface.init(.image_surface_rgb, testing.allocator, 20, 10);
-        defer sfc_if.deinit();
-
-        // getters
-        try testing.expectEqual(20, sfc_if.getWidth());
-        try testing.expectEqual(10, sfc_if.getHeight());
-        try testing.expectEqual(.rgb, sfc_if.getFormat());
-
-        // putPixel
-        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
-        const pix_rgb = rgb.asPixel();
-        const x: i32 = 7;
-        const y: i32 = 5;
-
-        try sfc_if.putPixel(x, y, pix_rgb);
-
-        // getPixel
-        try testing.expectEqual(pix_rgb, sfc_if.getPixel(x, y));
-    }
-
-    {
-        // RGBA
-        const sfc_if = try Surface.init(.image_surface_rgba, testing.allocator, 20, 10);
-        defer sfc_if.deinit();
-
-        // getters
-        try testing.expectEqual(20, sfc_if.getWidth());
-        try testing.expectEqual(10, sfc_if.getHeight());
-        try testing.expectEqual(.rgba, sfc_if.getFormat());
-
-        // putPixel
-        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
-        const pix_rgba = rgba.asPixel();
-        const x: i32 = 7;
-        const y: i32 = 5;
-
-        try sfc_if.putPixel(x, y, pix_rgba);
-
-        // getPixel
-        try testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
-    }
-}
-
 /// A memory-backed image surface. The pixel format is the type (e.g. RGB or
 /// RGBA). Call init to return an initialized surface.
+///
+/// Any methods that take an allocator must use the same allocator for the
+/// lifetime of the surface.
 pub fn ImageSurface(comptime T: type) type {
     return struct {
-        /// The underlying allocator, only needed for deinit.
-        alloc: mem.Allocator,
-
         /// The width of the surface.
         width: i32,
 
@@ -250,11 +215,26 @@ pub fn ImageSurface(comptime T: type) type {
             width: i32,
             height: i32,
             initial_px_: ?T,
-        ) !ImageSurface(T) {
+        ) (SurfaceError || mem.Allocator.Error)!ImageSurface(T) {
             if (width < 0) return SurfaceError.InvalidWidth;
             if (height < 0) return SurfaceError.InvalidHeight;
 
             const buf = try alloc.alloc(T, @intCast(height * width));
+            return initBuffer(buf, width, height, initial_px_);
+        }
+
+        /// Initializes a surface with externally allocated memory. If you use
+        /// this over init, do not use any method that takes an allocator as it
+        /// will be an illegal operation.
+        pub fn initBuffer(
+            buf: []T,
+            width: i32,
+            height: i32,
+            initial_px_: ?T,
+        ) ImageSurface(T) {
+            if (width < 0) @panic("invalid width");
+            if (height < 0) @panic("invalid height");
+
             if (initial_px_) |initial_px| {
                 @memset(buf, initial_px);
             } else {
@@ -262,7 +242,6 @@ pub fn ImageSurface(comptime T: type) type {
             }
 
             return .{
-                .alloc = alloc,
                 .width = width,
                 .height = height,
                 .buf = buf,
@@ -271,15 +250,23 @@ pub fn ImageSurface(comptime T: type) type {
 
         /// De-allocates the surface buffer. The surface is invalid for use after
         /// this is called.
-        pub fn deinit(self: *ImageSurface(T)) void {
-            self.alloc.free(self.buf);
+        pub fn deinit(self: *ImageSurface(T), alloc: mem.Allocator) void {
+            alloc.free(self.buf);
         }
 
         /// Downsamples the image, using simple pixel averaging.
         ///
         /// The surface is downsampled in-place. After downsampling, dimensions
         /// are altered and memory is freed.
-        pub fn downsample(self: *ImageSurface(T)) void {
+        pub fn downsample(self: *ImageSurface(T), alloc: mem.Allocator) void {
+            self.downsampleBuffer();
+            self.resizeBuffer(alloc);
+        }
+
+        /// Downsamples a buffer in place. The caller is responsible for
+        /// freeing the memory. After the downsample is complete, dimensions
+        /// are updated.
+        pub fn downsampleBuffer(self: *ImageSurface(T)) void {
             const scale = supersample_scale;
             const height: usize = @intCast(@divFloor(self.height, scale));
             const width: usize = @intCast(@divFloor(self.width, scale));
@@ -298,7 +285,15 @@ pub fn ImageSurface(comptime T: type) type {
             }
             self.height = @intCast(height);
             self.width = @intCast(width);
-            if (self.alloc.resize(self.buf, height * width)) {
+        }
+
+        /// Resizes the buffer to the dimensions set within the surface, if
+        /// different.
+        pub fn resizeBuffer(self: *ImageSurface(T), alloc: mem.Allocator) void {
+            const height: usize = @intCast(self.height);
+            const width: usize = @intCast(self.width);
+            if (self.buf.len == height * width) return;
+            if (alloc.resize(self.buf, height * width)) {
                 self.buf = self.buf.ptr[0 .. height * width];
             }
         }
@@ -306,24 +301,34 @@ pub fn ImageSurface(comptime T: type) type {
         /// Composites the source surface onto this surface using the
         /// Porter-Duff src-over operation at the destination. Any parts of the
         /// source outside of the destination are ignored.
-        pub fn srcOver(dst: *ImageSurface(T), src: Surface, dst_x: i32, dst_y: i32) !void {
+        pub fn srcOver(
+            dst: *ImageSurface(T),
+            src: *const Surface,
+            dst_x: i32,
+            dst_y: i32,
+        ) void {
             return dst.composite(src, T.srcOver, dst_x, dst_y);
         }
 
         /// Composites the source surface onto this surface using the
         /// Porter-Duff dst-in operation at the destination. Any parts of the
         /// source outside of the destination are ignored.
-        pub fn dstIn(dst: *ImageSurface(T), src: Surface, dst_x: i32, dst_y: i32) !void {
+        pub fn dstIn(
+            dst: *ImageSurface(T),
+            src: *const Surface,
+            dst_x: i32,
+            dst_y: i32,
+        ) void {
             return dst.composite(src, T.dstIn, dst_x, dst_y);
         }
 
         fn composite(
             dst: *ImageSurface(T),
-            src: Surface,
+            src: *const Surface,
             op: fn (T, pixel.Pixel) T,
             dst_x: i32,
             dst_y: i32,
-        ) !void {
+        ) void {
             if (dst_x >= dst.width or dst_y >= dst.height) return;
 
             const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
@@ -345,15 +350,16 @@ pub fn ImageSurface(comptime T: type) type {
                     const dst_put_x = src_x + dst_x;
                     const dst_put_y = src_y + dst_y;
                     const dst_idx: usize = @intCast(dst.width * dst_put_y + dst_put_x);
-                    const src_px = try src.getPixel(@intCast(src_x), @intCast(src_y));
-                    const dst_px = dst.buf[dst_idx];
-                    dst.buf[dst_idx] = op(dst_px, src_px);
+                    if (src.getPixel(@intCast(src_x), @intCast(src_y))) |src_px| {
+                        const dst_px = dst.buf[dst_idx];
+                        dst.buf[dst_idx] = op(dst_px, src_px);
+                    }
                 }
             }
         }
 
         /// Returns a Surface interface for this surface.
-        pub fn asSurfaceInterface(self: *ImageSurface(T)) Surface {
+        pub fn asSurfaceInterface(self: ImageSurface(T)) Surface {
             return switch (T.format) {
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
@@ -361,34 +367,76 @@ pub fn ImageSurface(comptime T: type) type {
             };
         }
 
-        /// Gets the pixel data at the co-ordinates specified.
-        pub fn getPixel(self: *ImageSurface(T), x: i32, y: i32) !pixel.Pixel {
-            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
-                return SurfaceError.OutOfRange;
-            }
-
+        /// Gets the pixel data at the co-ordinates specified. Returns null if
+        /// the co-ordinates are out of range.
+        pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
             return self.buf[@intCast(self.width * y + x)].asPixel();
         }
 
-        /// Puts a single pixel at the x and y co-ordinates.
-        pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) !void {
-            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
-                return SurfaceError.OutOfRange;
-            }
-            self.buf[@intCast(self.width * y + x)] = try T.fromPixel(px);
+        /// Puts a single pixel at the x and y co-ordinates. No-ops if the pixel is out of range.
+        pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            self.buf[@intCast(self.width * y + x)] = T.copySrc(px);
         }
 
         /// Replaces the surface with the supplied pixel.
-        pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) !void {
-            @memset(self.buf, try T.fromPixel(px));
+        pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) void {
+            @memset(self.buf, T.copySrc(px));
         }
     };
+}
+
+test "Surface interface" {
+    {
+        // RGB
+        var sfc_if = try Surface.init(.image_surface_rgb, testing.allocator, 20, 10);
+        defer sfc_if.deinit(testing.allocator);
+
+        // getters
+        try testing.expectEqual(20, sfc_if.getWidth());
+        try testing.expectEqual(10, sfc_if.getHeight());
+        try testing.expectEqual(.rgb, sfc_if.getFormat());
+
+        // putPixel
+        const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
+        const pix_rgb = rgb.asPixel();
+        const x: i32 = 7;
+        const y: i32 = 5;
+
+        sfc_if.putPixel(x, y, pix_rgb);
+
+        // getPixel
+        try testing.expectEqual(pix_rgb, sfc_if.getPixel(x, y));
+    }
+
+    {
+        // RGBA
+        var sfc_if = try Surface.init(.image_surface_rgba, testing.allocator, 20, 10);
+        defer sfc_if.deinit(testing.allocator);
+
+        // getters
+        try testing.expectEqual(20, sfc_if.getWidth());
+        try testing.expectEqual(10, sfc_if.getHeight());
+        try testing.expectEqual(.rgba, sfc_if.getFormat());
+
+        // putPixel
+        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const pix_rgba = rgba.asPixel();
+        const x: i32 = 7;
+        const y: i32 = 5;
+
+        sfc_if.putPixel(x, y, pix_rgba);
+
+        // getPixel
+        try testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
+    }
 }
 
 test "ImageSurface, init, deinit" {
     const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 10, 20, null);
-    defer sfc.deinit();
+    defer sfc.deinit(testing.allocator);
 
     try testing.expectEqual(20, sfc.height);
     try testing.expectEqual(10, sfc.width);
@@ -404,7 +452,7 @@ test "ImageSurface, init, deinit" {
 test "ImageSurface, getPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
-    defer sfc.deinit();
+    defer sfc.deinit(testing.allocator);
 
     {
         // OK
@@ -417,16 +465,16 @@ test "ImageSurface, getPixel" {
     }
 
     {
-        // Error, out of bounds
-        try testing.expectError(SurfaceError.OutOfRange, sfc.getPixel(20, 9));
-        try testing.expectError(SurfaceError.OutOfRange, sfc.getPixel(19, 10));
+        // Out of bounds
+        try testing.expectEqual(null, sfc.getPixel(20, 9));
+        try testing.expectEqual(null, sfc.getPixel(19, 10));
     }
 }
 
 test "ImageSurface, putPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
-    defer sfc.deinit();
+    defer sfc.deinit(testing.allocator);
 
     const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
     const pix_rgba = rgba.asPixel();
@@ -435,21 +483,29 @@ test "ImageSurface, putPixel" {
         // OK
         const x: i32 = 7;
         const y: i32 = 5;
-        try sfc.putPixel(x, y, pix_rgba);
+        sfc.putPixel(x, y, pix_rgba);
         sfc.buf[y * 20 + x] = rgba;
         try testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
     }
 
     {
         // Error, out of bounds
-        try testing.expectError(SurfaceError.OutOfRange, sfc.putPixel(20, 9, pix_rgba));
-        try testing.expectError(SurfaceError.OutOfRange, sfc.putPixel(19, 10, pix_rgba));
+        const orig = try testing.allocator.dupe(pixel.RGBA, sfc.buf);
+        defer testing.allocator.free(orig);
+        sfc.putPixel(20, 9, pix_rgba);
+        try testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
+        sfc.putPixel(19, 10, pix_rgba);
+        try testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
     }
 
     {
-        // Error, incorrect pixel type
+        // Different pixel type (copySrc is used)
         const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
-        try testing.expectError(error.InvalidPixelFormat, sfc.putPixel(1, 1, pix_rgb));
+        sfc.putPixel(1, 1, pix_rgb);
+        try testing.expectEqual(
+            pixel.RGBA{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF },
+            sfc.buf[21],
+        );
     }
 }
