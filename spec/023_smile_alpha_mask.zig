@@ -28,7 +28,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         image.width,
         image.height,
     );
-    defer mask_sfc.deinit();
+    defer mask_sfc.deinit(alloc);
 
     var x: i32 = 0;
     var y: i32 = 0;
@@ -40,13 +40,7 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
         }
 
         const px: z2d.Pixel = if (c == '0') .{ .alpha8 = .{ .a = 255 } } else .{ .alpha8 = .{ .a = 0 } };
-        mask_sfc.putPixel(x, y, px) catch |err| {
-            debug.print(
-                "error at mask image, pixel (x, y): ({}, {}), ({}, {})\n",
-                .{ x, y, image.width, image.height },
-            );
-            return err;
-        };
+        mask_sfc.putPixel(x, y, px);
         x += 1;
     }
 
@@ -63,41 +57,41 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     // you are probably better off just writing directly.
 
     // Create a working surface and paint it with the background color
-    const background_sfc = try z2d.Surface.initPixel(backgrounds[0], alloc, image.width, image.height);
-    defer background_sfc.deinit();
+    var background_sfc = try z2d.Surface.initPixel(backgrounds[0], alloc, image.width, image.height);
+    defer background_sfc.deinit(alloc);
     // Make our foreground surface
-    const foreground_sfc = try z2d.Surface.initPixel(foregrounds[0], alloc, image.width, image.height);
-    defer foreground_sfc.deinit();
+    var foreground_sfc = try z2d.Surface.initPixel(foregrounds[0], alloc, image.width, image.height);
+    defer foreground_sfc.deinit(alloc);
     // Apply mask to foreground
-    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    foreground_sfc.dstIn(&mask_sfc, 0, 0);
     // Apply foreground to background
-    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    background_sfc.srcOver(&foreground_sfc, 0, 0);
     // Composite our working surface at our first offset co-ordinates
-    try result_sfc.srcOver(background_sfc, 12, 13);
+    result_sfc.srcOver(&background_sfc, 12, 13);
 
     // 2nd smile
     //
     // Re-paint with the second background color.
-    try background_sfc.paintPixel(backgrounds[1]);
+    background_sfc.paintPixel(backgrounds[1]);
     // Re-paint foreground and apply mask
-    try foreground_sfc.paintPixel(foregrounds[1]);
-    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    foreground_sfc.paintPixel(foregrounds[1]);
+    foreground_sfc.dstIn(&mask_sfc, 0, 0);
     // Apply foreground to background
-    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    background_sfc.srcOver(&foreground_sfc, 0, 0);
     // Composite our working surface at our second offset co-ordinates
-    try result_sfc.srcOver(background_sfc, w / 2 - 7, 13);
+    result_sfc.srcOver(&background_sfc, w / 2 - 7, 13);
 
     // 3rd smile
     //
     // Re-paint with the third background color.
-    try background_sfc.paintPixel(backgrounds[2]);
+    background_sfc.paintPixel(backgrounds[2]);
     // Re-paint foreground and apply mask
-    try foreground_sfc.paintPixel(foregrounds[2]);
-    try foreground_sfc.dstIn(mask_sfc, 0, 0);
+    foreground_sfc.paintPixel(foregrounds[2]);
+    foreground_sfc.dstIn(&mask_sfc, 0, 0);
     // Apply foreground to background
-    try background_sfc.srcOver(foreground_sfc, 0, 0);
+    background_sfc.srcOver(&foreground_sfc, 0, 0);
     // Composite our working surface at our second offset co-ordinates
-    try result_sfc.srcOver(background_sfc, w / 4 + 2, h / 2 - 7);
+    result_sfc.srcOver(&background_sfc, w / 4 + 2, h / 2 - 7);
 
     // done!
 

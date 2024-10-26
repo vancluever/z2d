@@ -358,7 +358,7 @@ fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
     defer alloc.free(filename);
 
     var surface = try subject.render(alloc);
-    defer surface.deinit();
+    defer surface.deinit(alloc);
 
     var exported_file = try testExportPNG(alloc, surface, filename);
     defer exported_file.cleanup();
@@ -381,9 +381,9 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
     defer alloc.free(filename_smooth);
 
     var surface_pixelated = try subject.render(alloc, .none);
-    defer surface_pixelated.deinit();
+    defer surface_pixelated.deinit(alloc);
     var surface_smooth = try subject.render(alloc, .default);
-    defer surface_smooth.deinit();
+    defer surface_smooth.deinit(alloc);
 
     var exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
     defer exported_file_pixelated.cleanup();
