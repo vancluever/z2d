@@ -26,8 +26,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
     const margin = 20;
     const sub_canvas_width = 300;
@@ -35,34 +35,34 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const y_scale = 5;
     // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
     // then evens (4, 2), with the close connecting 4 and 1.
-    try path.moveTo(sub_canvas_width / 2, 0 + margin); // 1
-    try path.lineTo(sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
-    try path.lineTo(0 + margin, 0 + margin * y_scale); // 5
-    try path.lineTo(sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
-    try path.lineTo(0 + margin * x_scale, height - margin - 1); // 4
-    try path.close();
+    try path.moveTo(alloc, sub_canvas_width / 2, 0 + margin); // 1
+    try path.lineTo(alloc, sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
+    try path.lineTo(alloc, 0 + margin, 0 + margin * y_scale); // 5
+    try path.lineTo(alloc, sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
+    try path.lineTo(alloc, 0 + margin * x_scale, height - margin - 1); // 4
+    try path.close(alloc);
     try context.stroke(alloc, path);
 
     path.reset();
     context.tolerance = 3;
     var x_offset: f64 = 300;
-    try path.moveTo(x_offset + sub_canvas_width / 2, 0 + margin); // 1
-    try path.lineTo(x_offset + sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
-    try path.lineTo(x_offset + 0 + margin, 0 + margin * y_scale); // 5
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
-    try path.lineTo(x_offset + 0 + margin * x_scale, height - margin - 1); // 4
-    try path.close();
+    try path.moveTo(alloc, x_offset + sub_canvas_width / 2, 0 + margin); // 1
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
+    try path.lineTo(alloc, x_offset + 0 + margin, 0 + margin * y_scale); // 5
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
+    try path.lineTo(alloc, x_offset + 0 + margin * x_scale, height - margin - 1); // 4
+    try path.close(alloc);
     try context.stroke(alloc, path);
 
     path.reset();
     context.tolerance = 10;
     x_offset = 600;
-    try path.moveTo(x_offset + sub_canvas_width / 2, 0 + margin); // 1
-    try path.lineTo(x_offset + sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
-    try path.lineTo(x_offset + 0 + margin, 0 + margin * y_scale); // 5
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
-    try path.lineTo(x_offset + 0 + margin * x_scale, height - margin - 1); // 4
-    try path.close();
+    try path.moveTo(alloc, x_offset + sub_canvas_width / 2, 0 + margin); // 1
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
+    try path.lineTo(alloc, x_offset + 0 + margin, 0 + margin * y_scale); // 5
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
+    try path.lineTo(alloc, x_offset + 0 + margin * x_scale, height - margin - 1); // 4
+    try path.close(alloc);
     try context.stroke(alloc, path);
 
     return sfc;

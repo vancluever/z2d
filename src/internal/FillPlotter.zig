@@ -18,7 +18,7 @@ const InternalError = @import("../errors.zig").InternalError;
 
 pub fn plot(
     alloc: mem.Allocator,
-    nodes: std.ArrayList(nodepkg.PathNode),
+    nodes: []const nodepkg.PathNode,
     scale: f64,
     tolerance: f64,
 ) !PolygonList {
@@ -29,7 +29,7 @@ pub fn plot(
     var current_point: ?Point = null;
     var current_polygon: ?Polygon = null;
 
-    for (nodes.items, 0..) |node, i| {
+    for (nodes, 0..) |node, i| {
         switch (node) {
             .move_to => |n| {
                 if (current_polygon) |poly| {
@@ -46,7 +46,7 @@ pub fn plot(
                 // Check if this is the last node, and no-op if it is, as this
                 // is the auto-added move_to node that is given after
                 // close_path.
-                if (i == nodes.items.len - 1) {
+                if (i == nodes.len - 1) {
                     break;
                 }
 
@@ -129,7 +129,7 @@ test "degenerate line_to" {
     try nodes.append(.{ .close_path = .{} });
     try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
 
-    var result = try plot(alloc, nodes, 1, 0.1);
+    var result = try plot(alloc, nodes.items, 1, 0.1);
     defer result.deinit();
     try testing.expectEqual(1, result.polygons.items.len);
     var corners_len: usize = 0;

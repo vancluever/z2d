@@ -35,24 +35,24 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
-    try path.moveTo(20, 130);
-    try path.curveTo(20, 130, 20, 20, 130, 20);
-    try path.close();
+    try path.moveTo(alloc, 20, 130);
+    try path.curveTo(alloc, 20, 130, 20, 20, 130, 20);
+    try path.close(alloc);
 
-    try path.moveTo(170, 20);
-    try path.curveTo(280, 20, 280, 20, 280, 130);
-    try path.close();
+    try path.moveTo(alloc, 170, 20);
+    try path.curveTo(alloc, 280, 20, 280, 20, 280, 130);
+    try path.close(alloc);
 
-    try path.moveTo(280, 170);
-    try path.curveTo(280, 280, 170, 280, 170, 280);
-    try path.close();
+    try path.moveTo(alloc, 280, 170);
+    try path.curveTo(alloc, 280, 280, 170, 280, 170, 280);
+    try path.close(alloc);
 
-    try path.moveTo(130, 280);
-    try path.curveTo(20, 280, 20, 280, 20, 170);
-    try path.close();
+    try path.moveTo(alloc, 130, 280);
+    try path.curveTo(alloc, 20, 280, 20, 280, 20, 170);
+    try path.close(alloc);
 
     try context.fill(alloc, path);
 

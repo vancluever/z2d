@@ -54,12 +54,12 @@ fn line(alloc: mem.Allocator, context: *z2d.Context, i: f64) !void {
         .translate(x_offset, y_offset)
         .rotate(math.pi / 6.0 * i)
         .scale(2, 1);
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
     path.transformation = context.transformation;
-    try path.moveTo(0, 0);
-    try path.lineTo(25, 75);
-    try path.lineTo(50, 0);
+    try path.moveTo(alloc, 0, 0);
+    try path.lineTo(alloc, 25, 75);
+    try path.lineTo(alloc, 50, 0);
     context.line_width = lw: {
         var ux = saved_line_width;
         var uy = saved_line_width;

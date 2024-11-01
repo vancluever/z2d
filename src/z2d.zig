@@ -20,6 +20,10 @@
 //! * `Path` - The "path builder" type, used to build a path, or a set of
 //! sub-paths, used for filling or stroking operations.
 //!
+//! * `StaticPath` - An infallible wrapper over the fully unmanaged
+//! representation of a `Path`, allowing for building paths using a static
+//! buffer on the stack (conveniently).
+//!
 //! * `Surface` - The rendering target, backed by pixel buffers of various
 //! formats.
 //!
@@ -59,6 +63,7 @@ pub const errors = @import("errors.zig");
 
 pub const Context = @import("Context.zig");
 pub const Path = @import("Path.zig");
+pub const StaticPath = @import("static_path.zig").StaticPath;
 pub const Pattern = pattern.Pattern;
 pub const Pixel = pixel.Pixel;
 pub const Surface = surface.Surface;
@@ -68,4 +73,5 @@ test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("internal/FillPlotter.zig");
     _ = @import("internal/StrokePlotter.zig");
+    _ = @import("static_path.zig");
 }

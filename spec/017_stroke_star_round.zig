@@ -25,20 +25,20 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
     const margin = 20;
     const x_scale = 3;
     const y_scale = 5;
     // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
     // then evens (4, 2), with the close connecting 4 and 1.
-    try path.moveTo(width / 2, 0 + margin); // 1
-    try path.lineTo(width - margin * x_scale - 1, height - margin - 1); // 3
-    try path.lineTo(0 + margin, 0 + margin * y_scale); // 5
-    try path.lineTo(width - margin - 1, 0 + margin * y_scale); // 2
-    try path.lineTo(0 + margin * x_scale, height - margin - 1); // 4
-    try path.close();
+    try path.moveTo(alloc, width / 2, 0 + margin); // 1
+    try path.lineTo(alloc, width - margin * x_scale - 1, height - margin - 1); // 3
+    try path.lineTo(alloc, 0 + margin, 0 + margin * y_scale); // 5
+    try path.lineTo(alloc, width - margin - 1, 0 + margin * y_scale); // 2
+    try path.lineTo(alloc, 0 + margin * x_scale, height - margin - 1); // 4
+    try path.close(alloc);
 
     try context.stroke(alloc, path);
 

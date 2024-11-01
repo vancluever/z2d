@@ -23,14 +23,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
-    try path.moveTo(width / 2, 0 - height / 10);
-    try path.lineTo(width + width / 10, height / 2);
-    try path.lineTo(width / 2, height + height / 10);
-    try path.lineTo(0 - width / 10, height / 2);
-    try path.close();
+    try path.moveTo(alloc, width / 2, 0 - height / 10);
+    try path.lineTo(alloc, width + width / 10, height / 2);
+    try path.lineTo(alloc, width / 2, height + height / 10);
+    try path.lineTo(alloc, 0 - width / 10, height / 2);
+    try path.close(alloc);
 
     try context.fill(alloc, path);
 
