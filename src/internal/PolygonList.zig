@@ -55,6 +55,11 @@ pub const EdgeListIterator = struct {
         end: i32,
     };
 
+    pub fn deinit(it: *EdgeListIterator, alloc: mem.Allocator) void {
+        alloc.free(it.edges);
+        it.edges = undefined;
+    }
+
     pub fn next(it: *EdgeListIterator) ?EdgePair {
         debug.assert(it.index <= it.edges.len);
         if (it.edges.len == 0 or it.index >= it.edges.len - 1) return null;
