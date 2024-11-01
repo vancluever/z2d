@@ -1,3 +1,7 @@
+## 0.3.2-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.3.1 (November 1, 2024)
 
 BUG FIXES:
