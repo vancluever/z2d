@@ -1,6 +1,10 @@
-## 0.3.1-pre (Unreleased)
+## 0.3.1 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* internal: removed the configurable edge FBA in the painter, in favor of a
+  small static FBA in a `StaticFallbackAllocator`.
+  [#53](https://github.com/vancluever/z2d/pull/53)
 
 ## 0.3.0 (October 25, 2024)
 
