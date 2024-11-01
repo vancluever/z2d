@@ -24,8 +24,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
     // sub-canvas dimensions
     const sub_canvas_width = width / 3;
@@ -33,30 +33,30 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     // Triangle
     comptime var margin = 10;
-    try path.moveTo(0 + margin, 0 + margin);
-    try path.lineTo(sub_canvas_width - margin - 1, 0 + margin);
-    try path.lineTo(sub_canvas_width / 2 - 1, sub_canvas_height - margin - 1);
-    try path.close();
+    try path.moveTo(alloc, 0 + margin, 0 + margin);
+    try path.lineTo(alloc, sub_canvas_width - margin - 1, 0 + margin);
+    try path.lineTo(alloc, sub_canvas_width / 2 - 1, sub_canvas_height - margin - 1);
+    try path.close(alloc);
 
     // Square
     margin = 50;
     comptime var x_offset = sub_canvas_width;
-    try path.moveTo(x_offset + margin, 0 + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + margin, sub_canvas_height - margin - 1);
-    try path.close();
+    try path.moveTo(alloc, x_offset + margin, 0 + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, 0 + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + margin, sub_canvas_height - margin - 1);
+    try path.close(alloc);
 
     // Trapezoid
     const trapezoid_margin_top = 59;
     const trapezoid_margin_bottom = 33;
     const trapezoid_margin_y = 66;
     x_offset = sub_canvas_width * 2;
-    try path.moveTo(x_offset + trapezoid_margin_top, 0 + trapezoid_margin_y);
-    try path.lineTo(x_offset + sub_canvas_width - trapezoid_margin_top - 1, 0 + trapezoid_margin_y);
-    try path.lineTo(x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, sub_canvas_height - trapezoid_margin_y - 1);
-    try path.lineTo(x_offset + trapezoid_margin_bottom, sub_canvas_height - trapezoid_margin_y - 1);
-    try path.close();
+    try path.moveTo(alloc, x_offset + trapezoid_margin_top, 0 + trapezoid_margin_y);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - trapezoid_margin_top - 1, 0 + trapezoid_margin_y);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, sub_canvas_height - trapezoid_margin_y - 1);
+    try path.lineTo(alloc, x_offset + trapezoid_margin_bottom, sub_canvas_height - trapezoid_margin_y - 1);
+    try path.close(alloc);
 
     // Star
     margin = 13;
@@ -66,18 +66,18 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const y_offset = sub_canvas_height;
     // With all 5 points numbered 1-5 clockwise, we draw odds first (1, 3, 5),
     // then evens (4, 2), with the close connecting 4 and 1.
-    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin); // 1
-    try path.lineTo(x_offset + sub_canvas_width - margin * x_scale - 1, y_offset + sub_canvas_height - margin - 1); // 3
-    try path.lineTo(x_offset + margin, y_offset + margin * y_scale); // 5
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin * y_scale); // 2
-    try path.lineTo(x_offset + margin * x_scale, y_offset + sub_canvas_height - margin - 1); // 4
-    try path.close();
+    try path.moveTo(alloc, x_offset + sub_canvas_width / 2, y_offset + margin); // 1
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin * x_scale - 1, y_offset + sub_canvas_height - margin - 1); // 3
+    try path.lineTo(alloc, x_offset + margin, y_offset + margin * y_scale); // 5
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin * y_scale); // 2
+    try path.lineTo(alloc, x_offset + margin * x_scale, y_offset + sub_canvas_height - margin - 1); // 4
+    try path.close(alloc);
 
     // Bezier
     x_offset += sub_canvas_width;
-    try path.moveTo(x_offset + 12, y_offset + 166);
-    try path.curveTo(x_offset + 59, y_offset + 32, x_offset + 139, y_offset + 32, x_offset + 186, y_offset + 166);
-    try path.close();
+    try path.moveTo(alloc, x_offset + 12, y_offset + 166);
+    try path.curveTo(alloc, x_offset + 59, y_offset + 32, x_offset + 139, y_offset + 32, x_offset + 186, y_offset + 166);
+    try path.close(alloc);
 
     try context.fill(alloc, path);
 

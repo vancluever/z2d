@@ -24,76 +24,76 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
-    try path.moveTo(10, 10);
-    try path.lineTo(100, 20);
-    try path.lineTo(110, 120);
-    try path.lineTo(10, 110);
-    try path.lineTo(20, 30);
-    try path.lineTo(90, 40);
-    try path.lineTo(95, 100);
-    try path.lineTo(30, 95);
-    try path.lineTo(30, 50);
-    try path.lineTo(80, 50);
-    try path.lineTo(75, 85);
-    try path.lineTo(45, 80);
-    try path.lineTo(50, 60);
-    try path.lineTo(65, 70);
+    try path.moveTo(alloc, 10, 10);
+    try path.lineTo(alloc, 100, 20);
+    try path.lineTo(alloc, 110, 120);
+    try path.lineTo(alloc, 10, 110);
+    try path.lineTo(alloc, 20, 30);
+    try path.lineTo(alloc, 90, 40);
+    try path.lineTo(alloc, 95, 100);
+    try path.lineTo(alloc, 30, 95);
+    try path.lineTo(alloc, 30, 50);
+    try path.lineTo(alloc, 80, 50);
+    try path.lineTo(alloc, 75, 85);
+    try path.lineTo(alloc, 45, 80);
+    try path.lineTo(alloc, 50, 60);
+    try path.lineTo(alloc, 65, 70);
 
     ////////////////////
     const x_offset = 120;
 
-    try path.moveTo(x_offset + 110, 10);
-    try path.lineTo(x_offset + 20, 20);
-    try path.lineTo(x_offset + 10, 120);
-    try path.lineTo(x_offset + 110, 110);
-    try path.lineTo(x_offset + 100, 30);
-    try path.lineTo(x_offset + 30, 40);
-    try path.lineTo(x_offset + 25, 100);
-    try path.lineTo(x_offset + 90, 95);
-    try path.lineTo(x_offset + 90, 50);
-    try path.lineTo(x_offset + 40, 50);
-    try path.lineTo(x_offset + 45, 85);
-    try path.lineTo(x_offset + 75, 80);
-    try path.lineTo(x_offset + 70, 60);
-    try path.lineTo(x_offset + 55, 70);
+    try path.moveTo(alloc, x_offset + 110, 10);
+    try path.lineTo(alloc, x_offset + 20, 20);
+    try path.lineTo(alloc, x_offset + 10, 120);
+    try path.lineTo(alloc, x_offset + 110, 110);
+    try path.lineTo(alloc, x_offset + 100, 30);
+    try path.lineTo(alloc, x_offset + 30, 40);
+    try path.lineTo(alloc, x_offset + 25, 100);
+    try path.lineTo(alloc, x_offset + 90, 95);
+    try path.lineTo(alloc, x_offset + 90, 50);
+    try path.lineTo(alloc, x_offset + 40, 50);
+    try path.lineTo(alloc, x_offset + 45, 85);
+    try path.lineTo(alloc, x_offset + 75, 80);
+    try path.lineTo(alloc, x_offset + 70, 60);
+    try path.lineTo(alloc, x_offset + 55, 70);
 
     ////////////////////
     const y_offset = 130;
 
-    try path.moveTo(10, y_offset + 120);
-    try path.lineTo(100, y_offset + 110);
-    try path.lineTo(110, y_offset + 10);
-    try path.lineTo(10, y_offset + 20);
-    try path.lineTo(20, y_offset + 100);
-    try path.lineTo(90, y_offset + 90);
-    try path.lineTo(95, y_offset + 30);
-    try path.lineTo(30, y_offset + 35);
-    try path.lineTo(30, y_offset + 80);
-    try path.lineTo(80, y_offset + 80);
-    try path.lineTo(75, y_offset + 45);
-    try path.lineTo(45, y_offset + 50);
-    try path.lineTo(50, y_offset + 70);
-    try path.lineTo(65, y_offset + 60);
+    try path.moveTo(alloc, 10, y_offset + 120);
+    try path.lineTo(alloc, 100, y_offset + 110);
+    try path.lineTo(alloc, 110, y_offset + 10);
+    try path.lineTo(alloc, 10, y_offset + 20);
+    try path.lineTo(alloc, 20, y_offset + 100);
+    try path.lineTo(alloc, 90, y_offset + 90);
+    try path.lineTo(alloc, 95, y_offset + 30);
+    try path.lineTo(alloc, 30, y_offset + 35);
+    try path.lineTo(alloc, 30, y_offset + 80);
+    try path.lineTo(alloc, 80, y_offset + 80);
+    try path.lineTo(alloc, 75, y_offset + 45);
+    try path.lineTo(alloc, 45, y_offset + 50);
+    try path.lineTo(alloc, 50, y_offset + 70);
+    try path.lineTo(alloc, 65, y_offset + 60);
 
     ////////////////////
 
-    try path.moveTo(x_offset + 110, y_offset + 120);
-    try path.lineTo(x_offset + 20, y_offset + 110);
-    try path.lineTo(x_offset + 10, y_offset + 10);
-    try path.lineTo(x_offset + 110, y_offset + 20);
-    try path.lineTo(x_offset + 100, y_offset + 100);
-    try path.lineTo(x_offset + 30, y_offset + 90);
-    try path.lineTo(x_offset + 25, y_offset + 30);
-    try path.lineTo(x_offset + 90, y_offset + 35);
-    try path.lineTo(x_offset + 90, y_offset + 80);
-    try path.lineTo(x_offset + 40, y_offset + 80);
-    try path.lineTo(x_offset + 45, y_offset + 45);
-    try path.lineTo(x_offset + 75, y_offset + 50);
-    try path.lineTo(x_offset + 70, y_offset + 70);
-    try path.lineTo(x_offset + 55, y_offset + 60);
+    try path.moveTo(alloc, x_offset + 110, y_offset + 120);
+    try path.lineTo(alloc, x_offset + 20, y_offset + 110);
+    try path.lineTo(alloc, x_offset + 10, y_offset + 10);
+    try path.lineTo(alloc, x_offset + 110, y_offset + 20);
+    try path.lineTo(alloc, x_offset + 100, y_offset + 100);
+    try path.lineTo(alloc, x_offset + 30, y_offset + 90);
+    try path.lineTo(alloc, x_offset + 25, y_offset + 30);
+    try path.lineTo(alloc, x_offset + 90, y_offset + 35);
+    try path.lineTo(alloc, x_offset + 90, y_offset + 80);
+    try path.lineTo(alloc, x_offset + 40, y_offset + 80);
+    try path.lineTo(alloc, x_offset + 45, y_offset + 45);
+    try path.lineTo(alloc, x_offset + 75, y_offset + 50);
+    try path.lineTo(alloc, x_offset + 70, y_offset + 70);
+    try path.lineTo(alloc, x_offset + 55, y_offset + 60);
 
     try context.stroke(alloc, path);
 

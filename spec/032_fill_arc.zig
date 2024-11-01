@@ -24,8 +24,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
     // For approximating a circle w/bezier
     // https://stackoverflow.com/a/27863181
@@ -37,12 +37,12 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         const radius = 50;
         const p12 = radius * ratio;
 
-        try path.moveTo(center_x, center_y - radius);
-        try path.curveTo(center_x + p12, center_y - radius, center_x + radius, center_y - p12, center_x + radius, center_y);
-        try path.curveTo(center_x + radius, center_y + p12, center_x + p12, center_y + radius, center_x, center_y + radius);
-        try path.curveTo(center_x - p12, center_y + radius, center_x - radius, center_y + p12, center_x - radius, center_y);
-        try path.curveTo(center_x - radius, center_y - p12, center_x - p12, center_y - radius, center_x, center_y - radius);
-        try path.close();
+        try path.moveTo(alloc, center_x, center_y - radius);
+        try path.curveTo(alloc, center_x + p12, center_y - radius, center_x + radius, center_y - p12, center_x + radius, center_y);
+        try path.curveTo(alloc, center_x + radius, center_y + p12, center_x + p12, center_y + radius, center_x, center_y + radius);
+        try path.curveTo(alloc, center_x - p12, center_y + radius, center_x - radius, center_y + p12, center_x - radius, center_y);
+        try path.curveTo(alloc, center_x - radius, center_y - p12, center_x - p12, center_y - radius, center_x, center_y - radius);
+        try path.close(alloc);
         try context.fill(alloc, path);
     }
 
@@ -54,12 +54,12 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         const p12_minor = radius_minor * ratio;
 
         path.reset();
-        try path.moveTo(center_x, center_y - radius_major);
-        try path.curveTo(center_x + p12_minor, center_y - radius_major, center_x + radius_minor, center_y - p12_major, center_x + radius_minor, center_y);
-        try path.curveTo(center_x + radius_minor, center_y + p12_major, center_x + p12_minor, center_y + radius_major, center_x, center_y + radius_major);
-        try path.curveTo(center_x - p12_minor, center_y + radius_major, center_x - radius_minor, center_y + p12_major, center_x - radius_minor, center_y);
-        try path.curveTo(center_x - radius_minor, center_y - p12_major, center_x - p12_minor, center_y - radius_major, center_x, center_y - radius_major);
-        try path.close();
+        try path.moveTo(alloc, center_x, center_y - radius_major);
+        try path.curveTo(alloc, center_x + p12_minor, center_y - radius_major, center_x + radius_minor, center_y - p12_major, center_x + radius_minor, center_y);
+        try path.curveTo(alloc, center_x + radius_minor, center_y + p12_major, center_x + p12_minor, center_y + radius_major, center_x, center_y + radius_major);
+        try path.curveTo(alloc, center_x - p12_minor, center_y + radius_major, center_x - radius_minor, center_y + p12_major, center_x - radius_minor, center_y);
+        try path.curveTo(alloc, center_x - radius_minor, center_y - p12_major, center_x - p12_minor, center_y - radius_major, center_x, center_y - radius_major);
+        try path.close(alloc);
         try context.fill(alloc, path);
     }
 

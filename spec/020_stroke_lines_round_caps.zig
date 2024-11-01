@@ -26,8 +26,8 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
     // sub-canvas dimensions
     const sub_canvas_width = width / 4;
@@ -37,88 +37,88 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const margin = 30;
     var x_offset: f64 = 0;
     var y_offset: f64 = 0;
-    try path.moveTo(x_offset + margin, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + margin, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the right
     x_offset = sub_canvas_width;
-    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.moveTo(alloc, x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin);
 
     // Down and to the left
     x_offset = 0;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.lineTo(alloc, x_offset + margin, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the left
     x_offset = sub_canvas_width;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + margin, y_offset + margin);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + margin, y_offset + margin);
 
     // Horizontal (left -> right)
     x_offset = sub_canvas_width * 2;
     y_offset = 0;
-    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height / 2);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
+    try path.moveTo(alloc, x_offset + margin, y_offset + sub_canvas_height / 2);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
 
     // Vertical (up -> down)
     x_offset = sub_canvas_width * 2;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + sub_canvas_width / 2, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
 
     // Vertical (down -> up)
     x_offset = sub_canvas_width * 3;
     y_offset = 0;
-    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + margin);
+    try path.moveTo(alloc, x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2, y_offset + margin);
 
     // Horizontal (right -> left)
     x_offset = sub_canvas_width * 3;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height / 2);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
+    try path.lineTo(alloc, x_offset + margin, y_offset + sub_canvas_height / 2);
 
     // Joined, clockwise
     x_offset = 0;
     y_offset = sub_canvas_height * 2;
-    try path.moveTo(x_offset + margin, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2 - 1);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + margin, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2 - 1);
+    try path.lineTo(alloc, x_offset + margin, y_offset + sub_canvas_height - margin - 1);
 
     // Joined, counter-clockwise
     x_offset = sub_canvas_width;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height / 2 - 1);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.lineTo(alloc, x_offset + margin, y_offset + sub_canvas_height / 2 - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 
     // Joined, clockwise up-down, down-up
     x_offset = sub_canvas_width * 2;
     sub_canvas_height = sub_canvas_height / 2;
-    try path.moveTo(x_offset + margin, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width / 2 - 1, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.moveTo(alloc, x_offset + margin, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2 - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin);
 
     // Joined, clockwise down-up, up-down
     x_offset = sub_canvas_width * 3;
-    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width / 2 - 1, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2 - 1, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 
     // Joined, counter-clockwise, down-up, up-down
     x_offset = sub_canvas_width * 2;
     y_offset = y_offset + sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width / 2 - 1, y_offset + margin);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2 - 1, y_offset + margin);
+    try path.lineTo(alloc, x_offset + margin, y_offset + sub_canvas_height - margin - 1);
 
     // Joined, counter-clockwise, up-down, down-up
     x_offset = sub_canvas_width * 3;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width / 2 - 1, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + margin, y_offset + margin);
+    try path.moveTo(alloc, x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try path.lineTo(alloc, x_offset + sub_canvas_width / 2 - 1, y_offset + sub_canvas_height - margin - 1);
+    try path.lineTo(alloc, x_offset + margin, y_offset + margin);
 
     try context.stroke(alloc, path);
 

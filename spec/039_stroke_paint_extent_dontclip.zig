@@ -25,13 +25,13 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .anti_aliasing_mode = aa_mode,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
-    try path.moveTo(40, 50);
-    try path.lineTo(35, 60);
-    try path.lineTo(30, 70);
-    try path.lineTo(10, 50);
+    try path.moveTo(alloc, 40, 50);
+    try path.lineTo(alloc, 35, 60);
+    try path.lineTo(alloc, 30, 70);
+    try path.lineTo(alloc, 10, 50);
 
     try context.stroke(alloc, path);
 

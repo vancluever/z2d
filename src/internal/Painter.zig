@@ -38,14 +38,14 @@ pub fn Painter(comptime edge_cache_size: usize) type {
         pub fn fill(
             self: *const @This(),
             alloc: mem.Allocator,
-            nodes: std.ArrayList(PathNode),
+            nodes: []const PathNode,
         ) !void {
             // TODO: These path safety checks have been moved from the Context
             // down to here for now. The Painter API will soon be promoted to
             // being public, so this should be fine, and will likely be
             // canonicalized as such.
-            if (nodes.items.len == 0) return;
-            if (!(Path{ .nodes = nodes }).isClosed()) return PathError.PathNotClosed;
+            if (nodes.len == 0) return;
+            if (!PathNode.isClosedNodeSet(nodes)) return PathError.PathNotClosed;
 
             const scale: f64 = switch (self.context.anti_aliasing_mode) {
                 .none => 1,
@@ -76,10 +76,10 @@ pub fn Painter(comptime edge_cache_size: usize) type {
         pub fn stroke(
             self: *const @This(),
             alloc: mem.Allocator,
-            nodes: std.ArrayList(PathNode),
+            nodes: []const PathNode,
         ) !void {
             // Return if called with zero nodes.
-            if (nodes.items.len == 0) return;
+            if (nodes.len == 0) return;
 
             const scale: f64 = switch (self.context.anti_aliasing_mode) {
                 .none => 1,

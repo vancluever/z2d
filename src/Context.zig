@@ -100,7 +100,7 @@ transformation: Transformation = Transformation.identity,
 ///
 /// This is a no-op if there are no nodes.
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).fill(alloc, path.nodes);
+    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).fill(alloc, path.nodes.items);
 }
 
 /// Strokes a line for the path(s) in the supplied set.
@@ -115,5 +115,5 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).stroke(alloc, path.nodes);
+    try (paintpkg.Painter(self.default_edge_cache_size){ .context = self }).stroke(alloc, path.nodes.items);
 }

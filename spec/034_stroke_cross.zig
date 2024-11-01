@@ -25,22 +25,22 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         .line_width = 5,
     };
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var path = try z2d.Path.initCapacity(alloc, 0);
+    defer path.deinit(alloc);
 
-    try path.moveTo(100, 50);
-    try path.relLineTo(0, 50);
-    try path.relLineTo(-50, 0);
-    try path.relLineTo(0, 50);
-    try path.relLineTo(50, 0);
-    try path.relLineTo(0, 50);
-    try path.relLineTo(50, 0);
-    try path.relLineTo(0, -50);
-    try path.relLineTo(50, 0);
-    try path.relLineTo(0, -50);
-    try path.relLineTo(-50, 0);
-    try path.relLineTo(0, -50);
-    try path.close();
+    try path.moveTo(alloc, 100, 50);
+    try path.relLineTo(alloc, 0, 50);
+    try path.relLineTo(alloc, -50, 0);
+    try path.relLineTo(alloc, 0, 50);
+    try path.relLineTo(alloc, 50, 0);
+    try path.relLineTo(alloc, 0, 50);
+    try path.relLineTo(alloc, 50, 0);
+    try path.relLineTo(alloc, 0, -50);
+    try path.relLineTo(alloc, 50, 0);
+    try path.relLineTo(alloc, 0, -50);
+    try path.relLineTo(alloc, -50, 0);
+    try path.relLineTo(alloc, 0, -50);
+    try path.close(alloc);
     try context.stroke(alloc, path);
 
     return sfc;
