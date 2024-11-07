@@ -1,39 +1,50 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
 
-//! Painter represents the internal code related to painting (fill/stroke/etc).
-const Painter = @This();
-
 const std = @import("std");
 const debug = @import("std").debug;
 const heap = @import("std").heap;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-const fill_plotter = @import("FillPlotter.zig");
+const fill_plotter = @import("internal/FillPlotter.zig");
+const options = @import("options.zig");
 
-const Context = @import("../Context.zig");
-const Path = @import("../Path.zig");
-const PathNode = @import("path_nodes.zig").PathNode;
-const RGBA = @import("../pixel.zig").RGBA;
-const Surface = @import("../surface.zig").Surface;
-const FillRule = @import("../options.zig").FillRule;
-const StrokePlotter = @import("StrokePlotter.zig");
-const Polygon = @import("Polygon.zig");
-const PolygonList = @import("PolygonList.zig");
-const Transformation = @import("../Transformation.zig");
-const InternalError = @import("../errors.zig").InternalError;
-const PathError = @import("../errors.zig").PathError;
-const supersample_scale = @import("../surface.zig").supersample_scale;
+const Context = @import("Context.zig");
+const Path = @import("Path.zig");
+const PathNode = @import("internal/path_nodes.zig").PathNode;
+const RGBA = @import("pixel.zig").RGBA;
+const Surface = @import("surface.zig").Surface;
+const Pattern = @import("pattern.zig").Pattern;
+const FillRule = @import("options.zig").FillRule;
+const StrokePlotter = @import("internal/StrokePlotter.zig");
+const Polygon = @import("internal/Polygon.zig");
+const PolygonList = @import("internal/PolygonList.zig");
+const Transformation = @import("Transformation.zig");
+const InternalError = @import("errors.zig").InternalError;
+const PathError = @import("errors.zig").PathError;
+const supersample_scale = @import("surface.zig").supersample_scale;
 
-/// The reference to the context that we use for painting operations.
-context: *Context,
+pub const FillOpts = struct {
+    /// The anti-aliasing mode to use with the fill operation.
+    anti_aliasing_mode: options.AntiAliasMode = .default,
+
+    /// The fill rule to use during the fill operation.
+    fill_rule: options.FillRule = .non_zero,
+
+    /// The maximum error tolerance used for approximating curves and arcs. A
+    /// higher tolerance will give better performance, but "blockier" curves.
+    /// The default tolerance should be sufficient for most cases.
+    tolerance: f64 = options.default_tolerance,
+};
 
 /// Runs a fill operation on this current path and any subpaths.
 pub fn fill(
-    self: *const Painter,
     alloc: mem.Allocator,
+    surface: *Surface,
+    pattern: *Pattern,
     nodes: []const PathNode,
+    opts: FillOpts,
 ) !void {
     // TODO: These path safety checks have been moved from the Context
     // down to here for now. The Painter API will soon be promoted to
@@ -42,7 +53,7 @@ pub fn fill(
     if (nodes.len == 0) return;
     if (!PathNode.isClosedNodeSet(nodes)) return PathError.PathNotClosed;
 
-    const scale: f64 = switch (self.context.anti_aliasing_mode) {
+    const scale: f64 = switch (opts.anti_aliasing_mode) {
         .none => 1,
         .default => supersample_scale,
     };
@@ -51,32 +62,63 @@ pub fn fill(
         alloc,
         nodes,
         scale,
-        @max(self.context.tolerance, 0.001),
+        @max(opts.tolerance, 0.001),
     );
     defer polygons.deinit();
 
-    switch (self.context.anti_aliasing_mode) {
+    switch (opts.anti_aliasing_mode) {
         .none => {
-            try self.paintDirect(alloc, polygons, self.context.fill_rule);
+            try paintDirect(alloc, surface, pattern, polygons, opts.fill_rule);
         },
         .default => {
-            try self.paintComposite(alloc, polygons, self.context.fill_rule, scale);
+            try paintComposite(alloc, surface, pattern, polygons, opts.fill_rule, scale);
         },
     }
 }
+
+pub const StrokeOpts = struct {
+    /// The anti-aliasing mode to use with the stroke operation.
+    anti_aliasing_mode: options.AntiAliasMode = .default,
+
+    /// The line cap rule for the stroke operation.
+    line_cap_mode: options.CapMode = .butt,
+
+    /// The line join style for the stroke operation.
+    line_join_mode: options.JoinMode = .miter,
+
+    /// The line width for the stroke operation.
+    line_width: f64 = 2.0,
+
+    /// The maximum allowed ratio for miter joins. See `Context` for a full
+    /// explanation of this setting.
+    miter_limit: f64 = 10.0,
+
+    /// The maximum error tolerance used for approximating curves and arcs. A
+    /// higher tolerance will give better performance, but "blockier" curves.
+    /// The default tolerance should be sufficient for most cases.
+    tolerance: f64 = options.default_tolerance,
+
+    /// The transformation matrix to use for the stroke operation. Has more
+    /// subtle influences on drawing, affecting line width respective to scale,
+    /// warping due to a warped scale (e.g., different x and y scale), and any
+    /// respective capping.
+    transformation: Transformation = Transformation.identity,
+};
 
 /// Runs a stroke operation on this path and any sub-paths. The path is
 /// transformed to a fillable polygon representing the line, and the line is
 /// then filled.
 pub fn stroke(
-    self: *const Painter,
     alloc: mem.Allocator,
+    surface: *Surface,
+    pattern: *Pattern,
     nodes: []const PathNode,
+    opts: StrokeOpts,
 ) !void {
     // Return if called with zero nodes.
     if (nodes.len == 0) return;
 
-    const scale: f64 = switch (self.context.anti_aliasing_mode) {
+    const scale: f64 = switch (opts.anti_aliasing_mode) {
         .none => 1,
         .default => supersample_scale,
     };
@@ -99,25 +141,25 @@ pub fn stroke(
     const minimum_line_width: f64 = 0.00390625;
     var plotter = try StrokePlotter.init(
         alloc,
-        if (self.context.line_width >= minimum_line_width) self.context.line_width else minimum_line_width,
-        if (self.context.line_width >= 2) self.context.line_join_mode else .miter,
-        if (self.context.line_width >= 2) self.context.miter_limit else 10.0,
-        if (self.context.line_width >= 2) self.context.line_cap_mode else .butt,
+        if (opts.line_width >= minimum_line_width) opts.line_width else minimum_line_width,
+        if (opts.line_width >= 2) opts.line_join_mode else .miter,
+        if (opts.line_width >= 2) opts.miter_limit else 10.0,
+        if (opts.line_width >= 2) opts.line_cap_mode else .butt,
         scale,
-        @max(self.context.tolerance, 0.001),
-        self.context.transformation,
+        @max(opts.tolerance, 0.001),
+        opts.transformation,
     );
     defer plotter.deinit();
 
     var polygons = try plotter.plot(alloc, nodes);
     defer polygons.deinit();
 
-    switch (self.context.anti_aliasing_mode) {
+    switch (opts.anti_aliasing_mode) {
         .none => {
-            try self.paintDirect(alloc, polygons, .non_zero);
+            try paintDirect(alloc, surface, pattern, polygons, .non_zero);
         },
         .default => {
-            try self.paintComposite(alloc, polygons, .non_zero, scale);
+            try paintComposite(alloc, surface, pattern, polygons, .non_zero, scale);
         },
     }
 }
@@ -125,20 +167,21 @@ pub fn stroke(
 /// Direct paint, writes to surface directly, avoiding compositing. Does not
 /// use AA.
 fn paintDirect(
-    self: *const Painter,
     alloc: mem.Allocator,
+    surface: *Surface,
+    pattern: *Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
 ) !void {
     const poly_start_y: i32 = math.clamp(
         @as(i32, @intFromFloat(@floor(polygons.start.y))),
         0,
-        self.context.surface.getHeight() - 1,
+        surface.getHeight() - 1,
     );
     const poly_end_y: i32 = math.clamp(
         @as(i32, @intFromFloat(@ceil(polygons.end.y))),
         0,
-        self.context.surface.getHeight() - 1,
+        surface.getHeight() - 1,
     );
     var y = poly_start_y;
     while (y <= poly_end_y) : (y += 1) {
@@ -154,21 +197,21 @@ fn paintDirect(
             const start_x = math.clamp(
                 edge_pair.start,
                 0,
-                self.context.surface.getWidth() - 1,
+                surface.getWidth() - 1,
             );
             // Subtract 1 from the end edge as this is our pixel boundary
             // (end_x = 100 actually means we should only fill to x=99).
             const end_x = math.clamp(
                 edge_pair.end - 1,
                 0,
-                self.context.surface.getWidth() - 1,
+                surface.getWidth() - 1,
             );
 
             var x = start_x;
             while (x <= end_x) : (x += 1) {
-                const src = try self.context.pattern.getPixel(x, y);
-                const dst = self.context.surface.getPixel(x, y) orelse unreachable;
-                self.context.surface.putPixel(x, y, dst.srcOver(src));
+                const src = pattern.getPixel(x, y);
+                const dst = surface.getPixel(x, y) orelse unreachable;
+                surface.putPixel(x, y, dst.srcOver(src));
             }
         }
     }
@@ -177,8 +220,9 @@ fn paintDirect(
 /// Composite paint, for AA and other operations such as gradients (not yet
 /// implemented).
 fn paintComposite(
-    self: *const Painter,
     alloc: mem.Allocator,
+    surface: *Surface,
+    pattern: *Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
     scale: f64,
@@ -254,7 +298,7 @@ fn paintComposite(
     // interface unnecessarily.
     var deinit_fg = false;
     var foreground_sfc = sfc_f: {
-        switch (self.context.pattern) {
+        switch (pattern.*) {
             // This is the surface that we composite our mask on to get the
             // final image that in turn gets composited to the main surface. To
             // support proper compositing of the mask, and in turn onto the
@@ -267,7 +311,7 @@ fn paintComposite(
             // expand this a bit more (e.g., initializing the surface with the
             // painted gradient).
             .opaque_pattern => {
-                const px = try self.context.pattern.getPixel(0, 0);
+                const px = pattern.getPixel(0, 0);
                 if (px == .alpha8) {
                     // Our source pixel is alpha8, so we can avoid a
                     // pretty costly allocation here by just using our
@@ -285,7 +329,7 @@ fn paintComposite(
                 }
 
                 var fg_sfc = try Surface.initPixel(
-                    RGBA.copySrc(try self.context.pattern.getPixel(0, 0)).asPixel(),
+                    RGBA.copySrc(pattern.getPixel(0, 0)).asPixel(),
                     alloc,
                     mask_sfc.getWidth(),
                     mask_sfc.getHeight(),
@@ -304,5 +348,5 @@ fn paintComposite(
     }
 
     // Final compositing to main surface
-    self.context.surface.srcOver(&foreground_sfc, x0, y0);
+    surface.srcOver(&foreground_sfc, x0, y0);
 }

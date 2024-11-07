@@ -8,8 +8,8 @@ const Context = @This();
 const mem = @import("std").mem;
 
 const options = @import("options.zig");
+const painter = @import("painter.zig");
 
-const Painter = @import("internal/Painter.zig");
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
@@ -91,7 +91,17 @@ transformation: Transformation = Transformation.identity,
 ///
 /// This is a no-op if there are no nodes.
 pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    try (Painter{ .context = self }).fill(alloc, path.nodes.items);
+    try painter.fill(
+        alloc,
+        &self.surface,
+        &self.pattern,
+        path.nodes.items,
+        .{
+            .anti_aliasing_mode = self.anti_aliasing_mode,
+            .fill_rule = self.fill_rule,
+            .tolerance = self.tolerance,
+        },
+    );
 }
 
 /// Strokes a line for the path(s) in the supplied set.
@@ -106,5 +116,19 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
-    try (Painter{ .context = self }).stroke(alloc, path.nodes.items);
+    try painter.stroke(
+        alloc,
+        &self.surface,
+        &self.pattern,
+        path.nodes.items,
+        .{
+            .anti_aliasing_mode = self.anti_aliasing_mode,
+            .line_cap_mode = self.line_cap_mode,
+            .line_join_mode = self.line_join_mode,
+            .line_width = self.line_width,
+            .miter_limit = self.miter_limit,
+            .tolerance = self.tolerance,
+            .transformation = self.transformation,
+        },
+    );
 }
