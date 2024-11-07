@@ -42,7 +42,7 @@ pub const FillOpts = struct {
 pub fn fill(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: Pattern,
+    pattern: *Pattern,
     nodes: []const PathNode,
     opts: FillOpts,
 ) !void {
@@ -111,7 +111,7 @@ pub const StrokeOpts = struct {
 pub fn stroke(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: Pattern,
+    pattern: *Pattern,
     nodes: []const PathNode,
     opts: StrokeOpts,
 ) !void {
@@ -169,7 +169,7 @@ pub fn stroke(
 fn paintDirect(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: Pattern,
+    pattern: *Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
 ) !void {
@@ -209,7 +209,7 @@ fn paintDirect(
 
             var x = start_x;
             while (x <= end_x) : (x += 1) {
-                const src = try pattern.getPixel(x, y);
+                const src = pattern.getPixel(x, y);
                 const dst = surface.getPixel(x, y) orelse unreachable;
                 surface.putPixel(x, y, dst.srcOver(src));
             }
@@ -222,7 +222,7 @@ fn paintDirect(
 fn paintComposite(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: Pattern,
+    pattern: *Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
     scale: f64,
@@ -298,7 +298,7 @@ fn paintComposite(
     // interface unnecessarily.
     var deinit_fg = false;
     var foreground_sfc = sfc_f: {
-        switch (pattern) {
+        switch (pattern.*) {
             // This is the surface that we composite our mask on to get the
             // final image that in turn gets composited to the main surface. To
             // support proper compositing of the mask, and in turn onto the
@@ -311,7 +311,7 @@ fn paintComposite(
             // expand this a bit more (e.g., initializing the surface with the
             // painted gradient).
             .opaque_pattern => {
-                const px = try pattern.getPixel(0, 0);
+                const px = pattern.getPixel(0, 0);
                 if (px == .alpha8) {
                     // Our source pixel is alpha8, so we can avoid a
                     // pretty costly allocation here by just using our
@@ -329,7 +329,7 @@ fn paintComposite(
                 }
 
                 var fg_sfc = try Surface.initPixel(
-                    RGBA.copySrc(try pattern.getPixel(0, 0)).asPixel(),
+                    RGBA.copySrc(pattern.getPixel(0, 0)).asPixel(),
                     alloc,
                     mask_sfc.getWidth(),
                     mask_sfc.getHeight(),

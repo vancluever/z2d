@@ -94,7 +94,7 @@ pub fn fill(self: *Context, alloc: mem.Allocator, path: Path) !void {
     try painter.fill(
         alloc,
         &self.surface,
-        self.pattern,
+        &self.pattern,
         path.nodes.items,
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
@@ -119,7 +119,7 @@ pub fn stroke(self: *Context, alloc: mem.Allocator, path: Path) !void {
     try painter.stroke(
         alloc,
         &self.surface,
-        self.pattern,
+        &self.pattern,
         path.nodes.items,
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
