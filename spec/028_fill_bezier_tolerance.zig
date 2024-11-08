@@ -13,40 +13,32 @@ pub const filename = "028_fill_bezier_tolerance";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 900;
     const height = 300;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
+    context.setLineWidth(5);
 
-    var path = try z2d.Path.initCapacity(alloc, 0);
-    defer path.deinit(alloc);
-    context.line_width = 5;
+    try context.moveTo(19, 224);
+    try context.curveTo(89, 49, 209, 49, 279, 224);
+    try context.close();
+    try context.fill();
 
-    try path.moveTo(alloc, 19, 224);
-    try path.curveTo(alloc, 89, 49, 209, 49, 279, 224);
-    try path.close(alloc);
-    try context.fill(alloc, path);
+    context.setTolerance(3);
+    context.resetPath();
+    try context.moveTo(319, 224);
+    try context.curveTo(389, 49, 509, 49, 579, 224);
+    try context.close();
+    try context.fill();
 
-    context.tolerance = 3;
-    path.reset();
-    try path.moveTo(alloc, 319, 224);
-    try path.curveTo(alloc, 389, 49, 509, 49, 579, 224);
-    try path.close(alloc);
-    try context.fill(alloc, path);
-
-    context.tolerance = 10;
-    path.reset();
-    try path.moveTo(alloc, 619, 224);
-    try path.curveTo(alloc, 689, 49, 809, 49, 879, 224);
-    try path.close(alloc);
-    try context.fill(alloc, path);
+    context.setTolerance(10);
+    context.resetPath();
+    try context.moveTo(619, 224);
+    try context.curveTo(689, 49, 809, 49, 879, 224);
+    try context.close();
+    try context.fill();
 
     return sfc;
 }

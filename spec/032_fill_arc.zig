@@ -12,20 +12,12 @@ pub const filename = "032_fill_arc";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
-
-    var path = try z2d.Path.initCapacity(alloc, 0);
-    defer path.deinit(alloc);
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
 
     // For approximating a circle w/bezier
     // https://stackoverflow.com/a/27863181
@@ -37,13 +29,13 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         const radius = 50;
         const p12 = radius * ratio;
 
-        try path.moveTo(alloc, center_x, center_y - radius);
-        try path.curveTo(alloc, center_x + p12, center_y - radius, center_x + radius, center_y - p12, center_x + radius, center_y);
-        try path.curveTo(alloc, center_x + radius, center_y + p12, center_x + p12, center_y + radius, center_x, center_y + radius);
-        try path.curveTo(alloc, center_x - p12, center_y + radius, center_x - radius, center_y + p12, center_x - radius, center_y);
-        try path.curveTo(alloc, center_x - radius, center_y - p12, center_x - p12, center_y - radius, center_x, center_y - radius);
-        try path.close(alloc);
-        try context.fill(alloc, path);
+        try context.moveTo(center_x, center_y - radius);
+        try context.curveTo(center_x + p12, center_y - radius, center_x + radius, center_y - p12, center_x + radius, center_y);
+        try context.curveTo(center_x + radius, center_y + p12, center_x + p12, center_y + radius, center_x, center_y + radius);
+        try context.curveTo(center_x - p12, center_y + radius, center_x - radius, center_y + p12, center_x - radius, center_y);
+        try context.curveTo(center_x - radius, center_y - p12, center_x - p12, center_y - radius, center_x, center_y - radius);
+        try context.close();
+        try context.fill();
     }
 
     {
@@ -53,14 +45,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         const p12_major = radius_major * ratio;
         const p12_minor = radius_minor * ratio;
 
-        path.reset();
-        try path.moveTo(alloc, center_x, center_y - radius_major);
-        try path.curveTo(alloc, center_x + p12_minor, center_y - radius_major, center_x + radius_minor, center_y - p12_major, center_x + radius_minor, center_y);
-        try path.curveTo(alloc, center_x + radius_minor, center_y + p12_major, center_x + p12_minor, center_y + radius_major, center_x, center_y + radius_major);
-        try path.curveTo(alloc, center_x - p12_minor, center_y + radius_major, center_x - radius_minor, center_y + p12_major, center_x - radius_minor, center_y);
-        try path.curveTo(alloc, center_x - radius_minor, center_y - p12_major, center_x - p12_minor, center_y - radius_major, center_x, center_y - radius_major);
-        try path.close(alloc);
-        try context.fill(alloc, path);
+        context.resetPath();
+        try context.moveTo(center_x, center_y - radius_major);
+        try context.curveTo(center_x + p12_minor, center_y - radius_major, center_x + radius_minor, center_y - p12_major, center_x + radius_minor, center_y);
+        try context.curveTo(center_x + radius_minor, center_y + p12_major, center_x + p12_minor, center_y + radius_major, center_x, center_y + radius_major);
+        try context.curveTo(center_x - p12_minor, center_y + radius_major, center_x - radius_minor, center_y + p12_major, center_x - radius_minor, center_y);
+        try context.curveTo(center_x - radius_minor, center_y - p12_major, center_x - p12_minor, center_y - radius_major, center_x, center_y - radius_major);
+        try context.close();
+        try context.fill();
     }
 
     return sfc;
