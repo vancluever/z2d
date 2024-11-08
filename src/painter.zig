@@ -42,7 +42,7 @@ pub const FillOpts = struct {
 pub fn fill(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: *Pattern,
+    pattern: *const Pattern,
     nodes: []const PathNode,
     opts: FillOpts,
 ) !void {
@@ -111,7 +111,7 @@ pub const StrokeOpts = struct {
 pub fn stroke(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: *Pattern,
+    pattern: *const Pattern,
     nodes: []const PathNode,
     opts: StrokeOpts,
 ) !void {
@@ -169,7 +169,7 @@ pub fn stroke(
 fn paintDirect(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: *Pattern,
+    pattern: *const Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
 ) !void {
@@ -222,7 +222,7 @@ fn paintDirect(
 fn paintComposite(
     alloc: mem.Allocator,
     surface: *Surface,
-    pattern: *Pattern,
+    pattern: *const Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
     scale: f64,

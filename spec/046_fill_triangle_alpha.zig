@@ -14,33 +14,25 @@ pub const filename = "046_fill_triangle_alpha";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
-    const sfc = try z2d.Surface.initPixel(
+    var sfc = try z2d.Surface.initPixel(
         .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White so that srcOver shows up correctly
         alloc,
         width,
         height,
     );
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .alpha8 = .{ .a = 255 } },
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
-
-    var path = try z2d.Path.initCapacity(alloc, 0);
-    defer path.deinit(alloc);
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .alpha8 = .{ .a = 255 } });
+    context.setAntiAliasingMode(aa_mode);
 
     const margin = 10;
-    try path.moveTo(alloc, 0 + margin, 0 + margin);
-    try path.lineTo(alloc, width - margin - 1, 0 + margin);
-    try path.lineTo(alloc, width / 2 - 1, height - margin - 1);
-    try path.close(alloc);
+    try context.moveTo(0 + margin, 0 + margin);
+    try context.lineTo(width - margin - 1, 0 + margin);
+    try context.lineTo(width / 2 - 1, height - margin - 1);
+    try context.close();
 
-    try context.fill(alloc, path);
+    try context.fill();
 
     return sfc;
 }

@@ -281,7 +281,7 @@ pub fn relCurveToAssumeCapacity(
 /// path.transformation = path.transformation
 ///     .translate(x + width / 2, y + height / 2);
 ///     .scale(width / 2, height / 2);
-/// try path.arc(alloc, 0, 0, 1, 0, 2 + math.pi, false, null);
+/// try path.arc(alloc, 0, 0, 1, 0, 2 + math.pi);
 /// path.transformation = saved_ctm;
 /// ```
 ///

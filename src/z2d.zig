@@ -56,6 +56,7 @@
 
 pub const surface = @import("surface.zig");
 pub const pattern = @import("pattern.zig");
+pub const painter = @import("painter.zig");
 pub const pixel = @import("pixel.zig");
 pub const options = @import("options.zig");
 pub const png_exporter = @import("export_png.zig");

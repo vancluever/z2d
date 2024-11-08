@@ -12,27 +12,19 @@ pub const filename = "041_stroke_noop_lineto";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 18;
     const height = 36;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
 
-    var path = try z2d.Path.initCapacity(alloc, 0);
-    defer path.deinit(alloc);
+    try context.moveTo(9, 0);
+    try context.lineTo(9, 9);
+    try context.lineTo(0, 18);
+    try context.lineTo(0, 18);
 
-    try path.moveTo(alloc, 9, 0);
-    try path.lineTo(alloc, 9, 9);
-    try path.lineTo(alloc, 0, 18);
-    try path.lineTo(alloc, 0, 18);
-
-    try context.stroke(alloc, path);
+    try context.stroke();
 
     return sfc;
 }
