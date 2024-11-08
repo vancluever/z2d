@@ -5,7 +5,7 @@
 //! statically-allocated path buffer.
 //!
 //! This also demonstrates the use of the unmanaged functions in the painter,
-//! completely avoiding the use fo a Context.
+//! completely avoiding the use of a Context.
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
