@@ -63,7 +63,7 @@ pub fn deinit(self: *StrokePlotter) void {
 pub fn plot(
     self: *StrokePlotter,
     alloc: mem.Allocator,
-    nodes: std.ArrayList(nodepkg.PathNode),
+    nodes: []const nodepkg.PathNode,
 ) !PolygonList {
     var result = PolygonList.init(alloc);
     errdefer result.deinit();
@@ -93,7 +93,7 @@ pub fn plot(
 /// An iterator that advances a list of PathNodes by each fillable line.
 const Iterator = struct {
     plotter: *StrokePlotter,
-    nodes: std.ArrayList(nodepkg.PathNode),
+    nodes: []const nodepkg.PathNode,
     index: usize = 0,
 
     const ResultPolygonType = enum {
@@ -135,8 +135,8 @@ const Iterator = struct {
     };
 
     fn next(it: *Iterator, alloc: mem.Allocator) !?ResultPolygon {
-        debug.assert(it.index <= it.nodes.items.len);
-        if (it.index >= it.nodes.items.len) return null;
+        debug.assert(it.index <= it.nodes.len);
+        if (it.index >= it.nodes.len) return null;
 
         // Init the node iterator state that we will use to process our nodes.
         // We use a separate state and functions within that to keep things
@@ -144,13 +144,13 @@ const Iterator = struct {
         var state = State.init(alloc, it);
         errdefer state.deinit();
 
-        while (it.index < it.nodes.items.len) : (it.index += 1) {
-            if (!(try state.process(it.nodes.items[it.index]))) {
+        while (it.index < it.nodes.len) : (it.index += 1) {
+            if (!(try state.process(it.nodes[it.index]))) {
                 // Special case: When breaking, we need to increment on
                 // close_path if this is our current node. This is because we
                 // actually want to move to the next move_to the next time the
                 // iterator is called.
-                if (it.nodes.items[it.index] == .close_path) {
+                if (it.nodes[it.index] == .close_path) {
                     it.index += 1;
                 }
 
@@ -674,7 +674,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         );
         defer plotter.deinit();
 
-        var result = try plotter.plot(alloc, nodes);
+        var result = try plotter.plot(alloc, nodes.items);
         defer result.deinit();
         try testing.expectEqual(1, result.polygons.items.len);
         var corners_len: usize = 0;
@@ -707,7 +707,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         );
         defer plotter.deinit();
 
-        var result = try plotter.plot(alloc, nodes);
+        var result = try plotter.plot(alloc, nodes.items);
         defer result.deinit();
         try testing.expectEqual(1, result.polygons.items.len);
         var corners_len: usize = 0;

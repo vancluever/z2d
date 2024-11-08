@@ -17,53 +17,46 @@ pub const filename = "035_arc_command";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
-    const sfc = try z2d.Surface.initPixel(
+    var sfc = try z2d.Surface.initPixel(
         .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White
         alloc,
         width,
         height,
     );
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0x00, .b = 0x00 } }, // Red for our initial draw
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-        .line_width = 5,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0x00, .b = 0x00 } });
+    context.setAntiAliasingMode(aa_mode);
+    context.setLineWidth(5);
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
-    try path.moveTo(200, 200);
-    try path.arc(200, 200, 150, math.pi, math.pi * 1.5, true, null);
-    try path.close();
-    try context.fill(alloc, path);
+    try context.moveTo(200, 200);
+    try context.arcNegative(200, 200, 150, math.pi, math.pi * 1.5);
+    try context.close();
+    try context.fill();
     context.pattern = .{
         .opaque_pattern = .{
             .pixel = .{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0xFF } }, // Blue for stroke
         },
     };
-    try context.stroke(alloc, path);
+    try context.stroke();
 
-    path.reset();
-    try path.moveTo(175, 175);
-    try path.arc(175, 175, 150, math.pi, math.pi * 1.5, false, null);
-    try path.close();
+    context.resetPath();
+    try context.moveTo(175, 175);
+    try context.arc(175, 175, 150, math.pi, math.pi * 1.5);
+    try context.close();
     context.pattern = .{
         .opaque_pattern = .{
             .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0x00 } }, // Yellow for fill
         },
     };
-    try context.fill(alloc, path);
+    try context.fill();
     context.pattern = .{
         .opaque_pattern = .{
             .pixel = .{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0xFF } }, // Blue for stroke
         },
     };
-    try context.stroke(alloc, path);
+    try context.stroke();
 
     return sfc;
 }

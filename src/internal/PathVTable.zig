@@ -5,10 +5,14 @@
 //! operations into spline instructions.
 const PathVTable = @This();
 
+const mem = @import("std").mem;
+
 ptr: *anyopaque,
-line_to: *const fn (ctx: *anyopaque, err_: *?anyerror, x: f64, y: f64) void,
+alloc: mem.Allocator,
+line_to: *const fn (ctx: *anyopaque, alloc: mem.Allocator, err_: *?anyerror, x: f64, y: f64) void,
 curve_to: *const fn (
     ctx: *anyopaque,
+    alloc: mem.Allocator,
     err_: *?anyerror,
     x1: f64,
     y1: f64,
@@ -20,7 +24,7 @@ curve_to: *const fn (
 
 pub fn lineTo(self: *const PathVTable, x: f64, y: f64) !void {
     var err_: ?anyerror = null;
-    self.line_to(self.ptr, &err_, x, y);
+    self.line_to(self.ptr, self.alloc, &err_, x, y);
     if (err_) |err| return err;
 }
 
@@ -34,6 +38,6 @@ pub fn curveTo(
     y3: f64,
 ) !void {
     var err_: ?anyerror = null;
-    self.curve_to(self.ptr, &err_, x1, y1, x2, y2, x3, y3);
+    self.curve_to(self.ptr, self.alloc, &err_, x1, y1, x2, y2, x3, y3);
     if (err_) |err| return err;
 }

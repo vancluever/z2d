@@ -23,38 +23,30 @@ pub const filename = "031_fill_quad_bezier";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    try context.moveTo(20, 130);
+    try context.curveTo(20, 130, 20, 20, 130, 20);
+    try context.close();
 
-    try path.moveTo(20, 130);
-    try path.curveTo(20, 130, 20, 20, 130, 20);
-    try path.close();
+    try context.moveTo(170, 20);
+    try context.curveTo(280, 20, 280, 20, 280, 130);
+    try context.close();
 
-    try path.moveTo(170, 20);
-    try path.curveTo(280, 20, 280, 20, 280, 130);
-    try path.close();
+    try context.moveTo(280, 170);
+    try context.curveTo(280, 280, 170, 280, 170, 280);
+    try context.close();
 
-    try path.moveTo(280, 170);
-    try path.curveTo(280, 280, 170, 280, 170, 280);
-    try path.close();
+    try context.moveTo(130, 280);
+    try context.curveTo(20, 280, 20, 280, 20, 170);
+    try context.close();
 
-    try path.moveTo(130, 280);
-    try path.curveTo(20, 280, 20, 280, 20, 170);
-    try path.close();
-
-    try context.fill(alloc, path);
+    try context.fill();
 
     return sfc;
 }

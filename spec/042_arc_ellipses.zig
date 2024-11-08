@@ -13,80 +13,68 @@ pub const filename = "042_arc_ellipses";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-        .line_width = 5,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
+    context.setLineWidth(5);
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
     // Add a margin of (10, 10) by translation
-    path.transformation = path.transformation.translate(10, 10);
+    context.translate(10, 10);
     // first ellipse at 0, 0 rx = 50, ry=100
-    _ = try ellipse(&path, 0, 0, 50, 100);
-    try context.fill(alloc, path);
+    _ = try ellipse(&context, 0, 0, 50, 100, true);
+    try context.fill();
 
     // second as the first, but stroked, at 100, 0)
-    _ = try ellipse(&path, 100, 0, 50, 100);
-    try context.stroke(alloc, path);
+    _ = try ellipse(&context, 100, 0, 50, 100, true);
+    try context.stroke();
 
-    // as the second, but we capture the CTM to test stroke warping (at 200, 0)
-    var saved_ctm = context.transformation;
-    var saved_line_width = context.line_width;
-    context.transformation = try ellipse(&path, 200, 0, 50, 100);
-    context.line_width = lw: {
+    // as the second, but we don't reset the CTM to test stroke warping (at 200, 0)
+    var saved_ctm = context.getTransformation();
+    var saved_line_width = context.getLineWidth();
+    try ellipse(&context, 200, 0, 50, 100, false);
+    context.setLineWidth(lw: {
         var ux = saved_line_width;
         var uy = saved_line_width;
-        try context.transformation.deviceToUserDistance(&ux, &uy);
+        try context.deviceToUserDistance(&ux, &uy);
         if (ux < uy) {
             break :lw uy;
         }
         break :lw ux;
-    };
-    try context.stroke(alloc, path);
-    context.transformation = saved_ctm;
-    context.line_width = saved_line_width;
+    });
+    try context.stroke();
+    context.setTransformation(saved_ctm);
+    context.setLineWidth(saved_line_width);
 
     // as the third, but first rotate 45 degrees (at 300, 0)
-    const saved_path_ctm = path.transformation;
-    saved_ctm = context.transformation;
-    saved_line_width = context.line_width;
-    path.transformation = path.transformation.rotate(math.pi / 4.0);
-    context.transformation = try ellipse(&path, 300, 0, 50, 100);
-    context.line_width = lw: {
+    saved_ctm = context.getTransformation();
+    saved_line_width = context.getLineWidth();
+    context.rotate(math.pi / 4.0);
+    try ellipse(&context, 300, 0, 50, 100, false);
+    context.setLineWidth(lw: {
         var ux = saved_line_width;
         var uy = saved_line_width;
-        try context.transformation.deviceToUserDistance(&ux, &uy);
+        try context.deviceToUserDistance(&ux, &uy);
         if (ux < uy) {
             break :lw uy;
         }
         break :lw ux;
-    };
-    try context.stroke(alloc, path);
-    path.transformation = saved_path_ctm;
-    context.transformation = saved_ctm;
-    context.line_width = saved_line_width;
+    });
+    try context.stroke();
+    context.setTransformation(saved_ctm);
+    context.setLineWidth(saved_line_width);
 
     return sfc;
 }
 
-fn ellipse(path: *z2d.Path, x: f64, y: f64, rx: f64, ry: f64) !z2d.Transformation {
-    const saved_ctm = path.transformation;
-    path.reset();
-    path.transformation = path.transformation
-        .translate(x + rx / 2, y + ry / 2)
-        .scale(rx / 2, ry / 2);
-    try path.arc(0, 0, 1, 0, 2 * math.pi, false, null);
-    const effective_ctm = path.transformation;
-    path.transformation = saved_ctm;
-    try path.close();
-    return effective_ctm;
+fn ellipse(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64, reset_ctm: bool) !void {
+    const saved_ctm = context.getTransformation();
+    context.resetPath();
+    context.translate(x + rx / 2, y + ry / 2);
+    context.scale(rx / 2, ry / 2);
+    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    if (reset_ctm) context.setTransformation(saved_ctm);
+    try context.close();
 }

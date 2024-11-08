@@ -12,20 +12,12 @@ pub const filename = "014_stroke_lines";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 800;
     const height = 400;
-    const sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
-
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setAntiAliasingMode(aa_mode);
 
     // sub-canvas dimensions
     const sub_canvas_width = width / 4;
@@ -35,51 +27,51 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const margin = 10;
     comptime var x_offset = 0;
     comptime var y_offset = 0;
-    try path.moveTo(x_offset + margin, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try context.moveTo(x_offset + margin, y_offset + margin);
+    try context.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the right
     x_offset = sub_canvas_width;
-    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try context.moveTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try context.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
 
     // Down and to the left
     x_offset = 0;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
+    try context.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin);
+    try context.lineTo(x_offset + margin, y_offset + sub_canvas_height - margin - 1);
 
     // Up and to the left
     x_offset = sub_canvas_width;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + margin, y_offset + margin);
+    try context.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
+    try context.lineTo(x_offset + margin, y_offset + margin);
 
     // Horizontal (left -> right)
     x_offset = sub_canvas_width * 2;
     y_offset = 0;
-    try path.moveTo(x_offset + margin, y_offset + sub_canvas_height / 2);
-    try path.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
+    try context.moveTo(x_offset + margin, y_offset + sub_canvas_height / 2);
+    try context.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
 
     // Vertical (up -> down)
     x_offset = sub_canvas_width * 2;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin);
-    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
+    try context.moveTo(x_offset + sub_canvas_width / 2, y_offset + margin);
+    try context.lineTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
 
     // Vertical (down -> up)
     x_offset = sub_canvas_width * 3;
     y_offset = 0;
-    try path.moveTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
-    try path.lineTo(x_offset + sub_canvas_width / 2, y_offset + margin);
+    try context.moveTo(x_offset + sub_canvas_width / 2, y_offset + sub_canvas_height - margin - 1);
+    try context.lineTo(x_offset + sub_canvas_width / 2, y_offset + margin);
 
     // Horizontal (right -> left)
     x_offset = sub_canvas_width * 3;
     y_offset = sub_canvas_height;
-    try path.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
-    try path.lineTo(x_offset + margin, y_offset + sub_canvas_height / 2);
+    try context.moveTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height / 2);
+    try context.lineTo(x_offset + margin, y_offset + sub_canvas_height / 2);
 
-    try context.stroke(alloc, path);
+    try context.stroke();
 
     return sfc;
 }

@@ -134,7 +134,7 @@ fn writePNGIDATStream(
 
         for (0..@intCast(sfc.getWidth())) |x| {
             nbytes += written: {
-                switch (try sfc.getPixel(@intCast(x), @intCast(y))) {
+                switch (sfc.getPixel(@intCast(x), @intCast(y)) orelse unreachable) {
                     // PNG writes out numbers big-endian, but *only numbers larger
                     // than a byte*. This means we need to handle each pixel format
                     // slightly differently with how we swap around bytes, etc.

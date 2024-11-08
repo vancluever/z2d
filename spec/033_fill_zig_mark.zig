@@ -15,7 +15,7 @@ pub const filename = "033_fill_zig_mark";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 153;
     const height = 140;
-    const sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);
+    var sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);
 
     // <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 153 140">
     // <g fill="#F7A41D">
@@ -39,84 +39,77 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     // </g>
     // </svg>
 
-    var context: z2d.Context = .{
-        .surface = sfc,
-        .pattern = .{
-            .opaque_pattern = .{
-                .pixel = .{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } },
-            },
-        },
-        .anti_aliasing_mode = aa_mode,
-    };
+    var context = try z2d.Context.init(alloc, &sfc);
+    defer context.deinit();
+    context.setSource(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
+    context.setAntiAliasingMode(aa_mode);
 
-    var path = z2d.Path.init(alloc);
-    defer path.deinit();
-    try path.moveTo(46, 22);
-    try path.lineTo(28, 44);
-    try path.lineTo(19, 30);
-    try path.close();
-    try path.moveTo(46, 22);
-    try path.lineTo(33, 33);
-    try path.lineTo(28, 44);
-    try path.lineTo(22, 44);
-    try path.lineTo(22, 95);
-    try path.lineTo(31, 95);
-    try path.lineTo(20, 100);
-    try path.lineTo(12, 117);
-    try path.lineTo(0, 117);
-    try path.lineTo(0, 22);
-    try path.close();
-    try path.moveTo(31, 95);
-    try path.lineTo(12, 117);
-    try path.lineTo(4, 106);
-    try path.close();
+    try context.moveTo(46, 22);
+    try context.lineTo(28, 44);
+    try context.lineTo(19, 30);
+    try context.close();
+    try context.moveTo(46, 22);
+    try context.lineTo(33, 33);
+    try context.lineTo(28, 44);
+    try context.lineTo(22, 44);
+    try context.lineTo(22, 95);
+    try context.lineTo(31, 95);
+    try context.lineTo(20, 100);
+    try context.lineTo(12, 117);
+    try context.lineTo(0, 117);
+    try context.lineTo(0, 22);
+    try context.close();
+    try context.moveTo(31, 95);
+    try context.lineTo(12, 117);
+    try context.lineTo(4, 106);
+    try context.close();
 
-    try path.moveTo(56, 22);
-    try path.lineTo(62, 36);
-    try path.lineTo(37, 44);
-    try path.close();
-    try path.moveTo(56, 22);
-    try path.lineTo(111, 22);
-    try path.lineTo(111, 44);
-    try path.lineTo(37, 44);
-    try path.lineTo(56, 32);
-    try path.close();
-    try path.moveTo(116, 95);
-    try path.lineTo(97, 117);
-    try path.lineTo(90, 104);
-    try path.close();
-    try path.moveTo(116, 95);
-    try path.lineTo(100, 104);
-    try path.lineTo(97, 117);
-    try path.lineTo(42, 117);
-    try path.lineTo(42, 95);
-    try path.close();
-    try path.moveTo(150, 0);
-    try path.lineTo(52, 117);
-    try path.lineTo(3, 140);
-    try path.lineTo(101, 22);
-    try path.close();
+    try context.moveTo(56, 22);
+    try context.lineTo(62, 36);
+    try context.lineTo(37, 44);
+    try context.close();
+    try context.moveTo(56, 22);
+    try context.lineTo(111, 22);
+    try context.lineTo(111, 44);
+    try context.lineTo(37, 44);
+    try context.lineTo(56, 32);
+    try context.close();
+    try context.moveTo(116, 95);
+    try context.lineTo(97, 117);
+    try context.lineTo(90, 104);
+    try context.close();
+    try context.moveTo(116, 95);
+    try context.lineTo(100, 104);
+    try context.lineTo(97, 117);
+    try context.lineTo(42, 117);
+    try context.lineTo(42, 95);
+    try context.close();
+    try context.moveTo(150, 0);
+    try context.lineTo(52, 117);
+    try context.lineTo(3, 140);
+    try context.lineTo(101, 22);
+    try context.close();
 
-    try path.moveTo(141, 22);
-    try path.lineTo(140, 40);
-    try path.lineTo(122, 45);
-    try path.close();
-    try path.moveTo(153, 22);
-    try path.lineTo(153, 117);
-    try path.lineTo(106, 117);
-    try path.lineTo(120, 105);
-    try path.lineTo(125, 95);
-    try path.lineTo(131, 95);
-    try path.lineTo(131, 45);
-    try path.lineTo(122, 45);
-    try path.lineTo(132, 36);
-    try path.lineTo(141, 22);
-    try path.close();
-    try path.moveTo(125, 95);
-    try path.lineTo(130, 110);
-    try path.lineTo(106, 117);
-    try path.close();
+    try context.moveTo(141, 22);
+    try context.lineTo(140, 40);
+    try context.lineTo(122, 45);
+    try context.close();
+    try context.moveTo(153, 22);
+    try context.lineTo(153, 117);
+    try context.lineTo(106, 117);
+    try context.lineTo(120, 105);
+    try context.lineTo(125, 95);
+    try context.lineTo(131, 95);
+    try context.lineTo(131, 45);
+    try context.lineTo(122, 45);
+    try context.lineTo(132, 36);
+    try context.lineTo(141, 22);
+    try context.close();
+    try context.moveTo(125, 95);
+    try context.lineTo(130, 110);
+    try context.lineTo(106, 117);
+    try context.close();
 
-    try context.fill(alloc, path);
+    try context.fill();
     return sfc;
 }
