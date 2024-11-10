@@ -14,7 +14,6 @@ const meta = @import("std").meta;
 const testing = @import("std").testing;
 
 const pixel = @import("pixel.zig");
-const SurfaceError = @import("errors.zig").SurfaceError;
 
 /// The scale factor used for super-sample anti-aliasing. Any functionality
 /// using the `downsample` method in a surface should be aware of this value.
@@ -26,7 +25,7 @@ pub const SurfaceType = enum {
     image_surface_rgba,
     image_surface_alpha8,
 
-    fn toPixelType(self: SurfaceType) !type {
+    fn toPixelType(self: SurfaceType) type {
         return switch (self) {
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
@@ -43,6 +42,15 @@ pub const Surface = union(SurfaceType) {
     image_surface_rgba: ImageSurface(pixel.RGBA),
     image_surface_alpha8: ImageSurface(pixel.Alpha8),
 
+    /// Errors associated with surfaces.
+    pub const Error = error{
+        /// An invalid height was passed to surface initialization.
+        InvalidHeight,
+
+        /// An invalid width was passed to surface initialization.
+        InvalidWidth,
+    };
+
     /// Initializes a surface of the specific type. The surface buffer is
     /// initialized with the zero value for the pixel type (typically black or
     /// transparent).
@@ -53,10 +61,10 @@ pub const Surface = union(SurfaceType) {
         alloc: mem.Allocator,
         width: i32,
         height: i32,
-    ) !Surface {
+    ) (Error || mem.Allocator.Error)!Surface {
         switch (surface_type) {
             inline else => |t| {
-                const pt = try t.toPixelType();
+                const pt = t.toPixelType();
                 return (try ImageSurface(pt).init(
                     alloc,
                     width,
@@ -76,7 +84,7 @@ pub const Surface = union(SurfaceType) {
         alloc: mem.Allocator,
         width: i32,
         height: i32,
-    ) !Surface {
+    ) (Error || mem.Allocator.Error)!Surface {
         switch (initial_px) {
             inline else => |px| {
                 return (try ImageSurface(@TypeOf(px)).init(
@@ -215,9 +223,9 @@ pub fn ImageSurface(comptime T: type) type {
             width: i32,
             height: i32,
             initial_px_: ?T,
-        ) (SurfaceError || mem.Allocator.Error)!ImageSurface(T) {
-            if (width < 0) return SurfaceError.InvalidWidth;
-            if (height < 0) return SurfaceError.InvalidHeight;
+        ) (Surface.Error || mem.Allocator.Error)!ImageSurface(T) {
+            if (width < 0) return error.InvalidWidth;
+            if (height < 0) return error.InvalidHeight;
 
             const buf = try alloc.alloc(T, @intCast(height * width));
             return initBuffer(buf, width, height, initial_px_);

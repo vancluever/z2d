@@ -14,14 +14,17 @@ const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
 const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
-const InternalError = @import("../errors.zig").InternalError;
+const PlotterVTable = @import("PlotterVTable.zig");
+const InternalError = @import("InternalError.zig").InternalError;
+
+pub const Error = InternalError || mem.Allocator.Error;
 
 pub fn plot(
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
     scale: f64,
     tolerance: f64,
-) !PolygonList {
+) Error!PolygonList {
     var result = PolygonList.init(alloc);
     errdefer result.deinit();
 
@@ -108,7 +111,7 @@ const SplinePlotterCtx = struct {
     polygon: *Polygon,
     current_point: *?Point,
 
-    fn line_to(ctx: *anyopaque, err_: *?anyerror, node: nodepkg.PathLineTo) void {
+    fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *SplinePlotterCtx = @ptrCast(@alignCast(ctx));
         self.polygon.plot(node.point, null) catch |err| {
             err_.* = err;

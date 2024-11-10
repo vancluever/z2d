@@ -22,7 +22,6 @@ const Pixel = @import("pixel.zig").Pixel;
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
 const Transformation = @import("Transformation.zig");
-const PathError = @import("errors.zig").PathError;
 
 alloc: mem.Allocator,
 path: Path,
@@ -44,7 +43,7 @@ transformation: Transformation = Transformation.identity,
 
 /// Initializes a `Context` with the passed in allocator and surface. Call deinit
 /// to release the `Path` that is managed by the context.
-pub fn init(alloc: mem.Allocator, surface: *Surface) !Context {
+pub fn init(alloc: mem.Allocator, surface: *Surface) mem.Allocator.Error!Context {
     return .{
         .alloc = alloc,
         .surface = surface,
@@ -226,13 +225,13 @@ pub fn userToDeviceDistance(self: *Context, x: *f64, y: *f64) void {
 
 /// Applies the inverse of the current transformation matrix (CTM) to the
 /// supplied `x` and `y`.
-pub fn deviceToUser(self: *Context, x: *f64, y: *f64) !void {
+pub fn deviceToUser(self: *Context, x: *f64, y: *f64) Transformation.Error!void {
     try self.transformation.deviceToUser(x, y);
 }
 
 /// Applies the inverse of the current transformation matrix (CTM) to the
 /// supplied `x` and `y`, but ignores translation.
-pub fn deviceToUserDistance(self: *Context, x: *f64, y: *f64) !void {
+pub fn deviceToUserDistance(self: *Context, x: *f64, y: *f64) Transformation.Error!void {
     try self.transformation.deviceToUserDistance(x, y);
 }
 
@@ -242,26 +241,26 @@ pub fn resetPath(self: *Context) void {
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Context, x: f64, y: f64) !void {
+pub fn moveTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
     try self.path.moveTo(self.alloc, x, y);
 }
 
 /// Begins a new sub-path relative to the current point. Calling this
 /// without a current point triggers safety-checked undefined behavior.
-pub fn relMoveTo(self: *Context, x: f64, y: f64) void {
+pub fn relMoveTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
     try self.path.relMoveTo(self.alloc, x, y);
 }
 
 /// Draws a line from the current point to the specified point and sets
 /// it as the current point. Acts as a `moveTo` instead if there is no
 /// current point.
-pub fn lineTo(self: *Context, x: f64, y: f64) !void {
+pub fn lineTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
     try self.path.lineTo(self.alloc, x, y);
 }
 
 /// Draws a line relative to the current point. Calling this without a
 /// current point triggers safety-checked undefined behavior.
-pub fn relLineTo(self: *Context, x: f64, y: f64) !void {
+pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
     try self.path.relLineTo(self.alloc, x, y);
 }
 
@@ -277,7 +276,7 @@ pub fn curveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
+) (Path.Error || mem.Allocator.Error)!void {
     try self.path.curveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
 
@@ -291,7 +290,7 @@ pub fn relCurveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
+) (Path.Error || mem.Allocator.Error)!void {
     try self.path.relCurveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
 
@@ -334,7 +333,7 @@ pub fn arc(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) !void {
+) (Path.Error || mem.Allocator.Error)!void {
     try self.path.arc(self.alloc, xc, yc, radius, angle1, angle2);
 }
 
@@ -349,13 +348,13 @@ pub fn arcNegative(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) !void {
+) (Path.Error || mem.Allocator.Error)!void {
     try self.path.arcNegative(self.alloc, xc, yc, radius, angle1, angle2);
 }
 
 /// Closes the path by drawing a line from the current point by the
 /// starting point. No effect if there is no current point.
-pub fn close(self: *Context) !void {
+pub fn close(self: *Context) mem.Allocator.Error!void {
     try self.path.close(self.alloc);
 }
 
@@ -368,7 +367,7 @@ pub fn isPathClosed(self: *Context) bool {
 /// set must be closed.
 ///
 /// This is a no-op if there are no nodes.
-pub fn fill(self: *Context) !void {
+pub fn fill(self: *Context) painter.FillError!void {
     try painter.fill(
         self.alloc,
         self.surface,
@@ -393,7 +392,7 @@ pub fn fill(self: *Context) !void {
 /// `line_join_mode` (see `options.JoinMode`).
 ///
 /// This is a no-op if there are no nodes.
-pub fn stroke(self: *Context) !void {
+pub fn stroke(self: *Context) painter.StrokeError!void {
     try painter.stroke(
         self.alloc,
         self.surface,

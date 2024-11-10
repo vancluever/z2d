@@ -302,7 +302,7 @@ fn arc_segment(
     radius: f64,
     angle_A: f64,
     angle_B: f64,
-) !void {
+) PathVTable.Error!void {
     const r_sin_A = radius * @sin(angle_A);
     const r_cos_A = radius * @cos(angle_A);
     const r_sin_B = radius * @sin(angle_B);
@@ -341,7 +341,7 @@ pub fn arc_in_direction(
     dir: Direction,
     ctm: Transformation,
     tolerance_: ?f64,
-) !void {
+) PathVTable.Error!void {
     var amin = angle_min;
     var amax = angle_max;
     const tolerance = if (tolerance_) |t| t else options.default_tolerance;
