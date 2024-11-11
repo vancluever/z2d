@@ -11,9 +11,22 @@ const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
 const surface = @import("surface.zig");
-const ExportError = @import("errors.zig").ExportError;
 
 const native_endian = builtin.cpu.arch.endian();
+
+/// Errors associated with exporting (e.g., to PNG et al).
+pub const Error = error{
+    /// Error during streaming graphical data.
+    BytesWrittenMismatch,
+
+    /// The surface format is unsupported for export.
+    UnsupportedSurfaceFormat,
+};
+
+pub const WriteToPNGFileError = Error ||
+    fs.File.OpenError ||
+    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
+    fs.File.WriteError;
 
 /// Exports the surface to a PNG file supplied by filename.
 ///
@@ -22,11 +35,11 @@ const native_endian = builtin.cpu.arch.endian();
 pub fn writeToPNGFile(
     sfc: surface.Surface,
     filename: []const u8,
-) !void {
+) WriteToPNGFileError!void {
     switch (sfc.getFormat()) {
         .rgba, .rgb => {},
         else => {
-            return ExportError.UnsupportedSurfaceFormat;
+            return error.UnsupportedSurfaceFormat;
         },
     }
 
@@ -42,13 +55,13 @@ pub fn writeToPNGFile(
 }
 
 /// Writes the magic header for the PNG file.
-fn writePNGMagic(file: fs.File) !void {
+fn writePNGMagic(file: fs.File) fs.File.WriteError!void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
     _ = try file.write(header);
 }
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
+fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteError)!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
@@ -57,12 +70,12 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
-        else => return ExportError.UnsupportedSurfaceFormat,
+        else => return error.UnsupportedSurfaceFormat,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
-        else => return ExportError.UnsupportedSurfaceFormat,
+        else => return error.UnsupportedSurfaceFormat,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -81,6 +94,10 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
     );
 }
 
+const WritePNGIDATStreamError = Error ||
+    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
+    fs.File.WriteError;
+
 /// Write the IDAT stream (pixel data) for the PNG file.
 ///
 /// This is currently a very rudimentary algorithm - default zlib
@@ -88,7 +105,7 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) !void {
 fn writePNGIDATStream(
     file: fs.File,
     sfc: surface.Surface,
-) !void {
+) WritePNGIDATStreamError!void {
     // Set a minimum remaining buffer size here that is reasonably
     // sized. This may not be 100% scientific, but should account for
     // the 248 byte deflate buffer (see buffer sizes in the stdlib at
@@ -157,12 +174,12 @@ fn writePNGIDATStream(
                         );
                         break :written 4; // 4 bytes
                     },
-                    else => return ExportError.UnsupportedSurfaceFormat,
+                    else => return error.UnsupportedSurfaceFormat,
                 }
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
                 // If we didn't actually write everything, it's an error.
-                return ExportError.BytesWrittenMismatch;
+                return error.BytesWrittenMismatch;
             }
 
             // New remaining at this point is current_remaining - what was
@@ -204,18 +221,18 @@ fn u32PixelToBytesLittle(value: u32) [4]u8 {
 
 /// Writes a single IDAT chunk. The data should be part of the zlib
 /// stream. See writePNG_IDAT_stream et al.
-fn writePNGIDATSingle(file: fs.File, data: []const u8) !void {
+fn writePNGIDATSingle(file: fs.File, data: []const u8) fs.File.WriteError!void {
     try writePNGWriteChunk(file, "IDAT".*, data);
 }
 
 /// Write the IEND chunk.
-fn writePNGIEND(file: fs.File) !void {
+fn writePNGIEND(file: fs.File) fs.File.WriteError!void {
     try writePNGWriteChunk(file, "IEND".*, "");
 }
 
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
-fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) !void {
+fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) fs.File.WriteError!void {
     const len: u32 = @intCast(data.len);
     const checksum = writePNGChunkCRC(chunk_type, data);
 

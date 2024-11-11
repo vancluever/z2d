@@ -6,6 +6,7 @@ const debug = @import("std").debug;
 const heap = @import("std").heap;
 const math = @import("std").math;
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 const fill_plotter = @import("internal/FillPlotter.zig");
 const options = @import("options.zig");
@@ -21,8 +22,7 @@ const StrokePlotter = @import("internal/StrokePlotter.zig");
 const Polygon = @import("internal/Polygon.zig");
 const PolygonList = @import("internal/PolygonList.zig");
 const Transformation = @import("Transformation.zig");
-const InternalError = @import("errors.zig").InternalError;
-const PathError = @import("errors.zig").PathError;
+const InternalError = @import("internal/InternalError.zig").InternalError;
 const supersample_scale = @import("surface.zig").supersample_scale;
 
 pub const FillOpts = struct {
@@ -38,6 +38,13 @@ pub const FillOpts = struct {
     tolerance: f64 = options.default_tolerance,
 };
 
+/// Errors related to the fill operation.
+pub const FillError = error{
+    /// The supplied path (and any sub-paths) have not been explicitly closed,
+    /// which is required by the fill operation.
+    PathNotClosed,
+} || Surface.Error || InternalError || mem.Allocator.Error;
+
 /// Runs a fill operation on this current path and any subpaths.
 pub fn fill(
     alloc: mem.Allocator,
@@ -45,13 +52,13 @@ pub fn fill(
     pattern: *const Pattern,
     nodes: []const PathNode,
     opts: FillOpts,
-) !void {
+) FillError!void {
     // TODO: These path safety checks have been moved from the Context
     // down to here for now. The Painter API will soon be promoted to
     // being public, so this should be fine, and will likely be
     // canonicalized as such.
     if (nodes.len == 0) return;
-    if (!PathNode.isClosedNodeSet(nodes)) return PathError.PathNotClosed;
+    if (!PathNode.isClosedNodeSet(nodes)) return error.PathNotClosed;
 
     const scale: f64 = switch (opts.anti_aliasing_mode) {
         .none => 1,
@@ -105,6 +112,9 @@ pub const StrokeOpts = struct {
     transformation: Transformation = Transformation.identity,
 };
 
+/// Errors related to the stroke operation.
+pub const StrokeError = Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
+
 /// Runs a stroke operation on this path and any sub-paths. The path is
 /// transformed to a fillable polygon representing the line, and the line is
 /// then filled.
@@ -114,7 +124,11 @@ pub fn stroke(
     pattern: *const Pattern,
     nodes: []const PathNode,
     opts: StrokeOpts,
-) !void {
+) StrokeError!void {
+    // Attempt to inverse the matrix supplied to ensure it can be inverted
+    // farther down.
+    _ = try opts.transformation.inverse();
+
     // Return if called with zero nodes.
     if (nodes.len == 0) return;
 
@@ -164,6 +178,8 @@ pub fn stroke(
     }
 }
 
+const PaintError = Surface.Error || InternalError || mem.Allocator.Error;
+
 /// Direct paint, writes to surface directly, avoiding compositing. Does not
 /// use AA.
 fn paintDirect(
@@ -172,7 +188,7 @@ fn paintDirect(
     pattern: *const Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
-) !void {
+) PaintError!void {
     const poly_start_y: i32 = math.clamp(
         @as(i32, @intFromFloat(@floor(polygons.start.y))),
         0,
@@ -226,7 +242,7 @@ fn paintComposite(
     polygons: PolygonList,
     fill_rule: FillRule,
     scale: f64,
-) !void {
+) PaintError!void {
     // This math expects integer scaling.
     debug.assert(@floor(scale) == scale);
     const i_scale: i32 = @intFromFloat(scale);
@@ -349,4 +365,27 @@ fn paintComposite(
 
     // Final compositing to main surface
     surface.srcOver(&foreground_sfc, x0, y0);
+}
+
+test "stroke uninvertible matrix error" {
+    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
+    defer sfc.deinit(testing.allocator);
+    try testing.expectError(Transformation.Error.InvalidMatrix, stroke(
+        testing.allocator,
+        &sfc,
+        &.{
+            .opaque_pattern = .{
+                .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White on black
+            },
+        },
+        &.{},
+        .{ .transformation = .{
+            .ax = 1,
+            .by = 1,
+            .cx = 2,
+            .dy = 2,
+            .tx = 5,
+            .ty = 6,
+        } },
+    ));
 }

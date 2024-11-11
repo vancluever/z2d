@@ -34,7 +34,7 @@ plotter_impl: *const PlotterVTable,
 
 /// Run decomposition on the spline to break it down to its individual lines,
 /// plotting each line along the way.
-pub fn decompose(self: *Spline) !void {
+pub fn decompose(self: *Spline) PlotterVTable.Error!void {
     // Both tangents being zero means that this is just a straight line.
     if (self.a.equal(self.b) and self.c.equal(self.d)) {
         try self.plotter_impl.lineTo(.{ .point = self.d });
@@ -53,7 +53,7 @@ pub fn decompose(self: *Spline) !void {
 }
 
 /// Inner and recursive decomposition into the specified knot set.
-fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: f64) !void {
+fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: f64) PlotterVTable.Error!void {
     if (s1.errorSq() < tolerance) {
         if (!s1.a.equal(start)) {
             try self.plotter_impl.lineTo(.{ .point = s1.a });

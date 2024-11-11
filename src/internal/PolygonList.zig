@@ -29,7 +29,7 @@ pub fn deinit(self: *PolygonList) void {
     self.polygons.deinit();
 }
 
-pub fn append(self: *PolygonList, poly: Polygon) !void {
+pub fn append(self: *PolygonList, poly: Polygon) mem.Allocator.Error!void {
     const first = self.polygons.items.len == 0;
 
     try self.polygons.append(poly);
@@ -101,7 +101,7 @@ pub fn edgesForY(
     alloc: mem.Allocator,
     line_y: f64,
     fill_rule: FillRule,
-) !EdgeListIterator {
+) Polygon.EdgesForYError!EdgeListIterator {
     var edge_list = std.ArrayList(Polygon.Edge).init(alloc);
     defer edge_list.deinit();
 

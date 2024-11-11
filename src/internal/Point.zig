@@ -40,7 +40,7 @@ pub fn applyTransformDistance(self: Point, t: Transformation) Point {
 }
 
 /// Apply the inverse of the supplied transformation matrix to a point.
-pub fn applyInverseTransform(self: Point, t: Transformation) !Point {
+pub fn applyInverseTransform(self: Point, t: Transformation) Transformation.Error!Point {
     var x = self.x;
     var y = self.y;
     try t.deviceToUser(&x, &y);
@@ -52,7 +52,7 @@ pub fn applyInverseTransform(self: Point, t: Transformation) !Point {
 
 /// Apply the inverse of the supplied transformation matrix to a point,
 /// ignoring translate.
-pub fn applyInverseTransformDistance(self: Point, t: Transformation) !Point {
+pub fn applyInverseTransformDistance(self: Point, t: Transformation) Transformation.Error!Point {
     var x = self.x;
     var y = self.y;
     try t.deviceToUserDistance(&x, &y);

@@ -34,7 +34,12 @@ vertices: std.ArrayList(PenVertex),
 /// Initializes a pen at radius thickness / 2, with point distribution
 /// based on the maximum error along the radius, being equal to or less
 /// than tolerance.
-pub fn init(alloc: mem.Allocator, thickness: f64, tolerance: f64, ctm: Transformation) !Pen {
+pub fn init(
+    alloc: mem.Allocator,
+    thickness: f64,
+    tolerance: f64,
+    ctm: Transformation,
+) mem.Allocator.Error!Pen {
     // You can find the proof for our calculation here in cairo-pen.c in the
     // Cairo project. It shows that ultimately, the maximum error of an ellipse
     // is along its major axis, and to get our needed number of vertices, we
@@ -138,7 +143,7 @@ pub fn verticesFor(
     from_slope: Slope,
     to_slope: Slope,
     clockwise: bool,
-) !std.ArrayList(PenVertex) {
+) mem.Allocator.Error!std.ArrayList(PenVertex) {
     var result = std.ArrayList(PenVertex).init(self.alloc);
     errdefer result.deinit();
 

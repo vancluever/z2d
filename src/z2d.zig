@@ -60,7 +60,6 @@ pub const painter = @import("painter.zig");
 pub const pixel = @import("pixel.zig");
 pub const options = @import("options.zig");
 pub const png_exporter = @import("export_png.zig");
-pub const errors = @import("errors.zig");
 
 pub const Context = @import("Context.zig");
 pub const Path = @import("Path.zig");

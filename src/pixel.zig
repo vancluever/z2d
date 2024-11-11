@@ -6,6 +6,14 @@
 const math = @import("std").math;
 const testing = @import("std").testing;
 
+/// Errors related to Pixel operations.
+pub const Error = error{
+    /// Strict pixel conversion using fromPixel failed due to the exact
+    /// concrete type not matching. To to do a less strict conversion, use
+    /// copySrc.
+    InvalidFormat,
+};
+
 /// Format descriptors for the pixel formats supported by the library:
 ///
 /// * `.rgba` is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
@@ -64,10 +72,10 @@ pub const RGB = packed struct(u32) {
     }
 
     /// Returns this pixel as an interface.
-    pub fn fromPixel(p: Pixel) !RGB {
+    pub fn fromPixel(p: Pixel) Error!RGB {
         return switch (p) {
             Format.rgb => |q| q,
-            else => error.InvalidPixelFormat,
+            else => error.InvalidFormat,
         };
     }
 
@@ -212,10 +220,10 @@ pub const RGBA = packed struct(u32) {
     }
 
     /// Returns this pixel as an interface.
-    pub fn fromPixel(p: Pixel) !RGBA {
+    pub fn fromPixel(p: Pixel) Error!RGBA {
         return switch (p) {
             Format.rgba => |q| q,
-            else => error.InvalidPixelFormat,
+            else => error.InvalidFormat,
         };
     }
 
@@ -376,10 +384,10 @@ pub const Alpha8 = packed struct(u8) {
     pub const format: Format = .alpha8;
 
     /// Returns this pixel as an interface.
-    pub fn fromPixel(p: Pixel) !Alpha8 {
+    pub fn fromPixel(p: Pixel) Error!Alpha8 {
         return switch (p) {
             Format.alpha8 => |q| q,
-            else => error.InvalidPixelFormat,
+            else => error.InvalidFormat,
         };
     }
 
@@ -469,13 +477,13 @@ test "pixel interface, fromPixel" {
     const alpha8: Alpha8 = .{ .a = 0xDD };
 
     try testing.expectEqual(RGB.fromPixel(.{ .rgb = rgb }), rgb);
-    try testing.expectError(error.InvalidPixelFormat, RGB.fromPixel(.{ .rgba = rgba }));
+    try testing.expectError(error.InvalidFormat, RGB.fromPixel(.{ .rgba = rgba }));
 
     try testing.expectEqual(RGBA.fromPixel(.{ .rgba = rgba }), rgba);
-    try testing.expectError(error.InvalidPixelFormat, RGBA.fromPixel(.{ .rgb = rgb }));
+    try testing.expectError(error.InvalidFormat, RGBA.fromPixel(.{ .rgb = rgb }));
 
     try testing.expectEqual(Alpha8.fromPixel(.{ .alpha8 = alpha8 }), alpha8);
-    try testing.expectError(error.InvalidPixelFormat, Alpha8.fromPixel(.{ .rgb = rgb }));
+    try testing.expectError(error.InvalidFormat, Alpha8.fromPixel(.{ .rgb = rgb }));
 }
 
 test "pixel interface, asPixel" {

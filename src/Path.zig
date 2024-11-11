@@ -17,9 +17,15 @@ const arcpkg = @import("internal/arc.zig");
 const options = @import("options.zig");
 
 const PathNode = @import("internal/path_nodes.zig").PathNode;
+const PathVTable = @import("internal/PathVTable.zig");
 const Point = @import("internal/Point.zig");
-const PathError = @import("errors.zig").PathError;
 const Transformation = @import("Transformation.zig");
+
+/// Errors associated with `Path` point plotting operations.
+pub const Error = error{
+    /// A path operation requires a current point, but does not have one.
+    NoCurrentPoint,
+};
 
 /// The underlying node set. Do not edit or populate this directly, use the
 /// builder functions (e.g., moveTo, lineTo, curveTo, closePath, etc).
@@ -48,7 +54,7 @@ transformation: Transformation = Transformation.identity,
 
 /// Initializes the path set with an initial capacity of exactly num. Call
 /// deinit to release the node list when complete.
-pub fn initCapacity(alloc: mem.Allocator, num: usize) !Path {
+pub fn initCapacity(alloc: mem.Allocator, num: usize) mem.Allocator.Error!Path {
     return .{
         .nodes = try std.ArrayListUnmanaged(PathNode).initCapacity(alloc, num),
     };
@@ -77,7 +83,7 @@ pub fn reset(self: *Path) void {
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) !void {
+pub fn moveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.moveToAssumeCapacity(x, y);
@@ -110,23 +116,23 @@ pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Begins a new sub-path relative to the current point. It is an error to call
 /// this without a current point.
-pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) !void {
+pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         return self.moveTo(alloc, p.x + x, p.y + y);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Like relMoveTo, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) !void {
+pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
         self.moveToAssumeCapacity(p.x + x, p.y + y);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Draws a line from the current point to the specified point and sets it as
 /// the current point. Acts as a `moveTo` instead if there is no current point.
-pub fn lineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) !void {
+pub fn lineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.lineToAssumeCapacity(x, y);
@@ -146,18 +152,18 @@ pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Draws a line relative to the current point. It is an error to call this
 /// without a current point.
-pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) !void {
+pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         return self.lineTo(alloc, p.x + x, p.y + y);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Like relLineTo, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) !void {
+pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
         self.lineToAssumeCapacity(p.x + x, p.y + y);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Draws a cubic bezier with the three supplied control points from the
@@ -172,8 +178,8 @@ pub fn curveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
-    if (self.current_point == null) return PathError.NoCurrentPoint;
+) (Error || mem.Allocator.Error)!void {
+    if (self.current_point == null) return error.NoCurrentPoint;
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self._curveToAssumeCapacity(x1, y1, x2, y2, x3, y3);
@@ -189,8 +195,8 @@ pub fn curveToAssumeCapacity(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
-    if (self.current_point == null) return PathError.NoCurrentPoint;
+) Error!void {
+    if (self.current_point == null) return error.NoCurrentPoint;
     self._curveToAssumeCapacity(x1, y1, x2, y2, x3, y3);
 }
 
@@ -230,10 +236,10 @@ pub fn relCurveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
+) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         return self.curveTo(alloc, p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Like relCurveTo, but does not require an allocator. Assumes enough space
@@ -246,10 +252,10 @@ pub fn relCurveToAssumeCapacity(
     y2: f64,
     x3: f64,
     y3: f64,
-) !void {
+) Error!void {
     if (self.current_point) |p| {
         return self.curveToAssumeCapacity(p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
-    } else return PathError.NoCurrentPoint;
+    } else return error.NoCurrentPoint;
 }
 
 /// Adds a circular arc of the given radius to the current path. The arc is
@@ -293,7 +299,7 @@ pub fn arc(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) !void {
+) (Error || mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
     while (effective_angle2 < angle1) effective_angle2 += math.pi * 2;
     try arcpkg.arc_in_direction(
@@ -326,7 +332,7 @@ pub fn arcNegative(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) !void {
+) (Error || mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
     while (effective_angle2 > angle1) effective_angle2 -= math.pi * 2;
     try arcpkg.arc_in_direction(
@@ -350,7 +356,7 @@ pub fn arcNegative(
 fn arc_line_to(
     ctx: *anyopaque,
     alloc: mem.Allocator,
-    err_: *?anyerror,
+    err_: *?mem.Allocator.Error,
     x: f64,
     y: f64,
 ) void {
@@ -370,7 +376,7 @@ fn arc_line_to(
 fn arc_curve_to(
     ctx: *anyopaque,
     alloc: mem.Allocator,
-    err_: *?anyerror,
+    err_: *?PathVTable.Error,
     x1: f64,
     y1: f64,
     x2: f64,
@@ -387,7 +393,7 @@ fn arc_curve_to(
 
 /// Closes the path by drawing a line from the current point by the starting
 /// point. No effect if there is no current point.
-pub fn close(self: *Path, alloc: mem.Allocator) !void {
+pub fn close(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!void {
     if (self.current_point == null) return;
     debug.assert(self.initial_point != null);
     const newlen = self.nodes.items.len + 2;
@@ -646,7 +652,7 @@ test "relMoveTo" {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(PathError.NoCurrentPoint, p.relMoveTo(alloc, 1, 1));
+        try testing.expectEqual(error.NoCurrentPoint, p.relMoveTo(alloc, 1, 1));
     }
 }
 
@@ -680,7 +686,7 @@ test "relLineTo" {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(PathError.NoCurrentPoint, p.relLineTo(alloc, 1, 1));
+        try testing.expectEqual(error.NoCurrentPoint, p.relLineTo(alloc, 1, 1));
     }
 }
 
@@ -726,6 +732,6 @@ test "relCurveTo" {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(PathError.NoCurrentPoint, p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3));
+        try testing.expectEqual(error.NoCurrentPoint, p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3));
     }
 }

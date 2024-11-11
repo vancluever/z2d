@@ -17,11 +17,11 @@ const Pen = @import("Pen.zig");
 const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
+const PlotterVTable = @import("PlotterVTable.zig");
 const Polygon = @import("Polygon.zig");
 const PolygonList = @import("PolygonList.zig");
 const Transformation = @import("../Transformation.zig");
-const TransformationError = @import("../errors.zig").TransformationError;
-const InternalError = @import("../errors.zig").InternalError;
+const InternalError = @import("InternalError.zig").InternalError;
 
 thickness: f64,
 join_mode: options.JoinMode,
@@ -32,6 +32,8 @@ scale: f64,
 tolerance: f64,
 ctm: Transformation,
 
+pub const Error = InternalError || mem.Allocator.Error;
+
 pub fn init(
     alloc: mem.Allocator,
     thickness: f64,
@@ -41,9 +43,7 @@ pub fn init(
     scale: f64,
     tolerance: f64,
     ctm: Transformation,
-) !StrokePlotter {
-    // If our ctm cannot be inverted, return InvalidMatrix.
-    _ = ctm.inverse() catch return TransformationError.InvalidMatrix;
+) mem.Allocator.Error!StrokePlotter {
     return .{
         .thickness = thickness,
         .join_mode = join_mode,
@@ -64,7 +64,7 @@ pub fn plot(
     self: *StrokePlotter,
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
-) !PolygonList {
+) Error!PolygonList {
     var result = PolygonList.init(alloc);
     errdefer result.deinit();
 
@@ -125,7 +125,7 @@ const Iterator = struct {
         polygon: *Polygon,
         before: ?*Polygon.CornerList.Node,
 
-        fn line_to(ctx: *anyopaque, err_: *?anyerror, node: nodepkg.PathLineTo) void {
+        fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
             const self: *CapPlotterCtx = @ptrCast(@alignCast(ctx));
             self.polygon.plot(node.point, self.before) catch |err| {
                 err_.* = err;
@@ -134,7 +134,7 @@ const Iterator = struct {
         }
     };
 
-    fn next(it: *Iterator, alloc: mem.Allocator) !?ResultPolygon {
+    fn next(it: *Iterator, alloc: mem.Allocator) Error!?ResultPolygon {
         debug.assert(it.index <= it.nodes.len);
         if (it.index >= it.nodes.len) return null;
 
@@ -343,20 +343,24 @@ const Iterator = struct {
         p2: Point,
         poly_clockwise_: ?bool,
         before_outer: ?*Polygon.CornerList.Node,
-    ) !bool {
+    ) mem.Allocator.Error!bool {
         const Joiner = struct {
             polygon: *Polygon,
-            plot_fn: *const fn (*anyopaque, *?anyerror, Point, ?*Polygon.CornerList.Node) void,
+            plot_fn: *const fn (*anyopaque, *?mem.Allocator.Error, Point, ?*Polygon.CornerList.Node) void,
 
-            fn plot(self: *const @This(), point: Point, before: ?*Polygon.CornerList.Node) !void {
-                var err_: ?anyerror = null;
+            fn plot(
+                self: *const @This(),
+                point: Point,
+                before: ?*Polygon.CornerList.Node,
+            ) mem.Allocator.Error!void {
+                var err_: ?mem.Allocator.Error = null;
                 self.plot_fn(self.polygon, &err_, point, before);
                 if (err_) |err| return err;
             }
 
             fn plotOuter(
                 ctx: *anyopaque,
-                err_: *?anyerror,
+                err_: *?mem.Allocator.Error,
                 point: Point,
                 before: ?*Polygon.CornerList.Node,
             ) void {
@@ -369,7 +373,7 @@ const Iterator = struct {
 
             fn plotInner(
                 ctx: *anyopaque,
-                err_: *?anyerror,
+                err_: *?mem.Allocator.Error,
                 point: Point,
                 before: ?*Polygon.CornerList.Node,
             ) void {
@@ -500,7 +504,7 @@ const Iterator = struct {
             self.inner.deinit();
         }
 
-        fn process(self: *State, node: nodepkg.PathNode) !bool {
+        fn process(self: *State, node: nodepkg.PathNode) Error!bool {
             switch (node) {
                 .move_to => |n| {
                     return self.move_to(n);
@@ -517,7 +521,7 @@ const Iterator = struct {
             }
         }
 
-        fn move_to(self: *State, node: nodepkg.PathMoveTo) !bool {
+        fn move_to(self: *State, node: nodepkg.PathMoveTo) bool {
             // move_to with initial point means we're at the end of the
             // current line
             if (self.initial_point_ != null) {
@@ -529,7 +533,7 @@ const Iterator = struct {
             return true;
         }
 
-        fn line_to(self: *State, node: nodepkg.PathLineTo) !bool {
+        fn line_to(self: *State, node: nodepkg.PathLineTo) Error!bool {
             if (self.initial_point_ != null) {
                 if (self.current_point_) |current_point| {
                     if (!current_point.equal(node.point)) { // No-op on degenerate line_to
@@ -560,7 +564,7 @@ const Iterator = struct {
             return true;
         }
 
-        fn spline_line_to(ctx: *anyopaque, err_: *?anyerror, node: nodepkg.PathLineTo) void {
+        fn spline_line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
             const self: *State = @ptrCast(@alignCast(ctx));
             const proceed = self.line_to(node) catch |err| {
                 err_.* = err;
@@ -569,7 +573,7 @@ const Iterator = struct {
             debug.assert(proceed);
         }
 
-        fn curve_to(self: *State, node: nodepkg.PathCurveTo) !bool {
+        fn curve_to(self: *State, node: nodepkg.PathCurveTo) Error!bool {
             if (self.initial_point_ != null) {
                 if (self.current_point_) |current_point| {
                     var spline: Spline = .{
@@ -598,7 +602,7 @@ const Iterator = struct {
             return true;
         }
 
-        fn close_path(self: *State) !bool {
+        fn close_path(self: *State) Error!bool {
             if (self.initial_point_) |initial_point| {
                 if (self.current_point_) |current_point| {
                     if (self.last_point_) |last_point| {
@@ -718,24 +722,4 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         }
         try testing.expectEqual(4, corners_len);
     }
-}
-
-test "init uninvertible matrix error" {
-    try testing.expectError(TransformationError.InvalidMatrix, init(
-        testing.allocator,
-        2,
-        .miter,
-        10,
-        .butt,
-        1,
-        0.01,
-        .{
-            .ax = 1,
-            .by = 1,
-            .cx = 2,
-            .dy = 2,
-            .tx = 5,
-            .ty = 6,
-        },
-    ));
 }

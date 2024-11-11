@@ -12,7 +12,7 @@ const mem = @import("std").mem;
 
 pub const CornerList = std.DoublyLinkedList(Point);
 const Point = @import("Point.zig");
-const InternalError = @import("../errors.zig").InternalError;
+const InternalError = @import("InternalError.zig").InternalError;
 
 arena_alloc: heap.ArenaAllocator,
 concatenated_polygons: std.ArrayList(Polygon),
@@ -37,7 +37,7 @@ pub fn deinit(self: *const Polygon) void {
 
 /// Plots a point on the polygon. If before is specified, the point is plotted
 /// before it.
-pub fn plot(self: *Polygon, point: Point, before_: ?*CornerList.Node) !void {
+pub fn plot(self: *Polygon, point: Point, before_: ?*CornerList.Node) mem.Allocator.Error!void {
     const n = try self.arena_alloc.allocator().create(CornerList.Node);
 
     const scaled: Point = .{
@@ -53,7 +53,7 @@ pub fn plot(self: *Polygon, point: Point, before_: ?*CornerList.Node) !void {
 
 /// Like plot, but adds points in the reverse direction (i.e., at the start of
 /// the polygon instead of the end.
-pub fn plotReverse(self: *Polygon, point: Point) !void {
+pub fn plotReverse(self: *Polygon, point: Point) mem.Allocator.Error!void {
     const n = try self.arena_alloc.allocator().create(CornerList.Node);
 
     const scaled: Point = .{
@@ -81,7 +81,7 @@ fn checkUpdateExtents(self: *Polygon, point: Point) void {
 
 /// Concatenates a polygon into this one. It's invalid to use the other polygon
 /// after this operation is done.
-pub fn concat(self: *Polygon, other: Polygon) !void {
+pub fn concat(self: *Polygon, other: Polygon) mem.Allocator.Error!void {
     try self.concatenated_polygons.append(other);
     concatByCopying(&self.corners, &other.corners);
 
@@ -125,7 +125,13 @@ pub const Edge = packed struct {
     }
 };
 
-pub fn edgesForY(self: *const Polygon, alloc: mem.Allocator, line_y: f64) !std.ArrayList(Edge) {
+pub const EdgesForYError = InternalError || mem.Allocator.Error;
+
+pub fn edgesForY(
+    self: *const Polygon,
+    alloc: mem.Allocator,
+    line_y: f64,
+) EdgesForYError!std.ArrayList(Edge) {
     // Get a sorted list of X-edges suitable for traversal in a scanline
     // fill. For an in-depth explanation on how this works, see "Efficient
     // Polygon Fill Algorithm With C Code Sample" by Darel Rex Finley

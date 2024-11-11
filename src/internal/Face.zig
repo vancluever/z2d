@@ -125,7 +125,7 @@ pub fn cap_p0(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     const reversed = init(self.p1, self.p0, self.width, self.pen, self.ctm);
     return reversed.cap(
         plotter_impl,
@@ -139,7 +139,7 @@ pub fn cap_p1(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     return self.cap(
         plotter_impl,
         cap_mode,
@@ -152,7 +152,7 @@ fn cap(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     switch (cap_mode) {
         .butt => {
             try self.capButt(plotter_impl, clockwise);
@@ -170,7 +170,7 @@ fn capButt(
     self: Face,
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     if (clockwise) {
         try plotter_impl.lineTo(.{ .point = self.p1_ccw });
         try plotter_impl.lineTo(.{ .point = self.p1_cw });
@@ -184,7 +184,7 @@ fn capSquare(
     self: Face,
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     var offset_x = self.user_slope.dx * self.half_width;
     var offset_y = self.user_slope.dy * self.half_width;
     self.ctm.userToDeviceDistance(&offset_x, &offset_y);
@@ -217,7 +217,7 @@ fn capRound(
     self: Face,
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
-) !void {
+) PlotterVTable.Error!void {
     // We need to calculate our fan along the end as if we were
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the

@@ -20,7 +20,12 @@ const math = @import("std").math;
 const testing = @import("std").testing;
 
 const Point = @import("internal/Point.zig");
-const TransformationError = @import("errors.zig").TransformationError;
+
+/// Errors associated with matrix transformation operations.
+pub const Error = error{
+    /// The matrix is invalid for the specific operation.
+    InvalidMatrix,
+};
 
 ax: f64,
 by: f64,
@@ -94,12 +99,12 @@ fn mulScalar(a: Transformation, x: f64) Transformation {
 
 /// Returns the inverse of this Transformation matrix. InvalidMatrix is
 /// returned if the matrix is not invertible.
-pub fn inverse(a: Transformation) !Transformation {
+pub fn inverse(a: Transformation) Error!Transformation {
     // Determine some special cases first (scale + translate only, or translate
     // only).
     if (a.by == 0 and a.cx == 0) {
         if (a.ax == 0 or a.dy == 0) {
-            return TransformationError.InvalidMatrix; // We can't invert the determinant
+            return error.InvalidMatrix; // We can't invert the determinant
         } else if (a.ax != 1 or a.dy != 1) {
             // Scale + translate, this is the more complex case, but can be
             // ultimately reduced to some simple calculations due to the fact
@@ -133,7 +138,7 @@ pub fn inverse(a: Transformation) !Transformation {
     // For example, the determinant reduces to the standard ad - bc, so let's do that first.
     const det = a.determinant();
     if (det == 0) {
-        return TransformationError.InvalidMatrix; // We can't invert the determinant
+        return error.InvalidMatrix; // We can't invert the determinant
     }
 
     // We can just short-circuit to our adjunct below according to what the
@@ -201,13 +206,13 @@ pub fn userToDevice(a: Transformation, x: *f64, y: *f64) void {
 
 /// Applies the inverse of the transformation matrix to the supplied `x` and
 /// `y`, but ignores translation.
-pub fn deviceToUserDistance(a: Transformation, x: *f64, y: *f64) !void {
+pub fn deviceToUserDistance(a: Transformation, x: *f64, y: *f64) Error!void {
     (try a.inverse()).userToDeviceDistance(x, y);
 }
 
 /// Applies the inverse of the transformation matrix to the supplied `x` and
 /// `y`.
-pub fn deviceToUser(a: Transformation, x: *f64, y: *f64) !void {
+pub fn deviceToUser(a: Transformation, x: *f64, y: *f64) Error!void {
     (try a.inverse()).userToDevice(x, y);
 }
 
@@ -374,7 +379,7 @@ test "inverse" {
 
     {
         // Invalid special-case matrix
-        try testing.expectError(TransformationError.InvalidMatrix, (Transformation{
+        try testing.expectError(error.InvalidMatrix, (Transformation{
             .ax = 0,
             .by = 0,
             .cx = 0,
@@ -386,7 +391,7 @@ test "inverse" {
 
     {
         // Invalid standard-case matrix
-        try testing.expectError(TransformationError.InvalidMatrix, (Transformation{
+        try testing.expectError(error.InvalidMatrix, (Transformation{
             .ax = 3,
             .by = 3,
             .cx = 3,
