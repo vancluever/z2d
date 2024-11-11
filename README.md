@@ -128,11 +128,8 @@ stroking operations. Additionally, surfaces can be interfaced with directly.
 
 Currently:
 
- * Basic rendering of lines and cubic Beziers.
-   - Circular arc helpers now exist. Using these to draw ellipses is planned
-     with the addition of transformations. Additionally, examples exist in the
-     [`spec/`](spec/) directory for representing arcs and quadratic Beziers
-     with current primitives.
+ * Basic rendering of lines and cubic Beziers, with helpers for arcs (circles
+   native, ellipses through transformations).
  * Filling and stroking:
    - Miter, bevel, and round join supported for stroking.
    - Butt, square, and round caps supported for stroking.
