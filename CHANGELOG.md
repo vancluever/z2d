@@ -1,4 +1,4 @@
-## 0.4.0 (Unreleased)
+## 0.4.0 (November 13, 2024)
 
 This release introduces large changes to the layout of the library to better
 define the lines between _managed_ and _unmanaged_ architecture, similar to
