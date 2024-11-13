@@ -22,7 +22,7 @@ const PathNode = @import("internal/path_nodes.zig").PathNode;
 /// setters. If you require a feature of `Path` that is not wrapped or exposed
 /// (such as manipulation of the transformation matrix), you can access the
 /// instance directly through the `wrapped_path` field. Standard caveats apply;
-/// note that `Path.arc` and `Path.arcNegative`, for example, currently has no
+/// note that `Path.arc` and `Path.arcNegative`, for example, currently have no
 /// externally managed method equivalent, and as such, can't be used with
 /// `StaticPath`.
 pub fn StaticPath(comptime len: usize) type {
