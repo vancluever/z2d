@@ -32,7 +32,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.relLineTo(0, -50);
     try context.relLineTo(-50, 0);
     try context.relLineTo(0, -50);
-    try context.close();
+    try context.closePath();
     try context.stroke();
 
     return sfc;

@@ -36,7 +36,7 @@ fn fillMark(context: *z2d.Context) !void {
     try context.moveTo(46, 22);
     try context.lineTo(28, 44);
     try context.lineTo(19, 30);
-    try context.close();
+    try context.closePath();
     try context.moveTo(46, 22);
     try context.lineTo(33, 33);
     try context.lineTo(28, 44);
@@ -47,42 +47,42 @@ fn fillMark(context: *z2d.Context) !void {
     try context.lineTo(12, 117);
     try context.lineTo(0, 117);
     try context.lineTo(0, 22);
-    try context.close();
+    try context.closePath();
     try context.moveTo(31, 95);
     try context.lineTo(12, 117);
     try context.lineTo(4, 106);
-    try context.close();
+    try context.closePath();
 
     try context.moveTo(56, 22);
     try context.lineTo(62, 36);
     try context.lineTo(37, 44);
-    try context.close();
+    try context.closePath();
     try context.moveTo(56, 22);
     try context.lineTo(111, 22);
     try context.lineTo(111, 44);
     try context.lineTo(37, 44);
     try context.lineTo(56, 32);
-    try context.close();
+    try context.closePath();
     try context.moveTo(116, 95);
     try context.lineTo(97, 117);
     try context.lineTo(90, 104);
-    try context.close();
+    try context.closePath();
     try context.moveTo(116, 95);
     try context.lineTo(100, 104);
     try context.lineTo(97, 117);
     try context.lineTo(42, 117);
     try context.lineTo(42, 95);
-    try context.close();
+    try context.closePath();
     try context.moveTo(150, 0);
     try context.lineTo(52, 117);
     try context.lineTo(3, 140);
     try context.lineTo(101, 22);
-    try context.close();
+    try context.closePath();
 
     try context.moveTo(141, 22);
     try context.lineTo(140, 40);
     try context.lineTo(122, 45);
-    try context.close();
+    try context.closePath();
     try context.moveTo(153, 22);
     try context.lineTo(153, 117);
     try context.lineTo(106, 117);
@@ -93,11 +93,11 @@ fn fillMark(context: *z2d.Context) !void {
     try context.lineTo(122, 45);
     try context.lineTo(132, 36);
     try context.lineTo(141, 22);
-    try context.close();
+    try context.closePath();
     try context.moveTo(125, 95);
     try context.lineTo(130, 110);
     try context.lineTo(106, 117);
-    try context.close();
+    try context.closePath();
 
     try context.fill();
 }

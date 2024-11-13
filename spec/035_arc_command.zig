@@ -32,7 +32,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     try context.moveTo(200, 200);
     try context.arcNegative(200, 200, 150, math.pi, math.pi * 1.5);
-    try context.close();
+    try context.closePath();
     try context.fill();
     context.pattern = .{
         .opaque_pattern = .{
@@ -44,7 +44,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     context.resetPath();
     try context.moveTo(175, 175);
     try context.arc(175, 175, 150, math.pi, math.pi * 1.5);
-    try context.close();
+    try context.closePath();
     context.pattern = .{
         .opaque_pattern = .{
             .pixel = .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0x00 } }, // Yellow for fill

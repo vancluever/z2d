@@ -28,7 +28,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.moveTo(0 + margin, 0 + margin);
     try context.lineTo(sub_canvas_width - margin - 1, 0 + margin);
     try context.lineTo(sub_canvas_width / 2 - 1, sub_canvas_height - margin - 1);
-    try context.close();
+    try context.closePath();
 
     // Square
     margin = 50;
@@ -37,7 +37,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin);
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, sub_canvas_height - margin - 1);
     try context.lineTo(x_offset + margin, sub_canvas_height - margin - 1);
-    try context.close();
+    try context.closePath();
 
     // Trapezoid
     const trapezoid_margin_top = 59;
@@ -48,7 +48,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(x_offset + sub_canvas_width - trapezoid_margin_top - 1, 0 + trapezoid_margin_y);
     try context.lineTo(x_offset + sub_canvas_width - trapezoid_margin_bottom - 1, sub_canvas_height - trapezoid_margin_y - 1);
     try context.lineTo(x_offset + trapezoid_margin_bottom, sub_canvas_height - trapezoid_margin_y - 1);
-    try context.close();
+    try context.closePath();
 
     // Star
     margin = 13;
@@ -63,13 +63,13 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(x_offset + margin, y_offset + margin * y_scale); // 5
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + margin * y_scale); // 2
     try context.lineTo(x_offset + margin * x_scale, y_offset + sub_canvas_height - margin - 1); // 4
-    try context.close();
+    try context.closePath();
 
     // Bezier
     x_offset += sub_canvas_width;
     try context.moveTo(x_offset + 12, y_offset + 166);
     try context.curveTo(x_offset + 59, y_offset + 32, x_offset + 139, y_offset + 32, x_offset + 186, y_offset + 166);
-    try context.close();
+    try context.closePath();
 
     try context.fill();
 

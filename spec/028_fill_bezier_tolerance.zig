@@ -23,21 +23,21 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     try context.moveTo(19, 224);
     try context.curveTo(89, 49, 209, 49, 279, 224);
-    try context.close();
+    try context.closePath();
     try context.fill();
 
     context.setTolerance(3);
     context.resetPath();
     try context.moveTo(319, 224);
     try context.curveTo(389, 49, 509, 49, 579, 224);
-    try context.close();
+    try context.closePath();
     try context.fill();
 
     context.setTolerance(10);
     context.resetPath();
     try context.moveTo(619, 224);
     try context.curveTo(689, 49, 809, 49, 879, 224);
-    try context.close();
+    try context.closePath();
     try context.fill();
 
     return sfc;

@@ -32,7 +32,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(0 + margin, 0 + margin * y_scale); // 5
     try context.lineTo(sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
     try context.lineTo(0 + margin * x_scale, height - margin - 1); // 4
-    try context.close();
+    try context.closePath();
     try context.stroke();
 
     context.resetPath();
@@ -43,7 +43,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(x_offset + 0 + margin, 0 + margin * y_scale); // 5
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
     try context.lineTo(x_offset + 0 + margin * x_scale, height - margin - 1); // 4
-    try context.close();
+    try context.closePath();
     try context.stroke();
 
     context.resetPath();
@@ -54,7 +54,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(x_offset + 0 + margin, 0 + margin * y_scale); // 5
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, 0 + margin * y_scale); // 2
     try context.lineTo(x_offset + 0 + margin * x_scale, height - margin - 1); // 4
-    try context.close();
+    try context.closePath();
     try context.stroke();
 
     return sfc;

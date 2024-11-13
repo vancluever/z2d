@@ -36,14 +36,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(85, 60);
     try context.lineTo(80, 70);
     try context.lineTo(60, 50);
-    try context.close();
+    try context.closePath();
 
     // counter-clockwise, closed
     try context.moveTo(60, 10);
     try context.lineTo(70, 20);
     try context.lineTo(80, 30);
     try context.lineTo(90, 10);
-    try context.close();
+    try context.closePath();
 
     // single line, UL -> DR
     try context.moveTo(10, 90);

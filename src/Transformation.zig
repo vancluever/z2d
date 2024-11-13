@@ -10,10 +10,11 @@
 //!
 //! Since all named operations operate on the named fields using the assumption
 //! of the affine transformation matrix, more complex operations (such as
-//! inverse) should be safe. Checks are still made on functions that are
-//! possibly unsafe, however, to ensure that a matrix is valid before
-//! execution. Any operation that would fail due to a result of this will fail
-//! with an `InvalidMatrix` error.
+//! `inverse`) should be safe, so long as you stick to these methods and don't
+//! use `mul`. Checks are still made on functions that are possibly unsafe,
+//! however, to ensure that a matrix is valid before execution. Any operation
+//! that would fail due to a result of this will fail with an `InvalidMatrix`
+//! error.
 const Transformation = @This();
 
 const math = @import("std").math;
@@ -45,7 +46,7 @@ pub const identity: Transformation = .{
     .ty = 0,
 };
 
-/// Checks to see if a point is equal to another point.
+/// Returns `true` if the two matrices are equal.
 pub fn equal(a: Transformation, b: Transformation) bool {
     return a.ax == b.ax and
         a.by == b.by and
@@ -97,7 +98,7 @@ fn mulScalar(a: Transformation, x: f64) Transformation {
     };
 }
 
-/// Returns the inverse of this Transformation matrix. InvalidMatrix is
+/// Returns the inverse of this Transformation matrix. `InvalidMatrix` is
 /// returned if the matrix is not invertible.
 pub fn inverse(a: Transformation) Error!Transformation {
     // Determine some special cases first (scale + translate only, or translate
@@ -167,8 +168,8 @@ pub fn translate(a: Transformation, tx: f64, ty: f64) Transformation {
     return a.mul(b);
 }
 
-/// Scale by `(sx, sy)`. When `sx` and `sy` are not equal, a stretching effect
-/// will be achieved.
+/// Scale by (`sx`, `sy`). When `sx` and `sy` are not equal, a stretching
+/// effect will be achieved.
 pub fn scale(a: Transformation, sx: f64, sy: f64) Transformation {
     var b = identity;
     b.ax = sx;

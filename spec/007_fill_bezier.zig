@@ -20,7 +20,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     try context.moveTo(19, 249);
     try context.curveTo(89, 49, 209, 49, 279, 249);
-    try context.close();
+    try context.closePath();
 
     try context.fill();
 

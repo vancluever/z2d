@@ -34,7 +34,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         try context.curveTo(center_x + radius, center_y + p12, center_x + p12, center_y + radius, center_x, center_y + radius);
         try context.curveTo(center_x - p12, center_y + radius, center_x - radius, center_y + p12, center_x - radius, center_y);
         try context.curveTo(center_x - radius, center_y - p12, center_x - p12, center_y - radius, center_x, center_y - radius);
-        try context.close();
+        try context.closePath();
         try context.fill();
     }
 
@@ -51,7 +51,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         try context.curveTo(center_x + radius_minor, center_y + p12_major, center_x + p12_minor, center_y + radius_major, center_x, center_y + radius_major);
         try context.curveTo(center_x - p12_minor, center_y + radius_major, center_x - radius_minor, center_y + p12_major, center_x - radius_minor, center_y);
         try context.curveTo(center_x - radius_minor, center_y - p12_major, center_x - p12_minor, center_y - radius_major, center_x, center_y - radius_major);
-        try context.close();
+        try context.closePath();
         try context.fill();
     }
 

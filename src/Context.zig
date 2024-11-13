@@ -5,11 +5,11 @@
 //! `Path`, `Surface`, and `Pattern` that it uses for these operations and a
 //! frontend for controlling various options for filling and stroking.
 //!
-//! Every field within the context is controllable via setters or other
-//! frontend methods. It is recommended you do not manipulate the fields within
-//! a context directly. If you do wish further control over the process than
-//! what the context provides, you can use each underlying component in an
-//! unmanaged fashion by following the patterns the context uses as an example.
+//! Every field within `Context` is controllable via setters or other frontend
+//! methods. It is recommended you do not manipulate these fields directly. If
+//! you do wish further control over the process than what `Context` provides,
+//! you can use each underlying component in an unmanaged fashion by following
+//! the patterns used here as an example.
 const Context = @This();
 
 const mem = @import("std").mem;
@@ -41,8 +41,9 @@ miter_limit: f64 = 10.0,
 tolerance: f64 = options.default_tolerance,
 transformation: Transformation = Transformation.identity,
 
-/// Initializes a `Context` with the passed in allocator and surface. Call deinit
-/// to release the `Path` that is managed by the context.
+/// Initializes a `Context` with the passed in allocator and surface. Call
+/// `deinit` to release any resources managed solely by the context, such as
+/// the managed `Path`.
 pub fn init(alloc: mem.Allocator, surface: *Surface) mem.Allocator.Error!Context {
     return .{
         .alloc = alloc,
@@ -58,7 +59,7 @@ pub fn deinit(self: *Context) void {
     self.path = undefined;
 }
 
-/// Returns the current underlying pixel for the context's pattern.
+/// Returns the current underlying `Pixel` for the context's pattern.
 pub fn getSource(self: *Context) Pixel {
     return switch (self.pattern) {
         .opaque_pattern => |p| p.pixel,
@@ -66,9 +67,8 @@ pub fn getSource(self: *Context) Pixel {
 }
 
 /// Sets the context's pattern to the supplied `Pixel`. Fill and stroke
-/// operations will draw with this pixel when they are called.
-///
-/// The default pattern is RGBA opaque black.
+/// operations will draw with this pixel when they are called. The default
+/// pattern is RGBA opaque black.
 pub fn setSource(self: *Context, px: Pixel) void {
     self.pattern = .{ .opaque_pattern = .{ .pixel = px } };
 }
@@ -91,7 +91,7 @@ pub fn getFillRule(self: *Context) options.FillRule {
 }
 
 /// Sets how edges are counted during fill operations. The default mode is
-/// .non_zero.
+/// `.non_zero`.
 pub fn setFillRule(self: *Context, fill_rule: options.FillRule) void {
     self.fill_rule = fill_rule;
 }
@@ -102,7 +102,7 @@ pub fn getLineCapMode(self: *Context) options.CapMode {
 }
 
 /// Sets how the ends of lines are drawn during stroke operations, a process
-/// known as "capping". The default cap mode is .butt.
+/// known as "capping". The default cap mode is `.butt`.
 pub fn setLineCapMode(self: *Context, line_cap_mode: options.CapMode) void {
     self.line_cap_mode = line_cap_mode;
 }
@@ -112,7 +112,8 @@ pub fn getLineJoinMode(self: *Context) options.JoinMode {
     return self.line_join_mode;
 }
 
-/// Sets how lines are joined during stroke operations.
+/// Sets how lines are joined during stroke operations. The default join mode
+/// is `.miter`.
 pub fn setLineJoinMode(self: *Context, line_join_mode: options.JoinMode) void {
     self.line_join_mode = line_join_mode;
 }
@@ -133,10 +134,10 @@ pub fn getMiterLimit(self: *Context) f64 {
     return self.miter_limit;
 }
 
-/// Sets the limit when `line_join_mode` is set to `.miter`; in this mode, this
-/// value determines when the join is instead drawn as a bevel. This can be
-/// used to prevent extremely large miter points that result from very sharp
-/// angled joins.
+/// Sets the limit when the line join mode set with `setLineJoinMode` is
+/// `.miter`; in this mode, this value determines when the join is instead
+/// drawn as a bevel. This can be used to prevent extremely large miter points
+/// that result from very sharp angled joins.
 ///
 /// The value here is the maximum allowed ratio of the miter distance (the
 /// distance of the center of the stroke to the miter point) divided by the
@@ -166,8 +167,9 @@ pub fn getTolerance(self: *Context) f64 {
 /// marked artifacts at relatively low tolerance settings, so take care when
 /// changing under these scenarios.
 pub fn setTolerance(self: *Context, tolerance: f64) void {
-    self.tolerance = tolerance;
-    self.path.tolerance = tolerance;
+    const t = @max(tolerance, 0.001);
+    self.tolerance = t;
+    self.path.tolerance = t;
 }
 
 /// Returns the current transformation matrix (CTM) for the context.
@@ -206,8 +208,9 @@ pub fn rotate(self: *Context, angle: f64) void {
     self.setTransformation(self.getTransformation().rotate(angle));
 }
 
-/// Modifies the current transformation matrix (CTM) by scaling by `(sx, sy)`.
-/// When `sx` and `sy` are not equal, a stretching effect will be achieved.
+/// Modifies the current transformation matrix (CTM) by scaling by (`sx`,
+/// `sy`). When `sx` and `sy` are not equal, a stretching effect will be
+/// achieved.
 pub fn scale(self: *Context, sx: f64, sy: f64) void {
     self.setTransformation(self.getTransformation().scale(sx, sy));
 }
@@ -240,13 +243,15 @@ pub fn resetPath(self: *Context) void {
     self.path.reset();
 }
 
-/// Starts a new path, and moves the current point to it.
+/// Starts a new path, and moves the current point to it. If a path already has
+/// been started, a new sub-path is started. Note that this does not clear any
+/// existing paths or nodes, use `resetPath` to accomplish this.
 pub fn moveTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
     try self.path.moveTo(self.alloc, x, y);
 }
 
-/// Begins a new sub-path relative to the current point. Calling this
-/// without a current point triggers safety-checked undefined behavior.
+/// Begins a new sub-path relative to the current point. It is an error to call
+/// this without a current point.
 pub fn relMoveTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
     try self.path.relMoveTo(self.alloc, x, y);
 }
@@ -258,16 +263,15 @@ pub fn lineTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
     try self.path.lineTo(self.alloc, x, y);
 }
 
-/// Draws a line relative to the current point. Calling this without a
-/// current point triggers safety-checked undefined behavior.
+/// Draws a line relative to the current point. It is an error to call this
+/// without a current point.
 pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
     try self.path.relLineTo(self.alloc, x, y);
 }
 
-/// Draws a cubic bezier with the three supplied control points from
-/// the current point. The new current point is set to (x3, y3).
-/// Calling this without a current point triggers safety-checked
-/// undefined behavior.
+/// Draws a cubic bezier with the three supplied control points from the
+/// current point. The new current point is set to (`x3`, `y3`). It is an error
+/// to call this without a current point.
 pub fn curveTo(
     self: *Context,
     x1: f64,
@@ -280,8 +284,8 @@ pub fn curveTo(
     try self.path.curveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
 
-/// Draws a cubic bezier relative to the current point. Calling this
-/// without a current point triggers safety-checked undefined behavior.
+/// Draws a cubic bezier relative to the current point. It is an error to call
+/// this without a current point.
 pub fn relCurveTo(
     self: *Context,
     x1: f64,
@@ -295,11 +299,11 @@ pub fn relCurveTo(
 }
 
 /// Adds a circular arc of the given radius to the current path. The arc is
-/// centered at (xc, yc), begins at angle1 and proceeds in the direction of
-/// increasing angles (i.e., counterclockwise direction) to end at angle2.
+/// centered at (`xc`, `yc`), begins at `angle1` and proceeds in the direction
+/// of increasing angles (i.e., counterclockwise direction) to end at `angle2`.
 ///
-/// If angle2 is less than angle1, it will be increased by 2 * Π until it's
-/// greater than angle1.
+/// If `angle2` is less than `angle1`, it will be increased by 2 * Π until it's
+/// greater than `angle1`.
 ///
 /// Angles are measured at radians (to convert from degrees, multiply by Π /
 /// 180).
@@ -314,7 +318,7 @@ pub fn relCurveTo(
 /// ## Drawing an ellipse
 ///
 /// In order to draw an ellipse, use `arc` along with a transformation. The
-/// following example will draw an elliptical arc at `(x, y)` bounded by the
+/// following example will draw an elliptical arc at (`x`, `y`) bounded by the
 /// rectangle of `width` by `height` (i.e., the rectangle controls the lengths
 /// of the radii).
 ///
@@ -337,10 +341,10 @@ pub fn arc(
     try self.path.arc(self.alloc, xc, yc, radius, angle1, angle2);
 }
 
-/// Like arc, but draws in the reverse direction, i.e., begins at angle1, and
-/// moves in decreasing angles (i.e., counterclockwise direction) to end at
-/// angle2. If angle2 is greater than angle1, it will be decreased by 2 * Π
-/// until it's less than angle1.
+/// Like `arc`, but draws in the reverse direction, i.e., begins at `angle1`,
+/// and moves in decreasing angles (i.e., counterclockwise direction) to end at
+/// `angle2`. If `angle2` is greater than `angle1`, it will be decreased by 2 *
+/// Π until it's less than `angle1`.
 pub fn arcNegative(
     self: *Context,
     xc: f64,
@@ -354,19 +358,18 @@ pub fn arcNegative(
 
 /// Closes the path by drawing a line from the current point by the
 /// starting point. No effect if there is no current point.
-pub fn close(self: *Context) mem.Allocator.Error!void {
+pub fn closePath(self: *Context) mem.Allocator.Error!void {
     try self.path.close(self.alloc);
 }
 
-/// Returns true if all subpaths in the path set are currently closed.
+/// Returns `true` if all subpaths in the context's path set are currently
+/// closed.
 pub fn isPathClosed(self: *Context) bool {
     return self.path.isClosed();
 }
 
-/// Runs a fill operation on the path(s) in the supplied set. All paths in the
-/// set must be closed.
-///
-/// This is a no-op if there are no nodes.
+/// Runs a fill operation for the current path and any subpaths. All paths in
+/// the set must be closed. This is a no-op if there are no nodes.
 pub fn fill(self: *Context) painter.FillError!void {
     try painter.fill(
         self.alloc,
@@ -381,15 +384,14 @@ pub fn fill(self: *Context) painter.FillError!void {
     );
 }
 
-/// Strokes a line for the path(s) in the supplied set.
+/// Strokes a line for the current path and any subpaths.
 ///
 /// The behavior of open and closed paths are different for stroking. For open
-/// paths (not explicitly closed with `Path.close`), the start and the end of
-/// the line are capped using the style set in `line_cap_mode` (see
-/// `options.CapMode`). For closed paths (ones that *are* explicitly closed
-/// with `Path.close`), the intersection joint of the start and end are instead
-/// joined, as with with all other joints along the way, with the style set in
-/// `line_join_mode` (see `options.JoinMode`).
+/// paths (not explicitly closed with `closePath`), the start and the end of
+/// the line are capped using the style set with `setLineCapMode`. For closed
+/// paths (ones that *are* explicitly closed with `closePath`), the
+/// intersection joint of the start and end are instead joined, as with with
+/// all other joints along the way, with the style set in `setLineJoinMode`.
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context) painter.StrokeError!void {

@@ -40,7 +40,7 @@ pub const FillRule = enum {
 pub const JoinMode = enum {
     /// Lines are joined with a miter (pointed end).
     ///
-    /// See `Context.miter_limit` for details on how to control the miter
+    /// See `Context.setMiterLimit` for details on how to control the miter
     /// limit.
     miter,
 
@@ -69,7 +69,7 @@ pub const CapMode = enum {
 };
 
 /// Represents the anti-aliasing mode used when drawing paths, which smoothes
-/// out jagged lines (aka "jaggies"). "none" represents no anti-aliasing.
+/// out jagged lines (aka "jaggies"). `none` represents no anti-aliasing.
 pub const AntiAliasMode = enum {
     none,
     default,

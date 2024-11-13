@@ -10,7 +10,7 @@ const testing = @import("std").testing;
 pub const Error = error{
     /// Strict pixel conversion using fromPixel failed due to the exact
     /// concrete type not matching. To to do a less strict conversion, use
-    /// copySrc.
+    /// `copySrc`.
     InvalidFormat,
 };
 
@@ -32,9 +32,8 @@ pub const Pixel = union(Format) {
     alpha8: Alpha8,
 
     /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff src-over operation). All pixel types with color channels
+    /// are expected to be pre-multiplied.
     pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
         return switch (dst) {
             inline else => |d| d.srcOver(src).asPixel(),
@@ -42,9 +41,8 @@ pub const Pixel = union(Format) {
     }
 
     /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff dst-in operation). All pixel types with color channels are
+    /// expected to be pre-multiplied.
     pub fn dstIn(dst: Pixel, src: Pixel) Pixel {
         return switch (dst) {
             inline else => |d| d.dstIn(src).asPixel(),
@@ -99,9 +97,8 @@ pub const RGB = packed struct(u32) {
         };
     }
 
-    /// Returns an average of the pixels in the supplied slice.
-    ///
-    /// The average of a zero-length slice is pure black.
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is pure black.
     pub fn average(ps: []const RGB) RGB {
         if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0 };
 
@@ -128,9 +125,8 @@ pub const RGB = packed struct(u32) {
     }
 
     /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff src-over operation). All pixel types with color channels
+    /// are expected to be pre-multiplied.
     pub fn srcOver(dst: RGB, src: Pixel) RGB {
         const d = .{
             .r = @as(u32, @intCast(dst.r)),
@@ -157,9 +153,8 @@ pub const RGB = packed struct(u32) {
     }
 
     /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff dst-in operation). All pixel types with color channels are
+    /// expected to be pre-multiplied.
     pub fn dstIn(dst: RGB, src: Pixel) RGB {
         const d = .{
             .r = @as(u32, @intCast(dst.r)),
@@ -202,10 +197,8 @@ pub const RGBA = packed struct(u32) {
     /// The format descriptor for this pixel format.
     pub const format: Format = .rgba;
 
-    /// Returns a pixel from a clamped 0-1 value.
-    ///
-    /// The helper expects the values as straight alpha and will pre-multiply
-    /// the values for you.
+    /// Returns a pixel from a clamped 0-1 value. The helper expects the values
+    /// as straight alpha and will pre-multiply the values for you.
     pub fn fromClamped(r: f64, g: f64, b: f64, a: f64) RGBA {
         const rc = math.clamp(r, 0, 1);
         const gc = math.clamp(g, 0, 1);
@@ -249,9 +242,8 @@ pub const RGBA = packed struct(u32) {
         };
     }
 
-    /// Returns an average of the pixels in the supplied slice.
-    ///
-    /// The average of a zero-length slice is transparent black.
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is transparent black.
     pub fn average(ps: []const RGBA) RGBA {
         if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
@@ -310,9 +302,8 @@ pub const RGBA = packed struct(u32) {
     }
 
     /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff src-over operation). All pixel types with color channels
+    /// are expected to be pre-multiplied.
     pub fn srcOver(dst: RGBA, src: Pixel) RGBA {
         const d = .{
             .r = @as(u32, @intCast(dst.r)),
@@ -343,9 +334,8 @@ pub const RGBA = packed struct(u32) {
     }
 
     /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff dst-in operation). All pixel types with color channels are
+    /// expected to be pre-multiplied.
     pub fn dstIn(dst: RGBA, src: Pixel) RGBA {
         const d = .{
             .r = @as(u32, @intCast(dst.r)),
@@ -406,9 +396,8 @@ pub const Alpha8 = packed struct(u8) {
         };
     }
 
-    /// Returns an average of the pixels in the supplied slice.
-    ///
-    /// The average of a zero-length slice is transparent black.
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is transparent black.
     pub fn average(ps: []const Alpha8) Alpha8 {
         if (ps.len == 0) return .{ .a = 0 };
 
@@ -429,9 +418,8 @@ pub const Alpha8 = packed struct(u8) {
     }
 
     /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff src-over operation). All pixel types with color channels
+    /// are expected to be pre-multiplied.
     pub fn srcOver(dst: Alpha8, src: Pixel) Alpha8 {
         const d = .{
             .a = @as(u32, @intCast(dst.a)),
@@ -450,9 +438,8 @@ pub const Alpha8 = packed struct(u8) {
     }
 
     /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation).
-    ///
-    /// All pixel types with color channels are expected to be pre-multiplied.
+    /// Porter-Duff dst-in operation). All pixel types with color channels are
+    /// expected to be pre-multiplied.
     pub fn dstIn(dst: Alpha8, src: Pixel) Alpha8 {
         const d = .{
             .a = @as(u32, @intCast(dst.a)),
