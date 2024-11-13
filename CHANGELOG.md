@@ -19,7 +19,7 @@ checking that needs to be done for current points in `Path`).
 
 `StaticPath` has also been introduced as a shorthand to working with a static
 buffer `Path`. This wraps a buffer of a particular length so that you don't
-have to declare a it separately. Additionally, all methods in `StaticPath` are
+have to declare one separately. Additionally, all methods in `StaticPath` are
 100% infallible, with ones that would normally return non-memory errors causing
 safety-checked undefined behavior in the event these errors would be returned.
 
