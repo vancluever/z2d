@@ -41,6 +41,9 @@ pub const FillOpts = struct {
 };
 
 /// Errors related to the `fill` operation.
+///
+/// **Note for autodoc viewers:** `std.mem.Allocator.Error` is a member of this
+/// set, but is not shown because `std` is pruned from our autodoc.
 pub const FillError = error{
     /// The supplied path (and any sub-paths) have not been explicitly closed,
     /// which is required by the fill operation.
@@ -111,6 +114,9 @@ pub const StrokeOpts = struct {
 };
 
 /// Errors related to the `stroke` operation.
+///
+/// **Note for autodoc viewers:** `std.mem.Allocator.Error` is a member of this
+/// set, but is not shown because `std` is pruned from our autodoc.
 pub const StrokeError = Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
 
 /// Runs a stroke operation on the path set represented by `nodes`. The path(s)

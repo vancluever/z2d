@@ -23,6 +23,9 @@ pub const Error = error{
     UnsupportedSurfaceFormat,
 };
 
+/// **Note for autodoc viewers:** Several members of this error set have been
+/// obfuscated due to being pruned from autodoc. Please view source for the
+/// full set.
 pub const WriteToPNGFileError = Error ||
     fs.File.OpenError ||
     zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
