@@ -20,8 +20,7 @@ have to declare a it separately. Additionally, all methods in `StaticPath` are
 safety-checked undefined behavior in the event these errors would be returned.
 
 The new unmanaged API also introduces the new `painter` package, allowing you
-to do fill or stroke operations without needing to use a `Context`, which is
-described in further detail below.
+to do fill or stroke operations without needing to use a `Context`.
 
 THE NEW MANAGED CONTEXT
 
