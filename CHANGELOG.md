@@ -33,7 +33,7 @@ operation and it is now considered incorrect behavior to have to manipulate
 context fields directly.
 
 Most folks should be good using `Context` for day-to-day operations, but if you
-require more control (or wish to use static buffer API), it exists as a
+require more control (or wish to use the static buffer API), it exists as a
 reference example of how you can use the unmanaged API yourself.
 
 EXPLICIT ERROR SETS
