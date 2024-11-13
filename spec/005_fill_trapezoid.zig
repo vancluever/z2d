@@ -25,7 +25,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.lineTo(width - margin_top - 1, 0 + margin_y);
     try context.lineTo(width - margin_bottom - 1, height - margin_y - 1);
     try context.lineTo(0 + margin_bottom, height - margin_y - 1);
-    try context.close();
+    try context.closePath();
 
     try context.fill();
 

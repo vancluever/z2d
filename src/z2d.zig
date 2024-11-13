@@ -11,18 +11,25 @@
 //!
 //! The full API can be broken down as follows:
 //!
-//! ## Core types and interfaces
+//! ## `Context` - managed drawing
 //!
-//! * `Context` - The draw context, which connects patterns to surfaces, holds
-//! other state data, and is used to dispatch drawing operations. Most drawing
-//! operations will be executed from a context.
+//! The architecture of z2d is laid out as a set of unmanaged components,
+//! strung together by a `Context`. This holds a reference to structs like
+//! `Surface`, `Pattern`, and `Path`, and co-ordinates various operations and
+//! settings between these entities and others required during generalized use
+//! of the library.
+//!
+//! Should one require more control over the process, the entirety of z2d can
+//! be used through its unmanaged components alone. These can be found below.
+//! The `Context` can be used as a reference example as to use them yourself.
+//!
+//! ## Unmanaged types and interfaces
 //!
 //! * `Path` - The "path builder" type, used to build a path, or a set of
 //! sub-paths, used for filling or stroking operations.
-//!
-//! * `StaticPath` - An infallible wrapper over the fully unmanaged
-//! representation of a `Path`, allowing for building paths using a static
-//! buffer on the stack (conveniently).
+//!   - `StaticPath` - An infallible wrapper over the fully unmanaged
+//!   representation of a `Path`, allowing for building paths using a static
+//!   buffer on the stack (conveniently).
 //!
 //! * `Surface` - The rendering target, backed by pixel buffers of various
 //! formats.
@@ -41,6 +48,9 @@
 //! * `surface` - The package `Surface` resides in, exposes additional types
 //! and documentation.
 //!
+//! * `painter` - Contains the unmanaged painter functions for filling and
+//! stroking.
+//!
 //! * `pattern` - The package `Pattern` resides in, exposes additional types
 //! and documentation.
 //!
@@ -48,11 +58,9 @@
 //! utility functions for various formats.
 //!
 //! * `options` - Documents option enumerations used in various parts of the
-//! library, mostly in contexts.
+//! library.
 //!
 //! * `png_exporter` - Provides rudimentary PNG export functionality.
-//!
-//! * `errors` - Documents error sets related to operations in the library.
 
 pub const surface = @import("surface.zig");
 pub const pattern = @import("pattern.zig");

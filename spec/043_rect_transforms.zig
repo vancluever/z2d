@@ -78,5 +78,5 @@ fn rect(context: *z2d.Context, x: f64, y: f64, h: f64, w: f64, reset_ctm: bool) 
     try context.lineTo(1, 1);
     try context.lineTo(0, 1);
     if (reset_ctm) context.setTransformation(saved_ctm);
-    try context.close();
+    try context.closePath();
 }

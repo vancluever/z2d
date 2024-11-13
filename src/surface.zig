@@ -2,8 +2,8 @@
 //   Copyright © 2024 Chris Marchesi
 
 //! Surfaces are rendering targets, such as pixel buffers of various formats.
-//! Normally, you would use a `Context` to render to surfaces, but they can be
-//! manipulated directly when needed.
+//! Normally, you would use a `Context` (or the unmanaged `painter` package) to
+//! render to surfaces, but they can be manipulated directly when needed.
 //!
 //! The buffer for each surface can be accessed directly through its union type
 //! field (e.g., `sfc.image_surface_rgba.buf`) and `@bitcast` to get raw access
@@ -51,11 +51,10 @@ pub const Surface = union(SurfaceType) {
         InvalidWidth,
     };
 
-    /// Initializes a surface of the specific type. The surface buffer is
-    /// initialized with the zero value for the pixel type (typically black or
-    /// transparent).
-    ///
-    /// The caller owns the memory, so make sure to call deinit to release it.
+    /// Initializes a surface of the specific `surface_type`. The surface
+    /// buffer is initialized with the zero value for the pixel type (typically
+    /// black or transparent). The caller owns the memory, so make sure to call
+    /// `deinit` to release it.
     pub fn init(
         surface_type: SurfaceType,
         alloc: mem.Allocator,
@@ -75,10 +74,9 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
-    /// Initializes a surface with the buffer set to the supplied pixel. The
-    /// surface type is inferred from it.
-    ///
-    /// The caller owns the memory, so make sure to call deinit to release it.
+    /// Initializes a surface with the buffer set to the supplied `initial_px`.
+    /// The surface type is inferred from it. The caller owns the memory, so
+    /// make sure to call `deinit` to release it.
     pub fn initPixel(
         initial_px: pixel.Pixel,
         alloc: mem.Allocator,
@@ -97,6 +95,26 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
+    /// Initializes a surface with externally allocated memory. The buffer is
+    /// initialized with `initial_px_` or the zero value (opaque or transparent
+    /// black) if it is `null`. If you use this over `init` or `initPixel`, do
+    /// not use any method that takes an allocator as it will be an illegal
+    /// operation.
+    pub fn initBuffer(
+        comptime surface_type: SurfaceType,
+        initial_px_: ?surface_type.toPixelType(),
+        buf: []surface_type.toPixelType(),
+        width: i32,
+        height: i32,
+    ) Surface {
+        return ImageSurface(surface_type.toPixelType()).initBuffer(
+            buf,
+            width,
+            height,
+            initial_px_,
+        ).asSurfaceInterface();
+    }
+
     /// Releases the underlying surface memory. The surface is invalid to use
     /// after calling this.
     pub fn deinit(self: *Surface, alloc: mem.Allocator) void {
@@ -107,20 +125,18 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
-    /// Downsamples the image, using simple pixel averaging.
-    ///
-    /// The surface is downsampled in-place. After downsampling, dimensions are
-    /// altered and memory is freed.
+    /// Downsamples the image, using simple pixel averaging. The surface is
+    /// downsampled in-place. After downsampling, dimensions are altered and
+    /// memory is freed.
     pub fn downsample(self: *Surface, alloc: mem.Allocator) void {
         switch (self.*) {
             inline else => |*s| s.downsample(alloc),
         }
     }
 
-    /// Downsamples the image buffer, using simple pixel averaging.
-    ///
-    /// The surface is downsampled in-place. After downsampling, dimensions are
-    /// altered. Memory must be freed from the underlying buffer manually if desired.
+    /// Downsamples the image buffer, using simple pixel averaging. The surface
+    /// is downsampled in-place. After downsampling, dimensions are altered.
+    /// Memory must be freed from the underlying buffer manually if desired.
     pub fn downsampleBuffer(self: *Surface) void {
         switch (self.*) {
             inline else => |*s| s.downsampleBuffer(),
@@ -166,7 +182,7 @@ pub const Surface = union(SurfaceType) {
         };
     }
 
-    /// Gets the pixel data at the co-ordinates specified. Returns null if
+    /// Gets the pixel data at the co-ordinates specified. Returns `null` if
     /// co-ordinates are out of range.
     pub fn getPixel(self: Surface, x: i32, y: i32) ?pixel.Pixel {
         return switch (self) {
@@ -190,8 +206,9 @@ pub const Surface = union(SurfaceType) {
     }
 };
 
-/// A memory-backed image surface. The pixel format is the type (e.g. RGB or
-/// RGBA). Call init to return an initialized surface.
+/// A memory-backed image surface. The pixel format is the type (e.g.
+/// `Pixel.RGB` or `Pixel.RGBA`). Call `init` or `initBuffer` to return an
+/// initialized surface.
 ///
 /// Any methods that take an allocator must use the same allocator for the
 /// lifetime of the surface.
@@ -206,18 +223,18 @@ pub fn ImageSurface(comptime T: type) type {
         /// The underlying buffer. It's not advised to access this directly,
         /// rather use pixel operations such as getPixel and putPixel.
         ///
-        /// The buffer is initialized to height * width on initialization,
-        /// de-allocated on deinit, and is invalid to use after the latter is
+        /// The buffer is initialized to `width` * `height` on initialization,
+        /// de-allocated on `deinit`, and is invalid to use after the latter is
         /// called.
         buf: []T,
 
         /// The format for the surface.
         pub const format: pixel.Format = T.format;
 
-        /// Initializes a surface. deinit should be called when finished with
+        /// Initializes a surface. `deinit` should be called when finished with
         /// the surface, which invalidates it, after which it should not be
         /// used. If non-null, the surface is initialized with the supplied
-        /// pixel.
+        /// `initial_px_`.
         pub fn init(
             alloc: mem.Allocator,
             width: i32,
@@ -232,7 +249,7 @@ pub fn ImageSurface(comptime T: type) type {
         }
 
         /// Initializes a surface with externally allocated memory. If you use
-        /// this over init, do not use any method that takes an allocator as it
+        /// this over `init`, do not use any method that takes an allocator as it
         /// will be an illegal operation.
         pub fn initBuffer(
             buf: []T,
@@ -262,10 +279,9 @@ pub fn ImageSurface(comptime T: type) type {
             alloc.free(self.buf);
         }
 
-        /// Downsamples the image, using simple pixel averaging.
-        ///
-        /// The surface is downsampled in-place. After downsampling, dimensions
-        /// are altered and memory is freed.
+        /// Downsamples the image, using simple pixel averaging. The surface is
+        /// downsampled in-place. After downsampling, dimensions are altered
+        /// and memory is freed.
         pub fn downsample(self: *ImageSurface(T), alloc: mem.Allocator) void {
             self.downsampleBuffer();
             self.resizeBuffer(alloc);
@@ -366,7 +382,7 @@ pub fn ImageSurface(comptime T: type) type {
             }
         }
 
-        /// Returns a Surface interface for this surface.
+        /// Returns a `Surface` interface for this surface.
         pub fn asSurfaceInterface(self: ImageSurface(T)) Surface {
             return switch (T.format) {
                 .rgba => .{ .image_surface_rgba = self },
@@ -375,14 +391,15 @@ pub fn ImageSurface(comptime T: type) type {
             };
         }
 
-        /// Gets the pixel data at the co-ordinates specified. Returns null if
-        /// the co-ordinates are out of range.
+        /// Gets the pixel data at the co-ordinates specified. Returns `null`
+        /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
             return self.buf[@intCast(self.width * y + x)].asPixel();
         }
 
-        /// Puts a single pixel at the x and y co-ordinates. No-ops if the pixel is out of range.
+        /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
+        /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
             self.buf[@intCast(self.width * y + x)] = T.copySrc(px);
@@ -422,6 +439,28 @@ test "Surface interface" {
         // RGBA
         var sfc_if = try Surface.init(.image_surface_rgba, testing.allocator, 20, 10);
         defer sfc_if.deinit(testing.allocator);
+
+        // getters
+        try testing.expectEqual(20, sfc_if.getWidth());
+        try testing.expectEqual(10, sfc_if.getHeight());
+        try testing.expectEqual(.rgba, sfc_if.getFormat());
+
+        // putPixel
+        const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+        const pix_rgba = rgba.asPixel();
+        const x: i32 = 7;
+        const y: i32 = 5;
+
+        sfc_if.putPixel(x, y, pix_rgba);
+
+        // getPixel
+        try testing.expectEqual(pix_rgba, sfc_if.getPixel(x, y));
+    }
+
+    {
+        // RGBA, manual buffer
+        var buf: [20 * 10]pixel.RGBA = undefined;
+        var sfc_if = Surface.initBuffer(.image_surface_rgba, null, &buf, 20, 10);
 
         // getters
         try testing.expectEqual(20, sfc_if.getWidth());

@@ -22,8 +22,9 @@ const PathNode = @import("internal/path_nodes.zig").PathNode;
 /// setters. If you require a feature of `Path` that is not wrapped or exposed
 /// (such as manipulation of the transformation matrix), you can access the
 /// instance directly through the `wrapped_path` field. Standard caveats apply;
-/// note that `Path.arc`, for example, currently has no externally managed
-/// method equivalent, and as such, can't be used with `StaticPath`.
+/// note that `Path.arc` and `Path.arcNegative`, for example, currently has no
+/// externally managed method equivalent, and as such, can't be used with
+/// `StaticPath`.
 pub fn StaticPath(comptime len: usize) type {
     return struct {
         nodes: [len]PathNode = undefined,
@@ -64,7 +65,7 @@ pub fn StaticPath(comptime len: usize) type {
         }
 
         /// Draws a cubic bezier with the three supplied control points from
-        /// the current point. The new current point is set to (x3, y3).
+        /// the current point. The new current point is set to (`x3`, `y3`).
         /// Calling this without a current point triggers safety-checked
         /// undefined behavior.
         pub fn curveTo(
@@ -95,6 +96,10 @@ pub fn StaticPath(comptime len: usize) type {
 
         /// Closes the path by drawing a line from the current point by the
         /// starting point. No effect if there is no current point.
+        ///
+        /// Note that path closes require two points, one for the `close_path`
+        /// entry, and one for the implicit `move_to` entry; ensure your
+        /// `StaticPath` has enough space for both.
         pub fn close(self: *StaticPath(len)) void {
             self.wrapped_path.closeAssumeCapacity();
         }

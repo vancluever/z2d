@@ -21,12 +21,12 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     context.setLineCapMode(.round);
 
     try context.moveTo(10, 10);
-    try context.close();
+    try context.closePath();
 
     try context.moveTo(30, 30);
     try context.lineTo(30, 30);
     try context.lineTo(30, 30);
-    try context.close();
+    try context.closePath();
 
     // This should not draw anything
     try context.moveTo(50, 50);

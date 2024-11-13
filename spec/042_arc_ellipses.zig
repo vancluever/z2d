@@ -76,5 +76,5 @@ fn ellipse(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64, reset_ctm: b
     context.scale(rx / 2, ry / 2);
     try context.arc(0, 0, 1, 0, 2 * math.pi);
     if (reset_ctm) context.setTransformation(saved_ctm);
-    try context.close();
+    try context.closePath();
 }

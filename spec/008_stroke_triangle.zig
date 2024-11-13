@@ -22,7 +22,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.moveTo(0 + margin, 0 + margin);
     try context.lineTo(width - margin - 1, 0 + margin);
     try context.lineTo(width / 2 - 1, height - margin - 1);
-    try context.close();
+    try context.closePath();
 
     try context.stroke();
 

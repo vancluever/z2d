@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
 
+//! Contains unmanaged painter functions for filling and stroking.
+
 const std = @import("std");
 const debug = @import("std").debug;
 const heap = @import("std").heap;
@@ -38,14 +40,14 @@ pub const FillOpts = struct {
     tolerance: f64 = options.default_tolerance,
 };
 
-/// Errors related to the fill operation.
+/// Errors related to the `fill` operation.
 pub const FillError = error{
     /// The supplied path (and any sub-paths) have not been explicitly closed,
     /// which is required by the fill operation.
     PathNotClosed,
 } || Surface.Error || InternalError || mem.Allocator.Error;
 
-/// Runs a fill operation on this current path and any subpaths.
+/// Runs a fill operation on the path set represented by `nodes`.
 pub fn fill(
     alloc: mem.Allocator,
     surface: *Surface,
@@ -53,10 +55,6 @@ pub fn fill(
     nodes: []const PathNode,
     opts: FillOpts,
 ) FillError!void {
-    // TODO: These path safety checks have been moved from the Context
-    // down to here for now. The Painter API will soon be promoted to
-    // being public, so this should be fine, and will likely be
-    // canonicalized as such.
     if (nodes.len == 0) return;
     if (!PathNode.isClosedNodeSet(nodes)) return error.PathNotClosed;
 
@@ -112,12 +110,12 @@ pub const StrokeOpts = struct {
     transformation: Transformation = Transformation.identity,
 };
 
-/// Errors related to the stroke operation.
+/// Errors related to the `stroke` operation.
 pub const StrokeError = Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
 
-/// Runs a stroke operation on this path and any sub-paths. The path is
-/// transformed to a fillable polygon representing the line, and the line is
-/// then filled.
+/// Runs a stroke operation on the path set represented by `nodes`. The path(s)
+/// is/are transformed to one or more polygon(s) representing the line(s),
+/// which are then filled.
 pub fn stroke(
     alloc: mem.Allocator,
     surface: *Surface,

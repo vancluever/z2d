@@ -28,7 +28,7 @@ pub const Error = error{
 };
 
 /// The underlying node set. Do not edit or populate this directly, use the
-/// builder functions (e.g., moveTo, lineTo, curveTo, closePath, etc).
+/// builder functions (e.g., `moveTo`, `lineTo`, `curveTo`, `close`, etc).
 nodes: std.ArrayListUnmanaged(PathNode),
 
 /// The start of the current subpath when working with drawing operations.
@@ -52,25 +52,25 @@ tolerance: f64 = options.default_tolerance,
 /// device space).
 transformation: Transformation = Transformation.identity,
 
-/// Initializes the path set with an initial capacity of exactly num. Call
-/// deinit to release the node list when complete.
+/// Initializes the path set with an initial capacity of exactly `num`. Call
+/// `deinit` to release the node list when complete.
 pub fn initCapacity(alloc: mem.Allocator, num: usize) mem.Allocator.Error!Path {
     return .{
         .nodes = try std.ArrayListUnmanaged(PathNode).initCapacity(alloc, num),
     };
 }
 
-/// Initializes a Path with externally allocated memory. If you use this over
-/// init, do not use any method that takes an allocator as it will be an
-/// illegal operation.
+/// Initializes a `Path` with externally allocated memory. If you use this over
+/// `initCapacity`, do not use any method that takes an allocator as it will be
+/// an illegal operation.
 pub fn initBuffer(nodes: []PathNode) Path {
     return .{
         .nodes = std.ArrayListUnmanaged(PathNode).initBuffer(nodes),
     };
 }
 
-/// Releases the path node array list. It's invalid to use the path set after
-/// this call.
+/// Releases the `Path`'s node array list. It's invalid to use the path set
+/// after this call.
 pub fn deinit(self: *Path, alloc: mem.Allocator) void {
     self.nodes.deinit(alloc);
 }
@@ -89,8 +89,8 @@ pub fn moveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.E
     self.moveToAssumeCapacity(x, y);
 }
 
-/// Like moveTo, but does not require an allocator. Assumes enough space exists
-/// for the point.
+/// Like `moveTo`, but does not require an allocator. Assumes enough space
+/// exists for the point.
 pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
     const point: Point = (Point{
         .x = clampI32(x),
@@ -122,7 +122,7 @@ pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || me
     } else return error.NoCurrentPoint;
 }
 
-/// Like relMoveTo, but does not require an allocator. Assumes enough space
+/// Like `relMoveTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
 pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
@@ -138,8 +138,8 @@ pub fn lineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.E
     self.lineToAssumeCapacity(x, y);
 }
 
-/// Like lineTo, but does not require an allocator. Assumes enough space exists
-/// for the point.
+/// Like `lineTo`, but does not require an allocator. Assumes enough space
+/// exists for the point.
 pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
     if (self.current_point == null) return self.moveToAssumeCapacity(x, y);
     const point: Point = (Point{
@@ -158,7 +158,7 @@ pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || me
     } else return error.NoCurrentPoint;
 }
 
-/// Like relLineTo, but does not require an allocator. Assumes enough space
+/// Like `relLineTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
 pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
@@ -167,8 +167,8 @@ pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
 }
 
 /// Draws a cubic bezier with the three supplied control points from the
-/// current point. The new current point is set to (x3, y3). It is an error to
-/// call this without a current point.
+/// current point. The new current point is set to (`x3`, `y3`). It is an error
+/// to call this without a current point.
 pub fn curveTo(
     self: *Path,
     alloc: mem.Allocator,
@@ -185,8 +185,8 @@ pub fn curveTo(
     self._curveToAssumeCapacity(x1, y1, x2, y2, x3, y3);
 }
 
-/// Like curveTo, but does not require an allocator. Assumes enough space exists
-/// for the point.
+/// Like `curveTo`, but does not require an allocator. Assumes enough space
+/// exists for the point.
 pub fn curveToAssumeCapacity(
     self: *Path,
     x1: f64,
@@ -242,7 +242,7 @@ pub fn relCurveTo(
     } else return error.NoCurrentPoint;
 }
 
-/// Like relCurveTo, but does not require an allocator. Assumes enough space
+/// Like `relCurveTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
 pub fn relCurveToAssumeCapacity(
     self: *Path,
@@ -259,11 +259,11 @@ pub fn relCurveToAssumeCapacity(
 }
 
 /// Adds a circular arc of the given radius to the current path. The arc is
-/// centered at (xc, yc), begins at angle1 and proceeds in the direction of
-/// increasing angles (i.e., counterclockwise direction) to end at angle2.
+/// centered at (`xc`, `yc`), begins at `angle1` and proceeds in the direction
+/// of increasing angles (i.e., counterclockwise direction) to end at `angle2`.
 ///
-/// If angle2 is less than angle1, it will be increased by 2 * Π until it's
-/// greater than angle1.
+/// If `angle2` is less than `angle1`, it will be increased by 2 * Π until it's
+/// greater than `angle1`.
 ///
 /// Angles are measured at radians (to convert from degrees, multiply by Π /
 /// 180).
@@ -278,7 +278,7 @@ pub fn relCurveToAssumeCapacity(
 /// ## Drawing an ellipse
 ///
 /// In order to draw an ellipse, use `arc` along with a transformation. The
-/// following example will draw an elliptical arc at `(x, y)` bounded by the
+/// following example will draw an elliptical arc at (`x`, `y`) bounded by the
 /// rectangle of `width` by `height` (i.e., the rectangle controls the lengths
 /// of the radii).
 ///
@@ -316,14 +316,14 @@ pub fn arc(
         effective_angle2,
         .forward,
         self.transformation,
-        self.tolerance,
+        @max(self.tolerance, 0.001),
     );
 }
 
-/// Like arc, but draws in the reverse direction, i.e., begins at angle1, and
-/// moves in decreasing angles (i.e., counterclockwise direction) to end at
-/// angle2. If angle2 is greater than angle1, it will be decreased by 2 * Π
-/// until it's less than angle1.
+/// Like `arc`, but draws in the reverse direction, i.e., begins at `angle1`,
+/// and moves in decreasing angles (i.e., counterclockwise direction) to end at
+/// `angle2`. If `angle2` is greater than `angle1`, it will be decreased by 2 *
+/// Π until it's less than `angle1`.
 pub fn arcNegative(
     self: *Path,
     alloc: mem.Allocator,
@@ -349,7 +349,7 @@ pub fn arcNegative(
         angle1,
         .reverse,
         self.transformation,
-        self.tolerance,
+        @max(self.tolerance, 0.001),
     );
 }
 
@@ -401,12 +401,12 @@ pub fn close(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!void {
     self._closeAssumeCapacity();
 }
 
-/// Like close, but does not require an allocator. Assumes enough space exists
-/// for the points.
+/// Like `close`, but does not require an allocator. Assumes enough space
+/// exists for the points.
 ///
-/// Note that path closes require two points, one for the close_path entry, and
-/// one for the implicit move_path entry; ensure your `Path` has enough space
-/// for both.
+/// Note that path closes require two points, one for the `close_path` entry,
+/// and one for the implicit `move_to` entry; ensure your `Path` has enough
+/// space for both.
 pub fn closeAssumeCapacity(self: *Path) void {
     if (self.current_point == null) return;
     debug.assert(self.initial_point != null);
@@ -424,7 +424,7 @@ fn _closeAssumeCapacity(self: *Path) void {
     } });
 }
 
-/// Returns true if all subpaths in the path set are currently closed.
+/// Returns `true` if all subpaths in the path set are currently closed.
 pub fn isClosed(self: *const Path) bool {
     return PathNode.isClosedNodeSet(self.nodes.items);
 }
