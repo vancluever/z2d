@@ -122,7 +122,14 @@ Our drawing model is (loosely) inspired by
 [Cairo](https://www.cairographics.org): most operations take place through the
 `Context`, which connect `Pattern`s (pixel/color sources) and `Surface`s
 (drawing targets/buffers). `Path`s contain the vector data for filling and
-stroking operations. Additionally, surfaces can be interfaced with directly.
+stroking operations.
+
+Every component of z2d can be worked with directly in an unmanaged fashion
+without the `Context` as well, if so desired; `Surfaces` can be interfaced with
+directly, `Surface` and `Path` can be used with static buffers (in addition to
+their traditional unmanaged variant), and the painter methods for filling and
+stroking can be called directly with the output of these. For these cases,
+`Context` serves as a reference example.
 
 ## What's supported
 
