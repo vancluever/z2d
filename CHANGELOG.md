@@ -1,3 +1,7 @@
+## 0.4.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.4.0 (November 13, 2024)
 
 This release introduces large changes to the layout of the library to better
