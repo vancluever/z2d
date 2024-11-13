@@ -1,6 +1,52 @@
-## 0.3.2-pre (Unreleased)
+## 0.4.0 (Unreleased)
 
-Bumped version for dev.
+This release introduces large changes to the layout of the library to better
+define the lines between _managed_ and _unmanaged_ architecture, similar to
+Zig's memory-centric use of the terms.
+
+UNMANAGED API
+
+**All individual components of z2d now operate under an unmanaged model**. This
+especially goes for `Surface` and `Path`, which used to hold allocators in the
+past, but no longer do. Both `Surface` and `Path` now offer static buffer
+capabilities as well, allowing one to deal with allocation through other means
+if one desires. Static buffer methods are almost entirely infallible (save some
+checking that needs to be done for current points in `Path`).
+
+`StaticPath` has also been introduced as a shorthand to working with a static
+buffer `Path`. This wraps a buffer of a particular length so that you don't
+have to declare a it separately. Additionally, all methods in `StaticPath` are
+100% infallible, with ones that would normally return non-memory errors causing
+safety-checked undefined behavior in the event these errors would be returned.
+
+The new unmanaged API also introduces the new `painter` package, allowing you
+to do fill or stroke operations without needing to use a `Context`, which is
+described in further detail below.
+
+THE NEW MANAGED CONTEXT
+
+`Context` has now been completely overhauled to take the role as the sole
+managed component in z2d. It holds a `Path` of its own along with the `Surface`
+and `Pattern` that it did before 0.4.0, and more directly synchronizes settings
+that are common to both path-level operations and fill/stroke, such as
+transformation matrices and tolerance. Getters and setters exist for every
+operation and it is now considered incorrect behavior to have to manipulate
+context fields directly.
+
+Most folks should be good using `Context` for day-to-day operations, but if you
+require more control (or wish to use static buffer API), it exists as a
+reference example of how you can use the unmanaged API yourself.
+
+EXPLICIT ERROR SETS
+
+All API calls now have explicit error sets defined. The error sets have been
+defined with a granularity suiting the nature of the package. Most of the time,
+memory errors are not a member of our library-level sets and are merged at the
+site of the signature - this is for both readability and usability (e.g.,
+`Path.Error` can be returned on memory-infallible methods).
+
+As part of this work, the global `errors` package has been removed and errors
+are now located within their respective structs or packages.
 
 ## 0.3.1 (November 1, 2024)
 
