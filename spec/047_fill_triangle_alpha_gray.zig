@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: 0BSD
 //   Copyright © 2024 Chris Marchesi
 
-//! Case: Renders and fills a triangle on a 300x300 surface.
+//! Case: Renders and fills a triangle on a 300x300 surface using alpha8 for
+//! grayscale.
 //!
 //! This is similar to the 003_fill_triangle.zig, but uses alpha8 as its source
 //! versus RGB. Also renders a gray triangle at half alpha to test optimized
@@ -15,8 +16,8 @@ pub const filename = "047_fill_triangle_alpha_gray";
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
-    var sfc = try z2d.Surface.initPixel(
-        .{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White so that srcOver shows up correctly
+    var sfc = try z2d.Surface.init(
+        .image_surface_alpha8,
         alloc,
         width,
         height,
