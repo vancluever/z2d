@@ -39,12 +39,17 @@ pub fn writeToPNGFile(
     sfc: surface.Surface,
     filename: []const u8,
 ) WriteToPNGFileError!void {
-    switch (sfc.getFormat()) {
-        .rgba, .rgb => {},
-        else => {
-            return error.UnsupportedSurfaceFormat;
-        },
-    }
+    // TODO: There are currently no unsupported surface formats, and there
+    // might likely not be going forward (we had alpha as an unsupported format
+    // but now we just convert it to greyscale). Keeping this here for a bit
+    // just in case, but we likely can remove it.
+    //
+    // switch (sfc.getFormat()) {
+    //     .rgba, .rgb, .alpha8 => {},
+    //     else => {
+    //         return error.UnsupportedSurfaceFormat;
+    //     },
+    // }
 
     // Open and create the file.
     const file = try fs.cwd().createFile(filename, .{});
@@ -73,12 +78,12 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteErro
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
-        else => return error.UnsupportedSurfaceFormat,
+        .alpha8 => 8,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
-        else => return error.UnsupportedSurfaceFormat,
+        .alpha8 => 0,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -177,7 +182,14 @@ fn writePNGIDATStream(
                         );
                         break :written 4; // 4 bytes
                     },
-                    else => return error.UnsupportedSurfaceFormat,
+                    .alpha8 => |px| {
+                        mem.copyForwards(
+                            u8,
+                            pixel_buffer[nbytes..pixel_buffer.len],
+                            &@as([1]u8, @bitCast(px)),
+                        );
+                        break :written 1; // 1 byte
+                    },
                 }
             };
             if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
