@@ -1,6 +1,9 @@
 ## 0.4.1-pre (Unreleased)
 
-Bumped version for dev.
+IMPROVEMENTS:
+
+* PNG export now supports alpha surfaces, which are just exported to greyscale.
+  [#60](https://github.com/vancluever/z2d/pull/60)
 
 ## 0.4.0 (November 13, 2024)
 
