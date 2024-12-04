@@ -146,9 +146,10 @@ Currently:
  * Simple composition:
    - Currently only opaque pixel sources supported, gradients/etc planned.
  * Pixel formats:
-   - RGBA, RGB, 8-bit alpha.
+   - RGBA, RGB, and alpha-only in 8, 4, 2, and 1-bit formats.
  * Exporting:
-   - Rudimentary PNG export supported.
+   - Rudimentary PNG export supported; alpha-channel formats export to
+     greyscale.
 
 The current plan is to work towards writing a reasonably feature-complete SVG
 renderer, with the ability to utilize the same primitives to perform other
