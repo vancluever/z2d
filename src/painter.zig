@@ -12,12 +12,13 @@ const testing = @import("std").testing;
 
 const fill_plotter = @import("internal/FillPlotter.zig");
 const options = @import("options.zig");
+const pixel = @import("pixel.zig");
 
 const Context = @import("Context.zig");
 const Path = @import("Path.zig");
 const PathNode = @import("internal/path_nodes.zig").PathNode;
-const RGBA = @import("pixel.zig").RGBA;
 const Surface = @import("surface.zig").Surface;
+const SurfaceType = @import("surface.zig").SurfaceType;
 const Pattern = @import("pattern.zig").Pattern;
 const FillRule = @import("options.zig").FillRule;
 const StrokePlotter = @import("internal/StrokePlotter.zig");
@@ -61,7 +62,16 @@ pub fn fill(
     if (nodes.len == 0) return;
     if (!PathNode.isClosedNodeSet(nodes)) return error.PathNotClosed;
 
-    const scale: f64 = switch (opts.anti_aliasing_mode) {
+    // Force AA mode to .none if we are using an 1-bit alpha layer; there's no
+    // point in using AA in this mode as pixels are either on or off, and no
+    // in-between. This optimizes this path fully, saves RAM and processing
+    // time.
+    const aa_mode: options.AntiAliasMode = if (surface.* == .image_surface_alpha1)
+        .none
+    else
+        opts.anti_aliasing_mode;
+
+    const scale: f64 = switch (aa_mode) {
         .none => 1,
         .default => supersample_scale,
     };
@@ -74,7 +84,7 @@ pub fn fill(
     );
     defer polygons.deinit();
 
-    switch (opts.anti_aliasing_mode) {
+    switch (aa_mode) {
         .none => {
             try paintDirect(alloc, surface, pattern, polygons, opts.fill_rule);
         },
@@ -136,7 +146,16 @@ pub fn stroke(
     // Return if called with zero nodes.
     if (nodes.len == 0) return;
 
-    const scale: f64 = switch (opts.anti_aliasing_mode) {
+    // Force AA mode to .none if we are using an 1-bit alpha layer; there's no
+    // point in using AA in this mode as pixels are either on or off, and no
+    // in-between. This optimizes this path fully, saves RAM and processing
+    // time.
+    const aa_mode: options.AntiAliasMode = if (surface.* == .image_surface_alpha1)
+        .none
+    else
+        opts.anti_aliasing_mode;
+
+    const scale: f64 = switch (aa_mode) {
         .none => 1,
         .default => supersample_scale,
     };
@@ -172,7 +191,7 @@ pub fn stroke(
     var polygons = try plotter.plot(alloc, nodes);
     defer polygons.deinit();
 
-    switch (opts.anti_aliasing_mode) {
+    switch (aa_mode) {
         .none => {
             try paintDirect(alloc, surface, pattern, polygons, .non_zero);
         },
@@ -271,8 +290,20 @@ fn paintComposite(
         const offset_x: i32 = box_x0;
         const offset_y: i32 = box_y0;
 
+        // Check our surface type. If we are one of our < 8bpp alpha surfaces,
+        // we use that type instead.
+        const surface_type: SurfaceType = switch (surface.*) {
+            .image_surface_alpha4, .image_surface_alpha2, .image_surface_alpha1 => surface.*,
+            else => .image_surface_alpha8,
+        };
+        const opaque_px: pixel.Pixel = switch (surface_type) {
+            .image_surface_alpha4 => pixel.Alpha4.Opaque.asPixel(),
+            .image_surface_alpha2 => pixel.Alpha2.Opaque.asPixel(),
+            .image_surface_alpha1 => pixel.Alpha1.Opaque.asPixel(),
+            else => pixel.Alpha8.Opaque.asPixel(),
+        };
         var scaled_sfc = try Surface.init(
-            .image_surface_alpha8,
+            surface_type,
             alloc,
             mask_width,
             mask_height,
@@ -301,7 +332,7 @@ fn paintComposite(
                     scaled_sfc.putPixel(
                         @intCast(x - offset_x),
                         @intCast(y - offset_y),
-                        .{ .alpha8 = .{ .a = 255 } },
+                        opaque_px,
                     );
                 }
             }
@@ -332,24 +363,49 @@ fn paintComposite(
             // painted gradient).
             .opaque_pattern => {
                 const px = pattern.getPixel(0, 0);
-                if (px == .alpha8) {
-                    // Our source pixel is alpha8, so we can avoid a
-                    // pretty costly allocation here by just using our
-                    // mask as the foreground. We just need to check if
-                    // we need to do any composition (depending on
-                    // whether or not our source is a full opaque
-                    // alpha).
-                    if (px.alpha8.a != 255) {
-                        const pxa = px.alpha8;
-                        for (mask_sfc.image_surface_alpha8.buf, 0..) |sfc_px, i| {
-                            mask_sfc.image_surface_alpha8.buf[i] = pxa.dstIn(sfc_px.asPixel());
+                switch (px) {
+                    .alpha8, .alpha4, .alpha2, .alpha1 => {
+                        const source_px_format: pixel.Format = px;
+                        const dest_px_format: pixel.Format = surface.getFormat();
+                        if (source_px_format == dest_px_format) {
+                            // We have identical alpha formats, so we can avoid a
+                            // pretty costly allocation here by just using our
+                            // mask as the foreground. We just need to check if
+                            // we need to do any composition (depending on
+                            // whether or not our source is a full opaque
+                            // alpha). If the source is fully opaque, we can
+                            // just skip it, as the product would just be the
+                            // surface as it exists anyway.
+                            const opaque_px: pixel.Pixel = switch (source_px_format) {
+                                .alpha8 => pixel.Alpha8.Opaque.asPixel(),
+                                .alpha4 => pixel.Alpha4.Opaque.asPixel(),
+                                .alpha2 => pixel.Alpha2.Opaque.asPixel(),
+                                .alpha1 => pixel.Alpha1.Opaque.asPixel(),
+                                else => unreachable,
+                            };
+                            if (!px.equal(opaque_px)) {
+                                // TODO: Move this single-pixel composition to Surface eventually
+                                var y: i32 = 0;
+                                const mask_height = mask_sfc.getHeight();
+                                const mask_width = mask_sfc.getWidth();
+                                while (y < mask_height) : (y += 1) {
+                                    var x: i32 = 0;
+                                    while (x < mask_width) : (x += 1) {
+                                        if (mask_sfc.getPixel(x, y)) |sfc_px|
+                                            mask_sfc.putPixel(x, y, px.dstIn(sfc_px))
+                                        else
+                                            unreachable;
+                                    }
+                                }
+                            }
+                            break :sfc_f mask_sfc;
                         }
-                    }
-                    break :sfc_f mask_sfc;
+                    },
+                    else => {},
                 }
 
                 var fg_sfc = try Surface.initPixel(
-                    RGBA.copySrc(pattern.getPixel(0, 0)).asPixel(),
+                    pixel.RGBA.copySrc(pattern.getPixel(0, 0)).asPixel(),
                     alloc,
                     mask_sfc.getWidth(),
                     mask_sfc.getHeight(),

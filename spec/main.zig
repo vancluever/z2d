@@ -59,6 +59,9 @@ const _045_round_join_transforms = @import("045_round_join_transforms.zig");
 const _046_fill_triangle_alpha = @import("046_fill_triangle_alpha.zig");
 const _047_fill_triangle_alpha_gray = @import("047_fill_triangle_alpha_gray.zig");
 const _048_fill_triangle_static = @import("048_fill_triangle_static.zig");
+const _049_fill_triangle_alpha4_gray = @import("049_fill_triangle_alpha4_gray.zig");
+const _050_fill_triangle_alpha2_gray = @import("050_fill_triangle_alpha2_gray.zig");
+const _051_fill_triangle_alpha1_gray = @import("051_fill_triangle_alpha1_gray.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -114,6 +117,9 @@ pub fn main() !void {
     try pathExportRun(alloc, _046_fill_triangle_alpha);
     try pathExportRun(alloc, _047_fill_triangle_alpha_gray);
     try pathExportRun(alloc, _048_fill_triangle_static);
+    try pathExportRun(alloc, _049_fill_triangle_alpha4_gray);
+    try pathExportRun(alloc, _050_fill_triangle_alpha2_gray);
+    try pathExportRun(alloc, _051_fill_triangle_alpha1_gray);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -308,6 +314,18 @@ test "047_fill_triangle_alpha_gray" {
 
 test "048_fill_triangle_static" {
     try pathTestRun(testing.allocator, _048_fill_triangle_static);
+}
+
+test "049_fill_triangle_alpha4_gray" {
+    try pathTestRun(testing.allocator, _049_fill_triangle_alpha4_gray);
+}
+
+test "050_fill_triangle_alpha2_gray" {
+    try pathTestRun(testing.allocator, _050_fill_triangle_alpha2_gray);
+}
+
+test "051_fill_triangle_alpha1_gray" {
+    try pathTestRun(testing.allocator, _051_fill_triangle_alpha1_gray);
 }
 
 //////////////////////////////////////////////////////////////////////////////
