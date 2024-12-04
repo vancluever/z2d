@@ -79,11 +79,14 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteErro
         .rgba => 8,
         .rgb => 8,
         .alpha8 => 8,
+        .alpha4 => 4,
+        .alpha2 => 2,
+        .alpha1 => 1,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .rgba => 6,
         .rgb => 2,
-        .alpha8 => 0,
+        .alpha8, .alpha4, .alpha2, .alpha1 => 0,
     };
     const compression: u8 = 0;
     const filter: u8 = 0;
@@ -157,7 +160,8 @@ fn writePNGIDATStream(
         var pixel_buffer = [_]u8{0} ** 5;
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
-        for (0..@intCast(sfc.getWidth())) |x| {
+        var x: usize = 0;
+        while (x < sfc.getWidth()) : (x += 1) {
             nbytes += written: {
                 switch (sfc.getPixel(@intCast(x), @intCast(y)) orelse unreachable) {
                     // PNG writes out numbers big-endian, but *only numbers larger
@@ -188,6 +192,54 @@ fn writePNGIDATStream(
                             pixel_buffer[nbytes..pixel_buffer.len],
                             &@as([1]u8, @bitCast(px)),
                         );
+                        break :written 1; // 1 byte
+                    },
+                    .alpha4 => |px| {
+                        // Pack 2 pixels in a single byte, starting with the
+                        // one we have right now in the MSB range.
+                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
+                        const px_u8: u8 = @intCast(@as(u4, @bitCast(px)));
+                        pixel_buffer[nbytes] |= px_u8 << 4;
+                        x += 1;
+                        if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
+                            pixel_buffer[nbytes] |= @as(u8, @intCast(@as(u4, @bitCast(other_px.alpha4))));
+                        }
+                        break :written 1; // 1 byte
+                    },
+                    .alpha2 => |px| {
+                        // Pack 4 pixels in a single byte, starting with the
+                        // one we have right now in the MSB range.
+                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
+                        var px_u8: u8 = @intCast(@as(u2, @bitCast(px)));
+                        pixel_buffer[nbytes] |= px_u8 << 6;
+                        for (1..4) |i| {
+                            x += 1;
+                            if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
+                                const shl: u3 = @intCast(6 - i * 2);
+                                px_u8 = @intCast(@as(u2, @bitCast(other_px.alpha2)));
+                                pixel_buffer[nbytes] |= px_u8 << shl;
+                            } else {
+                                break;
+                            }
+                        }
+                        break :written 1; // 1 byte
+                    },
+                    .alpha1 => |px| {
+                        // Pack 8 pixels in a single byte, starting with the
+                        // one we have right now in the MSB.
+                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
+                        var px_u8: u8 = @intCast(@as(u1, @bitCast(px)));
+                        pixel_buffer[nbytes] |= px_u8 << 7;
+                        for (1..8) |i| {
+                            x += 1;
+                            if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
+                                const shl: u3 = @intCast(7 - i);
+                                px_u8 = @intCast(@as(u1, @bitCast(other_px.alpha1)));
+                                pixel_buffer[nbytes] |= px_u8 << shl;
+                            } else {
+                                break;
+                            }
+                        }
                         break :written 1; // 1 byte
                     },
                 }
