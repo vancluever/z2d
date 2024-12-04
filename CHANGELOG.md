@@ -4,7 +4,8 @@ IMPROVEMENTS:
 
 * 1, 2, and 4-bit alpha pixel types are now supported. Optimizations exist for
   these pixel formats when using them with surfaces.
-  [#61](https://github.com/vancluever/z2d/pull/61)
+  [#61](https://github.com/vancluever/z2d/pull/61),
+  [#62](https://github.com/vancluever/z2d/pull/62)
 * PNG export now supports alpha surfaces, which are just exported to greyscale.
   [#60](https://github.com/vancluever/z2d/pull/60)
 
