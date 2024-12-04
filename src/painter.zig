@@ -365,41 +365,46 @@ fn paintComposite(
                 const px = pattern.getPixel(0, 0);
                 switch (px) {
                     .alpha8, .alpha4, .alpha2, .alpha1 => {
-                        const source_px_format: pixel.Format = px;
+                        // Our source is a pure-alpha format, so we can avoid a
+                        // pretty costly allocation here by just using our mask
+                        // as the foreground. We just need to check if we need
+                        // to do any composition (depending on whether or not
+                        // our source is a full opaque alpha). If the source is
+                        // fully opaque, we can just skip it, as the product
+                        // would just be the surface as it exists anyway.
                         const dest_px_format: pixel.Format = surface.getFormat();
-                        if (source_px_format == dest_px_format) {
-                            // We have identical alpha formats, so we can avoid a
-                            // pretty costly allocation here by just using our
-                            // mask as the foreground. We just need to check if
-                            // we need to do any composition (depending on
-                            // whether or not our source is a full opaque
-                            // alpha). If the source is fully opaque, we can
-                            // just skip it, as the product would just be the
-                            // surface as it exists anyway.
-                            const opaque_px: pixel.Pixel = switch (source_px_format) {
-                                .alpha8 => pixel.Alpha8.Opaque.asPixel(),
-                                .alpha4 => pixel.Alpha4.Opaque.asPixel(),
-                                .alpha2 => pixel.Alpha2.Opaque.asPixel(),
-                                .alpha1 => pixel.Alpha1.Opaque.asPixel(),
-                                else => unreachable,
-                            };
-                            if (!px.equal(opaque_px)) {
-                                // TODO: Move this single-pixel composition to Surface eventually
-                                var y: i32 = 0;
-                                const mask_height = mask_sfc.getHeight();
-                                const mask_width = mask_sfc.getWidth();
-                                while (y < mask_height) : (y += 1) {
-                                    var x: i32 = 0;
-                                    while (x < mask_width) : (x += 1) {
-                                        if (mask_sfc.getPixel(x, y)) |sfc_px|
-                                            mask_sfc.putPixel(x, y, px.dstIn(sfc_px))
-                                        else
-                                            unreachable;
-                                    }
+                        const src_px: pixel.Pixel = switch (dest_px_format) {
+                            // This allows us to use mis-matching alpha sources
+                            // by just scaling up/down the pixel to the native
+                            // format (e.g., 4, 2, or 1 if our surface is one
+                            // of those, alpha8 for everything else).
+                            .alpha4 => pixel.Alpha4.copySrc(px).asPixel(),
+                            .alpha2 => pixel.Alpha2.copySrc(px).asPixel(),
+                            .alpha1 => pixel.Alpha1.copySrc(px).asPixel(),
+                            else => pixel.Alpha8.copySrc(px).asPixel(),
+                        };
+                        const opaque_px: pixel.Pixel = switch (dest_px_format) {
+                            .alpha4 => pixel.Alpha4.Opaque.asPixel(),
+                            .alpha2 => pixel.Alpha2.Opaque.asPixel(),
+                            .alpha1 => pixel.Alpha1.Opaque.asPixel(),
+                            else => pixel.Alpha8.Opaque.asPixel(),
+                        };
+                        if (!src_px.equal(opaque_px)) {
+                            // TODO: Move this single-pixel composition to Surface eventually
+                            var y: i32 = 0;
+                            const mask_height = mask_sfc.getHeight();
+                            const mask_width = mask_sfc.getWidth();
+                            while (y < mask_height) : (y += 1) {
+                                var x: i32 = 0;
+                                while (x < mask_width) : (x += 1) {
+                                    if (mask_sfc.getPixel(x, y)) |sfc_px|
+                                        mask_sfc.putPixel(x, y, src_px.dstIn(sfc_px))
+                                    else
+                                        unreachable;
                                 }
                             }
-                            break :sfc_f mask_sfc;
                         }
+                        break :sfc_f mask_sfc;
                     },
                     else => {},
                 }

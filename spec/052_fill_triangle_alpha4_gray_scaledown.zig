@@ -2,22 +2,20 @@
 //   Copyright © 2024 Chris Marchesi
 
 //! Case: Renders and fills a triangle on a 300x300 surface using alpha8 for
-//! grayscale.
+//! grayscale, to an alpha4 surface.
 //!
-//! This is similar to the 003_fill_triangle.zig, but uses alpha8 as its source
-//! versus RGB. Also renders a gray triangle at half alpha to test optimized
-//! composition path.
+//! This test should render identical to 049_fill_triangle_alpha4_gray.zig.
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
-pub const filename = "047_fill_triangle_alpha_gray";
+pub const filename = "052_fill_triangle_alpha4_gray_scaledown";
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     var sfc = try z2d.Surface.init(
-        .image_surface_alpha8,
+        .image_surface_alpha4,
         alloc,
         width,
         height,
