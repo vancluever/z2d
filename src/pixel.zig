@@ -1437,3 +1437,42 @@ test "Alpha, shlr" {
         // try testing.expectEqual(255, test_T.shlr(u8, @as(u1, 1)));
     }
 }
+
+test "equal" {
+    const rgb_a: Pixel = .{ .rgb = .{ .r = 0x11, .g = 0x22, .b = 0x33 } };
+    const rgb_b: Pixel = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } };
+    const rgba_a: Pixel = .{ .rgba = .{ .r = 0x11, .g = 0x22, .b = 0x33, .a = 0x44 } };
+    const rgba_b: Pixel = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } };
+    const alpha8_a: Pixel = .{ .alpha8 = .{ .a = 0x44 } };
+    const alpha8_b: Pixel = .{ .alpha8 = .{ .a = 0xDD } };
+    const alpha4_a: Pixel = .{ .alpha4 = .{ .a = 0x4 } };
+    const alpha4_b: Pixel = .{ .alpha4 = .{ .a = 0xD } };
+    const alpha2_a: Pixel = .{ .alpha2 = .{ .a = 1 } };
+    const alpha2_b: Pixel = .{ .alpha2 = .{ .a = 2 } };
+    const alpha1_a: Pixel = .{ .alpha1 = .{ .a = 0 } };
+    const alpha1_b: Pixel = .{ .alpha1 = .{ .a = 1 } };
+
+    try testing.expect(rgb_a.equal(rgb_a));
+    try testing.expect(!rgb_a.equal(rgb_b));
+    try testing.expect(!rgb_a.equal(rgba_a));
+
+    try testing.expect(rgba_a.equal(rgba_a));
+    try testing.expect(!rgba_a.equal(rgba_b));
+    try testing.expect(!rgba_a.equal(rgb_a));
+
+    try testing.expect(alpha8_a.equal(alpha8_a));
+    try testing.expect(!alpha8_a.equal(alpha8_b));
+    try testing.expect(!alpha8_a.equal(rgb_a));
+
+    try testing.expect(alpha4_a.equal(alpha4_a));
+    try testing.expect(!alpha4_a.equal(alpha4_b));
+    try testing.expect(!alpha4_a.equal(rgb_a));
+
+    try testing.expect(alpha2_a.equal(alpha2_a));
+    try testing.expect(!alpha2_a.equal(alpha2_b));
+    try testing.expect(!alpha2_a.equal(rgb_a));
+
+    try testing.expect(alpha1_a.equal(alpha1_a));
+    try testing.expect(!alpha1_a.equal(alpha1_b));
+    try testing.expect(!alpha1_a.equal(rgb_a));
+}
