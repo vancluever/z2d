@@ -422,13 +422,13 @@ pub const RGBA = packed struct(u32) {
 /// Describes an 8-bit alpha channel-only format.
 pub const Alpha8 = Alpha(.alpha8);
 
-/// Describes an 4-bit alpha channel-only format.
+/// Describes a 4-bit alpha channel-only format.
 pub const Alpha4 = Alpha(.alpha4);
 
-/// Describes an 2-bit alpha channel-only format.
+/// Describes a 2-bit alpha channel-only format.
 pub const Alpha2 = Alpha(.alpha2);
 
-/// Describes an 1-bit alpha channel-only format.
+/// Describes a 1-bit alpha channel-only format.
 pub const Alpha1 = Alpha(.alpha1);
 
 comptime {
