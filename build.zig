@@ -104,6 +104,7 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
     /////////////////////////////////////////////////////////////////////////
     // Main module
@@ -113,9 +114,23 @@ pub fn build(b: *std.Build) void {
     });
 
     /////////////////////////////////////////////////////////////////////////
+    // Development dependencies
+    /////////////////////////////////////////////////////////////////////////
+    const tracy_enable = b.option(
+        bool,
+        "tracy",
+        "Enable Tracy profiler support (needs to be run with the \"spec\" target)",
+    );
+    const tracy_dep = b.dependency("zig-tracy", .{
+        .target = b.host,
+        .optimize = optimize,
+        .tracy_enable = tracy_enable orelse false,
+        .tracy_callstack = @as(u8, @intCast(32)),
+    });
+
+    /////////////////////////////////////////////////////////////////////////
     // Unit tests
     /////////////////////////////////////////////////////////////////////////
-    const optimize = b.standardOptimizeOption(.{});
     const test_filters = b.option(
         [][]const u8,
         "filter",
@@ -159,6 +174,9 @@ pub fn build(b: *std.Build) void {
             });
     };
     spec_test.root_module.addImport("z2d", z2d);
+    spec_test.root_module.addImport("tracy", tracy_dep.module("tracy"));
+    spec_test.linkLibrary(tracy_dep.artifact("tracy"));
+    spec_test.linkLibCpp();
     const spec_run = b.addRunArtifact(spec_test);
     b.step("spec", "Run spec (E2E) tests").dependOn(&spec_run.step);
 

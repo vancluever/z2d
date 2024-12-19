@@ -3,6 +3,12 @@
 .{
     .name = "z2d",
     .version = "0.1.0",
+    .dependencies = .{
+        .@"zig-tracy" = .{
+            .url = "git+https://github.com/vancluever/zig-tracy?ref=fix-callstack#6e123ee26032e49a1a0039524ddf7970692931d9",
+            .hash = "122094fc39764bd527269d3721f52fc3b8cbb72bc4cdbd3345cbc2cd941936f3d185",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
