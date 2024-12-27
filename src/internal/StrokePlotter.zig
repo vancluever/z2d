@@ -65,8 +65,8 @@ pub fn plot(
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
 ) Error!PolygonList {
-    var result = PolygonList.init(alloc);
-    errdefer result.deinit();
+    var result: PolygonList = .{};
+    errdefer result.deinit(alloc);
 
     var it: Iterator = .{
         .plotter = self,
@@ -74,14 +74,14 @@ pub fn plot(
     };
 
     while (try it.next(alloc)) |next| {
-        errdefer next.deinit();
+        errdefer next.deinit(alloc);
         switch (next) {
             .closed => |n| {
-                try result.append(n[0]);
-                try result.append(n[1]);
+                try result.prepend(alloc, n[0]);
+                try result.prepend(alloc, n[1]);
             },
             .open => |n| {
-                try result.append(n);
+                try result.prepend(alloc, n);
             },
             .empty => {},
         }
@@ -107,14 +107,14 @@ const Iterator = struct {
         open: Polygon,
         empty: struct {},
 
-        fn deinit(self: ResultPolygon) void {
+        fn deinit(self: ResultPolygon, alloc: mem.Allocator) void {
             switch (self) {
                 .closed => |r| {
-                    r[0].deinit();
-                    r[1].deinit();
+                    r[0].deinit(alloc);
+                    r[1].deinit(alloc);
                 },
                 .open => |r| {
-                    r.deinit();
+                    r.deinit(alloc);
                 },
                 .empty => {},
             }
@@ -122,12 +122,13 @@ const Iterator = struct {
     };
 
     const CapPlotterCtx = struct {
+        alloc: mem.Allocator,
         polygon: *Polygon,
         before: ?*Polygon.CornerList.Node,
 
         fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
             const self: *CapPlotterCtx = @ptrCast(@alignCast(ctx));
-            self.polygon.plot(node.point, self.before) catch |err| {
+            self.polygon.plot(self.alloc, node.point, self.before) catch |err| {
                 err_.* = err;
                 return;
             };
@@ -178,6 +179,7 @@ const Iterator = struct {
                             // determine a subset as we're doing a 360-degree plot.
                             for (state.it.plotter.pen.vertices.items) |v| {
                                 try state.outer.plot(
+                                    alloc,
                                     .{
                                         .x = current_point.x + v.point.x,
                                         .y = current_point.y + v.point.y,
@@ -187,7 +189,7 @@ const Iterator = struct {
                             }
 
                             // Deinit inner here as it was never used
-                            state.inner.deinit();
+                            state.inner.deinit(alloc);
 
                             // Done
                             return .{ .open = state.outer };
@@ -216,6 +218,7 @@ const Iterator = struct {
                             if (state.clockwise_ == null) return InternalError.InvalidState;
                             const outer_start_node = state.outer.corners.first;
                             _ = try it.join(
+                                alloc,
                                 &state.outer,
                                 &state.inner,
                                 current_point,
@@ -251,6 +254,7 @@ const Iterator = struct {
                             // Start point
                             const outer_start_node = state.outer.corners.first;
                             var outer_start_ctx: CapPlotterCtx = .{
+                                .alloc = alloc,
                                 .polygon = &state.outer,
                                 .before = outer_start_node,
                             };
@@ -292,6 +296,7 @@ const Iterator = struct {
                                 it.plotter.ctm,
                             );
                             var plotter_ctx: CapPlotterCtx = .{
+                                .alloc = alloc,
                                 .polygon = &state.outer,
                                 .before = null,
                             };
@@ -313,7 +318,7 @@ const Iterator = struct {
                             );
 
                             // Deinit inner here as it was never used
-                            state.inner.deinit();
+                            state.inner.deinit(alloc);
 
                             // Done
                             return .{ .open = state.outer };
@@ -336,6 +341,7 @@ const Iterator = struct {
     /// initial direction if one is not passed in through poly_clockwise_.
     fn join(
         it: *Iterator,
+        alloc: mem.Allocator,
         outer: *Polygon,
         inner: *Polygon,
         p0: Point,
@@ -345,41 +351,47 @@ const Iterator = struct {
         before_outer: ?*Polygon.CornerList.Node,
     ) mem.Allocator.Error!bool {
         const Joiner = struct {
+            const Self = @This();
+
             polygon: *Polygon,
-            plot_fn: *const fn (*anyopaque, *?mem.Allocator.Error, Point, ?*Polygon.CornerList.Node) void,
+            alloc: mem.Allocator,
+            plot_fn: *const fn (
+                *const @This(),
+                *?mem.Allocator.Error,
+                Point,
+                ?*Polygon.CornerList.Node,
+            ) void,
 
             fn plot(
-                self: *const @This(),
+                self: *const Self,
                 point: Point,
                 before: ?*Polygon.CornerList.Node,
             ) mem.Allocator.Error!void {
                 var err_: ?mem.Allocator.Error = null;
-                self.plot_fn(self.polygon, &err_, point, before);
+                self.plot_fn(self, &err_, point, before);
                 if (err_) |err| return err;
             }
 
             fn plotOuter(
-                ctx: *anyopaque,
+                self: *const Self,
                 err_: *?mem.Allocator.Error,
                 point: Point,
                 before: ?*Polygon.CornerList.Node,
             ) void {
-                const polygon: *Polygon = @ptrCast(@alignCast(ctx));
-                polygon.plot(point, before) catch |err| {
+                self.polygon.plot(self.alloc, point, before) catch |err| {
                     err_.* = err;
                     return;
                 };
             }
 
             fn plotInner(
-                ctx: *anyopaque,
+                self: *const Self,
                 err_: *?mem.Allocator.Error,
                 point: Point,
                 before: ?*Polygon.CornerList.Node,
             ) void {
-                const polygon: *Polygon = @ptrCast(@alignCast(ctx));
                 _ = before;
-                polygon.plotReverse(point) catch |err| {
+                self.polygon.plotReverse(self.alloc, point) catch |err| {
                     err_.* = err;
                     return;
                 };
@@ -402,16 +414,20 @@ const Iterator = struct {
         const direction_switched: bool = if (join_clockwise != poly_clockwise) true else false;
         const outer_joiner: Joiner = if (direction_switched) .{
             .polygon = inner,
+            .alloc = alloc,
             .plot_fn = Joiner.plotInner,
         } else .{
             .polygon = outer,
+            .alloc = alloc,
             .plot_fn = Joiner.plotOuter,
         };
         const inner_joiner: Joiner = if (direction_switched) .{
             .polygon = outer,
+            .alloc = alloc,
             .plot_fn = Joiner.plotOuter,
         } else .{
             .polygon = inner,
+            .alloc = alloc,
             .plot_fn = Joiner.plotInner,
         };
 
@@ -481,6 +497,7 @@ const Iterator = struct {
     const State = struct {
         it: *Iterator,
 
+        alloc: mem.Allocator,
         outer: Polygon,
         inner: Polygon,
 
@@ -494,14 +511,15 @@ const Iterator = struct {
         fn init(alloc: mem.Allocator, it: *Iterator) State {
             return .{
                 .it = it,
-                .outer = Polygon.init(alloc, it.plotter.scale),
-                .inner = Polygon.init(alloc, it.plotter.scale),
+                .alloc = alloc,
+                .outer = .{ .scale = it.plotter.scale },
+                .inner = .{ .scale = it.plotter.scale },
             };
         }
 
         fn deinit(self: *State) void {
-            self.outer.deinit();
-            self.inner.deinit();
+            self.outer.deinit(self.alloc);
+            self.inner.deinit(self.alloc);
         }
 
         fn process(self: *State, node: nodepkg.PathNode) Error!bool {
@@ -542,6 +560,7 @@ const Iterator = struct {
                             // the join points representing the points
                             // around current.
                             const clockwise = try self.it.join(
+                                self.alloc,
                                 &self.outer,
                                 &self.inner,
                                 last_point,
@@ -625,6 +644,7 @@ const Iterator = struct {
                             // the join points representing the points
                             // around current.
                             const clockwise = try self.it.join(
+                                self.alloc,
                                 &self.outer,
                                 &self.inner,
                                 last_point,
@@ -679,10 +699,10 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         defer plotter.deinit();
 
         var result = try plotter.plot(alloc, nodes.items);
-        defer result.deinit();
-        try testing.expectEqual(1, result.polygons.items.len);
+        defer result.deinit(alloc);
+        try testing.expectEqual(1, result.polygons.len());
         var corners_len: usize = 0;
-        var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
         while (next_) |n| {
             corners_len += 1;
             next_ = n.next;
@@ -712,10 +732,10 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         defer plotter.deinit();
 
         var result = try plotter.plot(alloc, nodes.items);
-        defer result.deinit();
-        try testing.expectEqual(1, result.polygons.items.len);
+        defer result.deinit(alloc);
+        try testing.expectEqual(1, result.polygons.len());
         var corners_len: usize = 0;
-        var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
         while (next_) |n| {
             corners_len += 1;
             next_ = n.next;

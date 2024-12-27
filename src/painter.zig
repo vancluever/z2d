@@ -28,6 +28,15 @@ const Transformation = @import("Transformation.zig");
 const InternalError = @import("internal/InternalError.zig").InternalError;
 const supersample_scale = @import("surface.zig").supersample_scale;
 
+/// The size of the stack buffer portion of the allocator used to store
+/// discovered edges on a given scanline during rasterization. The value is in
+/// bytes and is reset per scanline. It is further divided up to various parts
+/// of the edge discovery process. If this is exhausted, allocation falls back
+/// to the heap (or whatever other allocator was passed into fill or stroke).
+///
+/// This value is not modifiable at this time.
+pub const edge_buffer_size = 512;
+
 pub const FillOpts = struct {
     /// The anti-aliasing mode to use with the fill operation.
     anti_aliasing_mode: options.AntiAliasMode = .default,
@@ -82,7 +91,7 @@ pub fn fill(
         scale,
         @max(opts.tolerance, 0.001),
     );
-    defer polygons.deinit();
+    defer polygons.deinit(alloc);
 
     switch (aa_mode) {
         .none => {
@@ -189,7 +198,7 @@ pub fn stroke(
     defer plotter.deinit();
 
     var polygons = try plotter.plot(alloc, nodes);
-    defer polygons.deinit();
+    defer polygons.deinit(alloc);
 
     switch (aa_mode) {
         .none => {
@@ -228,7 +237,7 @@ fn paintDirect(
         // allocator if we need to. This should be more than enough to do most
         // cases, but we can't guarantee it and we don't necessarily want to
         // blow up the stack.
-        var edge_stack_fallback = heap.stackFallback(512, alloc);
+        var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
         const edge_alloc = edge_stack_fallback.get();
         var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
@@ -318,7 +327,7 @@ fn paintComposite(
             // allocator if we need to. This should be more than enough to do
             // most cases, but we can't guarantee it and we don't necessarily
             // want to blow up the stack.
-            var edge_stack_fallback = heap.stackFallback(512, alloc);
+            var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
             const edge_alloc = edge_stack_fallback.get();
             var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
             defer edge_list.deinit(edge_alloc);
