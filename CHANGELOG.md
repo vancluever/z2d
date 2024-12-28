@@ -8,6 +8,8 @@ IMPROVEMENTS:
   [#62](https://github.com/vancluever/z2d/pull/62)
 * PNG export now supports alpha surfaces, which are just exported to greyscale.
   [#60](https://github.com/vancluever/z2d/pull/60)
+* Memory model changes to the polygon plotting portion of the rasterizer.
+  [#64](https://github.com/vancluever/z2d/pull/64)
 
 ## 0.4.0 (November 13, 2024)
 
