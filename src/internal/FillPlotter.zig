@@ -25,8 +25,8 @@ pub fn plot(
     scale: f64,
     tolerance: f64,
 ) Error!PolygonList {
-    var result = PolygonList.init(alloc);
-    errdefer result.deinit();
+    var result: PolygonList = .{};
+    errdefer result.deinit(alloc);
 
     var initial_point: ?Point = null;
     var current_point: ?Point = null;
@@ -39,9 +39,9 @@ pub fn plot(
                     // Only append this polygon if it's useful (has more than 2
                     // corners). Otherwise, get rid of it.
                     if (poly.corners.len > 2) {
-                        try result.append(poly);
+                        try result.prepend(alloc, poly);
                     } else {
-                        poly.deinit();
+                        poly.deinit(alloc);
                         current_polygon = null;
                     }
                 }
@@ -53,8 +53,8 @@ pub fn plot(
                     break;
                 }
 
-                current_polygon = Polygon.init(alloc, scale);
-                try current_polygon.?.plot(n.point, null);
+                current_polygon = .{ .scale = scale };
+                try current_polygon.?.plot(alloc, n.point, null);
                 initial_point = n.point;
                 current_point = n.point;
             },
@@ -64,7 +64,7 @@ pub fn plot(
                 if (current_polygon == null) return InternalError.InvalidState;
 
                 if (!current_point.?.equal(n.point)) {
-                    try current_polygon.?.plot(n.point, null);
+                    try current_polygon.?.plot(alloc, n.point, null);
                     current_point = n.point;
                 }
             },
@@ -76,6 +76,7 @@ pub fn plot(
                 var ctx: SplinePlotterCtx = .{
                     .polygon = &current_polygon.?,
                     .current_point = &current_point,
+                    .alloc = alloc,
                 };
                 var spline: Spline = .{
                     .a = current_point.?,
@@ -110,10 +111,11 @@ pub fn plot(
 const SplinePlotterCtx = struct {
     polygon: *Polygon,
     current_point: *?Point,
+    alloc: mem.Allocator,
 
     fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *SplinePlotterCtx = @ptrCast(@alignCast(ctx));
-        self.polygon.plot(node.point, null) catch |err| {
+        self.polygon.plot(self.alloc, node.point, null) catch |err| {
             err_.* = err;
             return;
         };
@@ -133,12 +135,12 @@ test "degenerate line_to" {
     try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
 
     var result = try plot(alloc, nodes.items, 1, 0.1);
-    defer result.deinit();
-    try testing.expectEqual(1, result.polygons.items.len);
+    defer result.deinit(alloc);
+    try testing.expectEqual(1, result.polygons.len());
     var corners_len: usize = 0;
     var corners = std.ArrayList(Point).init(alloc);
     defer corners.deinit();
-    var next_: ?*Polygon.CornerList.Node = result.polygons.items[0].corners.first;
+    var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
     while (next_) |n| {
         try corners.append(n.data);
         corners_len += 1;

@@ -13,26 +13,28 @@ const mem = @import("std").mem;
 const FillRule = @import("../options.zig").FillRule;
 const Polygon = @import("Polygon.zig");
 const Point = @import("Point.zig");
+const edge_buffer_size = @import("../painter.zig").edge_buffer_size;
 
-polygons: std.ArrayList(Polygon),
+polygons: std.SinglyLinkedList(Polygon) = .{},
 start: Point = .{ .x = 0, .y = 0 },
 end: Point = .{ .x = 0, .y = 0 },
 
-pub fn init(alloc: mem.Allocator) PolygonList {
-    return .{
-        .polygons = std.ArrayList(Polygon).init(alloc),
-    };
+pub fn deinit(self: *PolygonList, alloc: mem.Allocator) void {
+    var poly_ = self.polygons.first;
+    while (poly_) |poly| {
+        poly_ = poly.next;
+        poly.data.deinit(alloc);
+        alloc.destroy(poly);
+    }
+    self.polygons = .{};
 }
 
-pub fn deinit(self: *PolygonList) void {
-    for (self.polygons.items) |poly| poly.deinit();
-    self.polygons.deinit();
-}
+pub fn prepend(self: *PolygonList, alloc: mem.Allocator, poly: Polygon) mem.Allocator.Error!void {
+    const first = self.polygons.len() == 0;
 
-pub fn append(self: *PolygonList, poly: Polygon) mem.Allocator.Error!void {
-    const first = self.polygons.items.len == 0;
-
-    try self.polygons.append(poly);
+    const n = try alloc.create(std.SinglyLinkedList(Polygon).Node);
+    n.data = poly;
+    self.polygons.prepend(n);
 
     if (first) {
         self.start = poly.start;
@@ -102,16 +104,27 @@ pub fn edgesForY(
     line_y: f64,
     fill_rule: FillRule,
 ) Polygon.EdgesForYError!EdgeListIterator {
-    var edge_list = std.ArrayList(Polygon.Edge).init(alloc);
-    defer edge_list.deinit();
+    // Internal implementation note: we work off of a small (512 byte) FBA with
+    // the heap as a fallback. FBAs are stacked in that if a freed allocation
+    // is the last one allocated, memory will be recovered, but if not, it's
+    // just dropped on the floor and that memory is "orphaned", if you will. As
+    // such, to be effective, we want to make sure that the space is divided up
+    // well between the final edge list and the temporary edge list, as such we
+    // give the final edge list (which lives at the bottom of the FBA stack)
+    // 2/3 of the space as initial capacity, to reduce the likelihood of
+    // wasteful resizes given that an initial ArrayList size is only 8 items.
+    const edge_list_capacity = edge_buffer_size / @sizeOf(Polygon.Edge) / 3 * 2;
+    var edge_list = try std.ArrayListUnmanaged(Polygon.Edge).initCapacity(alloc, edge_list_capacity);
+    defer edge_list.deinit(alloc);
 
-    for (self.polygons.items) |poly| {
-        var poly_edge_list = try poly.edgesForY(alloc, line_y);
-        defer poly_edge_list.deinit();
-        try edge_list.appendSlice(poly_edge_list.items);
+    var poly_ = self.polygons.first;
+    while (poly_) |poly| : (poly_ = poly.next) {
+        var poly_edge_list = try poly.data.edgesForY(alloc, line_y);
+        defer poly_edge_list.deinit(alloc);
+        try edge_list.appendSlice(alloc, poly_edge_list.items);
     }
 
-    const edge_list_sorted = try edge_list.toOwnedSlice();
+    const edge_list_sorted = try edge_list.toOwnedSlice(alloc);
     mem.sort(Polygon.Edge, edge_list_sorted, {}, Polygon.Edge.sort_asc);
     return .{
         .edges = edge_list_sorted,

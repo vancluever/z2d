@@ -12,33 +12,32 @@ const mem = @import("std").mem;
 
 pub const CornerList = std.DoublyLinkedList(Point);
 const Point = @import("Point.zig");
+const PolygonList = @import("PolygonList.zig");
 const InternalError = @import("InternalError.zig").InternalError;
+const edge_buffer_size = @import("../painter.zig").edge_buffer_size;
 
-arena_alloc: heap.ArenaAllocator,
-concatenated_polygons: std.ArrayList(Polygon),
 corners: CornerList = .{},
 start: Point = .{ .x = 0, .y = 0 },
 end: Point = .{ .x = 0, .y = 0 },
 scale: f64,
 
-pub fn init(alloc: mem.Allocator, scale: f64) Polygon {
-    return .{
-        .arena_alloc = heap.ArenaAllocator.init(alloc),
-        .concatenated_polygons = std.ArrayList(Polygon).init(alloc),
-        .scale = scale,
-    };
-}
-
-pub fn deinit(self: *const Polygon) void {
-    for (self.concatenated_polygons.items) |poly| poly.deinit();
-    self.concatenated_polygons.deinit();
-    self.arena_alloc.deinit();
+pub fn deinit(self: *const Polygon, alloc: mem.Allocator) void {
+    var node_ = self.corners.first;
+    while (node_) |node| {
+        node_ = node.next;
+        alloc.destroy(node);
+    }
 }
 
 /// Plots a point on the polygon. If before is specified, the point is plotted
 /// before it.
-pub fn plot(self: *Polygon, point: Point, before_: ?*CornerList.Node) mem.Allocator.Error!void {
-    const n = try self.arena_alloc.allocator().create(CornerList.Node);
+pub fn plot(
+    self: *Polygon,
+    alloc: mem.Allocator,
+    point: Point,
+    before_: ?*CornerList.Node,
+) mem.Allocator.Error!void {
+    const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
         .x = point.x * self.scale,
@@ -53,8 +52,8 @@ pub fn plot(self: *Polygon, point: Point, before_: ?*CornerList.Node) mem.Alloca
 
 /// Like plot, but adds points in the reverse direction (i.e., at the start of
 /// the polygon instead of the end.
-pub fn plotReverse(self: *Polygon, point: Point) mem.Allocator.Error!void {
-    const n = try self.arena_alloc.allocator().create(CornerList.Node);
+pub fn plotReverse(self: *Polygon, alloc: mem.Allocator, point: Point) mem.Allocator.Error!void {
+    const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
         .x = point.x * self.scale,
@@ -82,7 +81,6 @@ fn checkUpdateExtents(self: *Polygon, point: Point) void {
 /// Concatenates a polygon into this one. It's invalid to use the other polygon
 /// after this operation is done.
 pub fn concat(self: *Polygon, other: Polygon) mem.Allocator.Error!void {
-    try self.concatenated_polygons.append(other);
     concatByCopying(&self.corners, &other.corners);
 
     self.checkUpdateExtents(other.start);
@@ -131,7 +129,7 @@ pub fn edgesForY(
     self: *const Polygon,
     alloc: mem.Allocator,
     line_y: f64,
-) EdgesForYError!std.ArrayList(Edge) {
+) EdgesForYError!std.ArrayListUnmanaged(Edge) {
     // Get a sorted list of X-edges suitable for traversal in a scanline
     // fill. For an in-depth explanation on how this works, see "Efficient
     // Polygon Fill Algorithm With C Code Sample" by Darel Rex Finley
@@ -140,9 +138,13 @@ pub fn edgesForY(
     // Parts of this section follows the public-domain code listed in the
     // sample.
 
-    var edge_list = std.ArrayList(Edge).init(alloc);
+    // See PolygonList.edgesForY for more details on FBA organization and
+    // initial capacity.
+    const edge_buffer_item_size = edge_buffer_size / @sizeOf(Edge);
+    const edge_list_capacity = edge_buffer_item_size - (edge_buffer_item_size / 3 * 2);
+    var edge_list = try std.ArrayListUnmanaged(Edge).initCapacity(alloc, edge_list_capacity);
     if (self.corners.len == 0) return edge_list;
-    defer edge_list.deinit();
+    defer edge_list.deinit(alloc);
 
     // We take our line measurements at the middle of the line; this helps
     // "break the tie" with lines that fall exactly on point boundaries.
@@ -160,7 +162,7 @@ pub fn edgesForY(
         {
             const last_x = last.data.x;
             const cur_x = current.data.x;
-            try edge_list.append(edge: {
+            try edge_list.append(alloc, edge: {
                 // y(x) = (y1 - y0) / (x1 - x0) * (x - x0) + y0
                 //
                 // or:
@@ -187,7 +189,7 @@ pub fn edgesForY(
     }
 
     // Sort our edges
-    const edge_list_sorted = try edge_list.toOwnedSlice();
+    const edge_list_sorted = try edge_list.toOwnedSlice(alloc);
     mem.sort(Edge, edge_list_sorted, {}, Edge.sort_asc);
-    return std.ArrayList(Edge).fromOwnedSlice(alloc, edge_list_sorted);
+    return std.ArrayListUnmanaged(Edge).fromOwnedSlice(edge_list_sorted);
 }
