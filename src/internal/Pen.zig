@@ -25,11 +25,9 @@ const PenVertex = struct {
     slope_ccw: Slope,
 };
 
-alloc: mem.Allocator,
-
 /// The vertices, centered around (0,0) and distributed on even angles
 /// around the pen.
-vertices: std.ArrayList(PenVertex),
+vertices: std.ArrayListUnmanaged(PenVertex),
 
 /// Initializes a pen at radius thickness / 2, with point distribution
 /// based on the maximum error along the radius, being equal to or less
@@ -86,8 +84,8 @@ pub fn init(
     };
 
     // We can now initialize and plot our vertices
-    var vertices = try std.ArrayList(PenVertex).initCapacity(alloc, num_vertices);
-    errdefer vertices.deinit();
+    var vertices = try std.ArrayListUnmanaged(PenVertex).initCapacity(alloc, num_vertices);
+    errdefer vertices.deinit(alloc);
 
     // Add the points in a first pass. Note our baseline for determining points
     // is user space (as we're just plotting a circle, so we need to transform
@@ -102,7 +100,7 @@ pub fn init(
         var dx = radius * @cos(theta);
         var dy = radius * @sin(theta);
         ctm.userToDeviceDistance(&dx, &dy);
-        try vertices.append(.{
+        try vertices.append(alloc, .{
             .point = .{ .x = dx, .y = dy },
             .slope_cw = undefined,
             .slope_ccw = undefined,
@@ -125,128 +123,12 @@ pub fn init(
     }
 
     return .{
-        .alloc = alloc,
         .vertices = vertices,
     };
 }
 
-pub fn deinit(self: *Pen) void {
-    self.vertices.deinit();
-}
-
-/// Gets the vertices for the range from one face to the other, depending on
-/// the line direction.
-///
-/// The caller owns the ArrayList and must call deinit on it.
-pub fn verticesFor(
-    self: *const Pen,
-    from_slope: Slope,
-    to_slope: Slope,
-    clockwise: bool,
-) mem.Allocator.Error!std.ArrayList(PenVertex) {
-    var result = std.ArrayList(PenVertex).init(self.alloc);
-    errdefer result.deinit();
-
-    // The algorithm is basically a binary search back from the middle of
-    // the vertex set. We search backwards for the vertex right after the
-    // outer point of the end of the inbound face (i.e., the unjoined
-    // stroke). This process is then repeated for the other direction to
-    // locate the vertex right before the outer point of the start of the
-    // outbound face.
-
-    // Check the direction of the join so that we can return the
-    // appropriate vertices in the correct order.
-    var start: usize = 0;
-    var end: usize = 0;
-    const vertices_len: i32 = @intCast(self.vertices.items.len);
-    if (clockwise) {
-        // Clockwise join
-        var low: i32 = 0;
-        var high: i32 = vertices_len;
-        var i: i32 = (low + high) >> 1;
-        while (high - low > 1) : (i = (low + high) >> 1) {
-            if (self.vertices.items[@intCast(i)].slope_cw.compare(from_slope) < 0)
-                low = i
-            else
-                high = i;
-        }
-
-        if (self.vertices.items[@intCast(i)].slope_cw.compare(from_slope) < 0) {
-            i += 1;
-            if (i == vertices_len) i = 0;
-        }
-        start = @intCast(i);
-
-        if (to_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) >= 0) {
-            low = i;
-            high = i + vertices_len;
-            i = (low + high) >> 1;
-            while (high - low > 1) : (i = (low + high) >> 1) {
-                const j: i32 = if (i >= vertices_len) i - vertices_len else i;
-                if (self.vertices.items[@intCast(j)].slope_cw.compare(to_slope) > 0)
-                    high = i
-                else
-                    low = i;
-            }
-
-            if (i >= vertices_len) i -= vertices_len;
-        }
-
-        end = @intCast(i);
-    } else {
-        // Counter-clockwise join
-        var low: i32 = 0;
-        var high: i32 = vertices_len;
-        var i: i32 = (low + high) >> 1;
-        while (high - low > 1) : (i = (low + high) >> 1) {
-            if (from_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0)
-                low = i
-            else
-                high = i;
-        }
-
-        if (from_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) < 0) {
-            i += 1;
-            if (i == vertices_len) i = 0;
-        }
-        start = @intCast(i);
-
-        if (self.vertices.items[@intCast(i)].slope_cw.compare(to_slope) <= 0) {
-            low = i;
-            high = i + vertices_len;
-            i = (low + high) >> 1;
-            while (high - low > 1) : (i = (low + high) >> 1) {
-                const j: i32 = if (i >= vertices_len) i - vertices_len else i;
-                if (to_slope.compare(self.vertices.items[@intCast(j)].slope_ccw) > 0)
-                    high = i
-                else
-                    low = i;
-            }
-
-            if (i >= vertices_len) i -= vertices_len;
-        }
-
-        end = @intCast(i);
-    }
-
-    var idx = start;
-    if (clockwise) {
-        while (idx != end) : ({
-            idx += 1;
-            if (idx == vertices_len) idx = 0;
-        }) {
-            try result.append(self.vertices.items[idx]);
-        }
-    } else {
-        while (idx != end) : ({
-            if (idx == 0) idx = @intCast(vertices_len);
-            idx -= 1;
-        }) {
-            try result.append(self.vertices.items[idx]);
-        }
-    }
-
-    return result;
+pub fn deinit(self: *Pen, alloc: mem.Allocator) void {
+    self.vertices.deinit(alloc);
 }
 
 /// Returns an iterator for the vertex range from one face to the other,
