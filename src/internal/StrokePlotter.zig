@@ -56,8 +56,8 @@ pub fn init(
     };
 }
 
-pub fn deinit(self: *StrokePlotter) void {
-    self.pen.deinit();
+pub fn deinit(self: *StrokePlotter, alloc: mem.Allocator) void {
+    self.pen.deinit(alloc);
 }
 
 pub fn plot(
@@ -680,11 +680,11 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
         // p0 -> p1 is equal
         const alloc = testing.allocator;
-        var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
-        defer nodes.deinit();
-        try nodes.append(.{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
-        try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
-        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        defer nodes.deinit(alloc);
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
 
         var plotter = try StrokePlotter.init(
             alloc,
@@ -696,7 +696,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             0.01,
             Transformation.identity,
         );
-        defer plotter.deinit();
+        defer plotter.deinit(alloc);
 
         var result = try plotter.plot(alloc, nodes.items);
         defer result.deinit(alloc);
@@ -713,11 +713,11 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
         // p1 -> p2 is equal
         const alloc = testing.allocator;
-        var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
-        defer nodes.deinit();
-        try nodes.append(.{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
-        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
-        try nodes.append(.{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        defer nodes.deinit(alloc);
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
 
         var plotter = try StrokePlotter.init(
             alloc,
@@ -729,7 +729,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             0.01,
             Transformation.identity,
         );
-        defer plotter.deinit();
+        defer plotter.deinit(alloc);
 
         var result = try plotter.plot(alloc, nodes.items);
         defer result.deinit(alloc);

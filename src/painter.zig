@@ -195,7 +195,7 @@ pub fn stroke(
         @max(opts.tolerance, 0.001),
         opts.transformation,
     );
-    defer plotter.deinit();
+    defer plotter.deinit(alloc);
 
     var polygons = try plotter.plot(alloc, nodes);
     defer polygons.deinit(alloc);

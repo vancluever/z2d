@@ -125,24 +125,24 @@ const SplinePlotterCtx = struct {
 
 test "degenerate line_to" {
     const alloc = testing.allocator;
-    var nodes = std.ArrayList(nodepkg.PathNode).init(alloc);
-    defer nodes.deinit();
-    try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
-    try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
-    try nodes.append(.{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
-    try nodes.append(.{ .line_to = .{ .point = .{ .x = 0, .y = 10 } } });
-    try nodes.append(.{ .close_path = .{} });
-    try nodes.append(.{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+    var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+    defer nodes.deinit(alloc);
+    try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+    try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+    try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+    try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 0, .y = 10 } } });
+    try nodes.append(alloc, .{ .close_path = .{} });
+    try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
 
     var result = try plot(alloc, nodes.items, 1, 0.1);
     defer result.deinit(alloc);
     try testing.expectEqual(1, result.polygons.len());
     var corners_len: usize = 0;
-    var corners = std.ArrayList(Point).init(alloc);
-    defer corners.deinit();
+    var corners: std.ArrayListUnmanaged(Point) = .{};
+    defer corners.deinit(alloc);
     var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
     while (next_) |n| {
-        try corners.append(n.data);
+        try corners.append(alloc, n.data);
         corners_len += 1;
         next_ = n.next;
     }
