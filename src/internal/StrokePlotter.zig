@@ -27,7 +27,7 @@ thickness: f64,
 join_mode: options.JoinMode,
 miter_limit: f64,
 cap_mode: options.CapMode,
-pen: Pen,
+pen: ?Pen,
 scale: f64,
 tolerance: f64,
 ctm: Transformation,
@@ -49,7 +49,10 @@ pub fn init(
         .join_mode = join_mode,
         .miter_limit = miter_limit,
         .cap_mode = cap_mode,
-        .pen = try Pen.init(alloc, thickness, tolerance, ctm),
+        .pen = if (join_mode == .round or cap_mode == .round)
+            try Pen.init(alloc, thickness, tolerance, ctm)
+        else
+            null,
         .scale = scale,
         .tolerance = tolerance,
         .ctm = ctm,
@@ -57,7 +60,7 @@ pub fn init(
 }
 
 pub fn deinit(self: *StrokePlotter, alloc: mem.Allocator) void {
-    self.pen.deinit(alloc);
+    if (self.pen) |*p| p.deinit(alloc);
 }
 
 pub fn plot(
@@ -177,7 +180,8 @@ const Iterator = struct {
                         if (state.it.plotter.cap_mode == .round) {
                             // Just plot off all of the pen's vertices, no need to
                             // determine a subset as we're doing a 360-degree plot.
-                            for (state.it.plotter.pen.vertices.items) |v| {
+                            debug.assert(state.it.plotter.pen != null);
+                            for (state.it.plotter.pen.?.vertices.items) |v| {
                                 try state.outer.plot(
                                     alloc,
                                     .{
@@ -237,14 +241,12 @@ const Iterator = struct {
                                 initial_point,
                                 first_line_point,
                                 it.plotter.thickness,
-                                it.plotter.pen,
                                 it.plotter.ctm,
                             );
                             const cap_points_end = Face.init(
                                 last_point,
                                 current_point,
                                 it.plotter.thickness,
-                                it.plotter.pen,
                                 it.plotter.ctm,
                             );
 
@@ -265,6 +267,7 @@ const Iterator = struct {
                                 },
                                 it.plotter.cap_mode,
                                 clockwise,
+                                it.plotter.pen,
                             );
 
                             // End point
@@ -276,6 +279,7 @@ const Iterator = struct {
                                 },
                                 it.plotter.cap_mode,
                                 clockwise,
+                                it.plotter.pen,
                             );
 
                             // Now, concat the end of the inner polygon to the
@@ -292,7 +296,6 @@ const Iterator = struct {
                                 initial_point,
                                 current_point,
                                 it.plotter.thickness,
-                                it.plotter.pen,
                                 it.plotter.ctm,
                             );
                             var plotter_ctx: CapPlotterCtx = .{
@@ -307,6 +310,7 @@ const Iterator = struct {
                                 },
                                 it.plotter.cap_mode,
                                 true,
+                                it.plotter.pen,
                             );
                             try cap_points.cap_p1(
                                 &.{
@@ -315,6 +319,7 @@ const Iterator = struct {
                                 },
                                 it.plotter.cap_mode,
                                 true,
+                                it.plotter.pen,
                             );
 
                             // Deinit inner here as it was never used
@@ -401,8 +406,8 @@ const Iterator = struct {
         // Guard against no-op joins - if one of our segments is degenerate, just return.
         if (p0.equal(p1) or p1.equal(p2)) return if (poly_clockwise_) |cw| cw else false;
 
-        const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
-        const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.pen, it.plotter.ctm);
+        const in = Face.init(p0, p1, it.plotter.thickness, it.plotter.ctm);
+        const out = Face.init(p1, p2, it.plotter.thickness, it.plotter.ctm);
         const join_clockwise = in.dev_slope.compare(out.dev_slope) < 0;
 
         // Calculate if the join direction is different from the larger
@@ -464,7 +469,8 @@ const Iterator = struct {
             },
 
             .round => {
-                var vit = it.plotter.pen.vertexIteratorFor(in.dev_slope, out.dev_slope, join_clockwise);
+                debug.assert(it.plotter.pen != null);
+                var vit = it.plotter.pen.?.vertexIteratorFor(in.dev_slope, out.dev_slope, join_clockwise);
                 try outer_joiner.plot(
                     if (join_clockwise) in.p1_ccw else in.p1_cw,
                     before_outer,
@@ -611,6 +617,18 @@ const Iterator = struct {
                     // the existing join method. Put this back when we're done.
                     const actual_join_mode = self.it.plotter.join_mode;
                     self.it.plotter.join_mode = .round;
+                    // Lazy-init the pen as well if it has not been
+                    // initialized. It does not need to be de-initialized here
+                    // (nor should it), deinit on the plotter will take care of
+                    // it.
+                    if (self.it.plotter.pen == null) {
+                        self.it.plotter.pen = try Pen.init(
+                            self.alloc,
+                            self.it.plotter.thickness,
+                            self.it.plotter.tolerance,
+                            self.it.plotter.ctm,
+                        );
+                    }
                     defer self.it.plotter.join_mode = actual_join_mode;
 
                     // Decompose now

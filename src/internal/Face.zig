@@ -44,11 +44,10 @@ p0_cw: Point,
 p0_ccw: Point,
 p1_cw: Point,
 p1_ccw: Point,
-pen: Pen,
 ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation) Face {
+pub fn init(p0: Point, p1: Point, thickness: f64, ctm: Transformation) Face {
     const dev_slope = Slope.init(p0, p1).normalize();
     const half_width = thickness / 2;
     var offset_x: f64 = undefined;
@@ -92,7 +91,6 @@ pub fn init(p0: Point, p1: Point, thickness: f64, pen: Pen, ctm: Transformation)
         .p0_ccw = .{ .x = p0.x + offset_ccw_x, .y = p0.y + offset_ccw_y },
         .p1_cw = .{ .x = p1.x + offset_cw_x, .y = p1.y + offset_cw_y },
         .p1_ccw = .{ .x = p1.x + offset_ccw_x, .y = p1.y + offset_ccw_y },
-        .pen = pen,
         .ctm = ctm,
     };
 }
@@ -125,12 +123,14 @@ pub fn cap_p0(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
+    pen: ?Pen,
 ) PlotterVTable.Error!void {
-    const reversed = init(self.p1, self.p0, self.width, self.pen, self.ctm);
+    const reversed = init(self.p1, self.p0, self.width, self.ctm);
     return reversed.cap(
         plotter_impl,
         cap_mode,
         clockwise,
+        pen,
     );
 }
 
@@ -139,11 +139,13 @@ pub fn cap_p1(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
+    pen: ?Pen,
 ) PlotterVTable.Error!void {
     return self.cap(
         plotter_impl,
         cap_mode,
         clockwise,
+        pen,
     );
 }
 
@@ -152,6 +154,7 @@ fn cap(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
+    pen: ?Pen,
 ) PlotterVTable.Error!void {
     switch (cap_mode) {
         .butt => {
@@ -161,7 +164,7 @@ fn cap(
             try self.capSquare(plotter_impl, clockwise);
         },
         .round => {
-            try self.capRound(plotter_impl, clockwise);
+            try self.capRound(plotter_impl, clockwise, pen);
         },
     }
 }
@@ -217,12 +220,14 @@ fn capRound(
     self: Face,
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
+    pen: ?Pen,
 ) PlotterVTable.Error!void {
     // We need to calculate our fan along the end as if we were
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
-    var vit = self.pen.vertexIteratorFor(
+    debug.assert(pen != null);
+    var vit = pen.?.vertexIteratorFor(
         self.dev_slope,
         .{ .dx = -self.dev_slope.dx, .dy = -self.dev_slope.dy },
         clockwise,
