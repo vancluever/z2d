@@ -162,6 +162,9 @@ vector rasterization, suitable for UI design and other similar tasks.
 Development currently is working off of Zig 0.13.0, YMMV with versions outside
 of 0.13.0.
 
+There is currently a `zig-0.14.0` branch that is currently being updated
+against the latest Zig 0.14.0. 
+
 ## Documentation and examples
 
 View the documentation for the `main` branch at: https://z2d.vancluevertech.com/docs
