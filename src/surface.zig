@@ -470,7 +470,7 @@ pub fn ImageSurface(comptime T: type) type {
 }
 
 /// A specialized surface for pixel types that are smaller than 8 bits in size,
-/// packing the data into a `PackedIntSlice` in little-endian fashion.
+/// packing the data into the buffer in little-endian fashion.
 ///
 /// ## Accessing pixel data
 ///
@@ -497,10 +497,6 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// The underlying buffer as a densely-packed []u8. See the type
         /// function documentation for details on how to interpret the buffer.
         buf: []u8,
-
-        /// The PackedIntSlice interface to buf, through which most of the
-        /// surface interacts.
-        buf_packed_if: std.PackedIntSliceEndian(T, .little),
 
         /// The format for the surface.
         pub const format: pixel.Format = T.format;
@@ -547,7 +543,6 @@ pub fn PackedImageSurface(comptime T: type) type {
                 .width = width,
                 .height = height,
                 .buf = buf,
-                .buf_packed_if = std.PackedIntSliceEndian(T, .little).init(buf, @intCast(height * width)),
             };
         }
 
@@ -579,10 +574,10 @@ pub fn PackedImageSurface(comptime T: type) type {
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * @as(usize, @intCast(self.width)) + (x * scale + j);
-                            pixels[i * scale + j] = self.buf_packed_if.get(idx);
+                            pixels[i * scale + j] = self._get(idx);
                         }
                     }
-                    self.buf_packed_if.set(y * width + x, T.average(&pixels));
+                    self._set(y * width + x, T.average(&pixels));
                 }
             }
             self.height = @intCast(height);
@@ -598,7 +593,6 @@ pub fn PackedImageSurface(comptime T: type) type {
             if (self.buf.len == new_len) return;
             if (alloc.resize(self.buf, new_len)) {
                 self.buf = self.buf.ptr[0..new_len];
-                self.buf_packed_if = self.buf_packed_if.slice(0, height * width);
             }
         }
 
@@ -655,8 +649,8 @@ pub fn PackedImageSurface(comptime T: type) type {
                     const dst_put_y = src_y + dst_y;
                     const dst_idx: usize = @intCast(dst.width * dst_put_y + dst_put_x);
                     if (src.getPixel(@intCast(src_x), @intCast(src_y))) |src_px| {
-                        const dst_px = dst.buf_packed_if.get(dst_idx);
-                        dst.buf_packed_if.set(dst_idx, op(dst_px, src_px));
+                        const dst_px = dst._get(dst_idx);
+                        dst._set(dst_idx, op(dst_px, src_px));
                     }
                 }
             }
@@ -676,14 +670,14 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const PackedImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self.buf_packed_if.get(@intCast(self.width * y + x)).asPixel();
+            return self._get(@intCast(self.width * y + x)).asPixel();
         }
 
         /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
         /// pixel is out of range.
         pub fn putPixel(self: *PackedImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf_packed_if.set(@intCast(self.width * y + x), T.copySrc(px));
+            self._set(@intCast(self.width * y + x), T.copySrc(px));
         }
 
         /// Replaces the surface with the supplied pixel.
@@ -691,15 +685,25 @@ pub fn PackedImageSurface(comptime T: type) type {
             _paintPixel(self.buf, T.copySrc(px));
         }
 
+        fn _get(self: *const PackedImageSurface(T), index: usize) T {
+            const px_int_t = @typeInfo(T).Struct.backing_integer.?;
+            const px_int = mem.readPackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), .little);
+            return @as(T, @bitCast(px_int));
+        }
+
+        fn _set(self: *PackedImageSurface(T), index: usize, value: T) void {
+            const px_int_t = @typeInfo(T).Struct.backing_integer.?;
+            const px_int = @as(px_int_t, @bitCast(value));
+            mem.writePackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), px_int, .little);
+        }
+
         fn _paintPixel(buf: []u8, px: T) void {
-            // There's nothing like setAll in packed_int_array unfortunately,
-            // so we roll our own, albeit tailored to our specific purpose, by
-            // basically taking the pixel that we are supposed to set and using
-            // that to pack a u8 with the number of pixels that will fit, then
-            // just using that to memset the slice. Note that this may fill
-            // past the end of the canvas into the excess in the last byte, but
-            // that's fine as this space is undefined in our implementation
-            // anyway.
+            // To set the entire buffer to a certain pixel, we take the pixel
+            // that we are supposed to set and use that to pack a u8 with the
+            // number of pixels that will fit, then use that to memset the
+            // slice. Note that this may fill past the end of the canvas into
+            // the excess in the last byte, but that's fine as this space is
+            // undefined in our implementation anyway.
             //
             // NOTE: This pattern *should* be resilient across endianness.
             // We're not doing any math here, and if intCast from a smaller
