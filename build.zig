@@ -122,7 +122,7 @@ pub fn build(b: *std.Build) void {
         "Enable Tracy profiler support (needs to be run with the \"spec\" target)",
     );
     const tracy_dep = b.dependency("zig-tracy", .{
-        .target = b.host,
+        .target = target,
         .optimize = optimize,
         .tracy_enable = tracy_enable orelse false,
         .tracy_callstack = @as(u8, @intCast(32)),
