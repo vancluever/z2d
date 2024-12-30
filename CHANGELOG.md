@@ -5,7 +5,9 @@ IMPROVEMENTS:
 * 1, 2, and 4-bit alpha pixel types are now supported. Optimizations exist for
   these pixel formats when using them with surfaces.
   [#61](https://github.com/vancluever/z2d/pull/61),
-  [#62](https://github.com/vancluever/z2d/pull/62)
+  [#62](https://github.com/vancluever/z2d/pull/62),
+  [#68](https://github.com/vancluever/z2d/pull/68) (the latter PR supersedes
+  `PackedIntSliceEndian` portion of #61, which is being removed in Zig 0.14.0)
 * PNG export now supports alpha surfaces, which are just exported to greyscale.
   [#60](https://github.com/vancluever/z2d/pull/60)
 * Memory model changes to the polygon plotting portion of the rasterizer.
