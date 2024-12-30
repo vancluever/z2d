@@ -1,11 +1,17 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+  inputs.zig = {
+    url = "github:mitchellh/zig-overlay";
+    inputs = {
+      nixpkgs.follows = "nixpkgs";
+    };
+  };
   inputs.zls = {
-    url = "github:zigtools/zls/0.13.0";
+    url = "github:zigtools/zls";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, zls }:
+  outputs = { self, nixpkgs, zig, zls }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -30,7 +36,7 @@
           in
           pkgs.mkShell {
             packages = with pkgs; [
-              zig_0_13
+              zig.packages.${system}.master-2024-12-28
               zls.packages.${system}.zls
               python3
             ];

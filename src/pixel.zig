@@ -512,8 +512,8 @@ fn Alpha(comptime fmt: Format) type {
             const src_T = @TypeOf(val);
             if (target_T == src_T) return val;
 
-            const from_bits = @typeInfo(src_T).Int.bits;
-            const to_bits = @typeInfo(target_T).Int.bits;
+            const from_bits = @typeInfo(src_T).int.bits;
+            const to_bits = @typeInfo(target_T).int.bits;
             if (from_bits > to_bits) {
                 return @intCast(val >> from_bits - to_bits);
             }
@@ -617,7 +617,7 @@ inline fn srcOverColor(sca: u8, dca: u8, sa: u8) u8 {
 
 inline fn srcOverAlpha(comptime T: type, sa: T, da: T) T {
     const max: u16 = comptime max: {
-        const bits = @typeInfo(T).Int.bits;
+        const bits = @typeInfo(T).int.bits;
         debug.assert(bits <= 8);
         break :max (1 << bits) - 1;
     };
@@ -634,7 +634,7 @@ inline fn dstInColor(dca: u8, sa: u8) u8 {
 
 inline fn dstInAlpha(comptime T: type, sa: T, da: T) T {
     const max: u16 = comptime max: {
-        const bits = @typeInfo(T).Int.bits;
+        const bits = @typeInfo(T).int.bits;
         debug.assert(bits <= 8);
         break :max (1 << bits) - 1;
     };
