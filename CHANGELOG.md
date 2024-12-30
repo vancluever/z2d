@@ -10,6 +10,7 @@ IMPROVEMENTS:
   [#60](https://github.com/vancluever/z2d/pull/60)
 * Memory model changes to the polygon plotting portion of the rasterizer.
   [#64](https://github.com/vancluever/z2d/pull/64)
+  [#67](https://github.com/vancluever/z2d/pull/67) 
 
 ## 0.4.0 (November 13, 2024)
 
