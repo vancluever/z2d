@@ -79,7 +79,7 @@ pub const Transformation = @import("Transformation.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
-    _ = @import("internal/FillPlotter.zig");
-    _ = @import("internal/StrokePlotter.zig");
+    _ = @import("internal/fill_plotter.zig");
+    _ = @import("internal/stroke_plotter.zig");
     _ = @import("static_path.zig");
 }

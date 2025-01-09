@@ -10,7 +10,8 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-const fill_plotter = @import("internal/FillPlotter.zig");
+const fill_plotter = @import("internal/fill_plotter.zig");
+const stroke_plotter = @import("internal/stroke_plotter.zig");
 const options = @import("options.zig");
 const pixel = @import("pixel.zig");
 
@@ -21,7 +22,6 @@ const Surface = @import("surface.zig").Surface;
 const SurfaceType = @import("surface.zig").SurfaceType;
 const Pattern = @import("pattern.zig").Pattern;
 const FillRule = @import("options.zig").FillRule;
-const StrokePlotter = @import("internal/StrokePlotter.zig");
 const Polygon = @import("internal/Polygon.zig");
 const PolygonList = @import("internal/PolygonList.zig");
 const Transformation = @import("Transformation.zig");
@@ -107,6 +107,14 @@ pub const StrokeOpts = struct {
     /// The anti-aliasing mode to use with the stroke operation.
     anti_aliasing_mode: options.AntiAliasMode = .default,
 
+    /// The dash array, if dashed lines are desired. See `Context` for a full
+    /// explanation of this setting.
+    dashes: []const f64 = &.{},
+
+    /// The dash offset when doing dashed lines. See `Context` for a full
+    /// explanation of this setting.
+    dash_offset: f64 = 0,
+
     /// The line cap rule for the stroke operation.
     line_cap_mode: options.CapMode = .butt,
 
@@ -185,19 +193,24 @@ pub fn stroke(
     // sort of arbitrarily chosen as Cairo's minimum 24.8 fixed-point value (so
     // 1/256).
     const minimum_line_width: f64 = 0.00390625;
-    var plotter = try StrokePlotter.init(
+    var polygons = try stroke_plotter.plot(
         alloc,
-        if (opts.line_width >= minimum_line_width) opts.line_width else minimum_line_width,
-        if (opts.line_width >= 2) opts.line_join_mode else .miter,
-        if (opts.line_width >= 2) opts.miter_limit else 10.0,
-        if (opts.line_width >= 2) opts.line_cap_mode else .butt,
-        scale,
-        @max(opts.tolerance, 0.001),
-        opts.transformation,
+        nodes,
+        .{
+            .cap_mode = if (opts.line_width >= 2) opts.line_cap_mode else .butt,
+            .ctm = opts.transformation,
+            .dashes = opts.dashes,
+            .dash_offset = opts.dash_offset,
+            .join_mode = if (opts.line_width >= 2) opts.line_join_mode else .miter,
+            .miter_limit = if (opts.line_width >= 2) opts.miter_limit else 10.0,
+            .scale = scale,
+            .thickness = if (opts.line_width >= minimum_line_width)
+                opts.line_width
+            else
+                minimum_line_width,
+            .tolerance = @max(opts.tolerance, 0.001),
+        },
     );
-    defer plotter.deinit(alloc);
-
-    var polygons = try plotter.plot(alloc, nodes);
     defer polygons.deinit(alloc);
 
     switch (aa_mode) {
