@@ -15,6 +15,11 @@ IMPROVEMENTS:
   [#64](https://github.com/vancluever/z2d/pull/64)
   [#67](https://github.com/vancluever/z2d/pull/67) 
 
+BUG FIXES:
+
+* Path: relative helpers now correctly operate in user space when using
+  transformations. [#69](https://github.com/vancluever/z2d/pull/69)
+
 ## 0.4.0 (November 13, 2024)
 
 This release introduces large changes to the layout of the library to better
