@@ -25,6 +25,14 @@ const Transformation = @import("Transformation.zig");
 pub const Error = error{
     /// A path operation requires a current point, but does not have one.
     NoCurrentPoint,
+
+    /// A relative path helper encountered an error inverting the current
+    /// transformation matrix to translate the current point back to user space
+    /// before applying the relative point. This is necessary as path nodes are
+    /// stored in device space at the lower level. Make sure any transformation
+    /// matrices in use are invertible and use the standard helpers (translate,
+    /// rotate, scale) unless absolutely necessary.
+    InvalidMatrix,
 };
 
 /// The underlying node set. Do not edit or populate this directly, use the
@@ -118,7 +126,8 @@ pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 /// this without a current point.
 pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
-        return self.moveTo(alloc, p.x + x, p.y + y);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        return self.moveTo(alloc, user_point.x + x, user_point.y + y);
     } else return error.NoCurrentPoint;
 }
 
@@ -126,7 +135,8 @@ pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || me
 /// exists for the point.
 pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
-        self.moveToAssumeCapacity(p.x + x, p.y + y);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        self.moveToAssumeCapacity(user_point.x + x, user_point.y + y);
     } else return error.NoCurrentPoint;
 }
 
@@ -154,7 +164,8 @@ pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 /// without a current point.
 pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
-        return self.lineTo(alloc, p.x + x, p.y + y);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        return self.lineTo(alloc, user_point.x + x, user_point.y + y);
     } else return error.NoCurrentPoint;
 }
 
@@ -162,7 +173,8 @@ pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || me
 /// exists for the point.
 pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
     if (self.current_point) |p| {
-        self.lineToAssumeCapacity(p.x + x, p.y + y);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        self.lineToAssumeCapacity(user_point.x + x, user_point.y + y);
     } else return error.NoCurrentPoint;
 }
 
@@ -238,7 +250,16 @@ pub fn relCurveTo(
     y3: f64,
 ) (Error || mem.Allocator.Error)!void {
     if (self.current_point) |p| {
-        return self.curveTo(alloc, p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        return self.curveTo(
+            alloc,
+            user_point.x + x1,
+            user_point.y + y1,
+            user_point.x + x2,
+            user_point.y + y2,
+            user_point.x + x3,
+            user_point.y + y3,
+        );
     } else return error.NoCurrentPoint;
 }
 
@@ -254,7 +275,15 @@ pub fn relCurveToAssumeCapacity(
     y3: f64,
 ) Error!void {
     if (self.current_point) |p| {
-        return self.curveToAssumeCapacity(p.x + x1, p.y + y1, p.x + x2, p.y + y2, p.x + x3, p.y + y3);
+        const user_point = try p.applyInverseTransform(self.transformation);
+        return self.curveToAssumeCapacity(
+            user_point.x + x1,
+            user_point.y + y1,
+            user_point.x + x2,
+            user_point.y + y2,
+            user_point.x + x3,
+            user_point.y + y3,
+        );
     } else return error.NoCurrentPoint;
 }
 
@@ -734,4 +763,44 @@ test "relCurveTo" {
         defer p.deinit(alloc);
         try testing.expectEqual(error.NoCurrentPoint, p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3));
     }
+}
+
+test "relative helpers with transformations" {
+    const alloc = testing.allocator;
+    var p = try initCapacity(alloc, 0);
+    defer p.deinit(alloc);
+
+    p.transformation = p.transformation.translate(100, 200);
+    try p.moveTo(alloc, 0, 0);
+    try testing.expectEqual(PathNode{
+        .move_to = .{
+            .point = .{ .x = 100, .y = 200 },
+        },
+    }, p.nodes.items[0]);
+    try p.relMoveTo(alloc, -10, -20);
+    try testing.expectEqual(PathNode{
+        .move_to = .{
+            .point = .{ .x = 90, .y = 180 },
+        },
+    }, p.nodes.items[1]);
+
+    p.reset();
+    try p.moveTo(alloc, 0, 0);
+    try p.relLineTo(alloc, -10, -20);
+    try testing.expectEqual(PathNode{
+        .line_to = .{
+            .point = .{ .x = 90, .y = 180 },
+        },
+    }, p.nodes.items[1]);
+
+    p.reset();
+    try p.moveTo(alloc, 0, 0);
+    try p.relCurveTo(alloc, -10, -20, 30, 40, -50, -60);
+    try testing.expectEqual(PathNode{
+        .curve_to = .{
+            .p1 = .{ .x = 90, .y = 180 },
+            .p2 = .{ .x = 130, .y = 240 },
+            .p3 = .{ .x = 50, .y = 140 },
+        },
+    }, p.nodes.items[1]);
 }
