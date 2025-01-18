@@ -142,9 +142,22 @@ pub fn compare(a: Slope, b: Slope) i32 {
 /// the code will read as above ("2 <= ml² (1 + in · out)"), the comments will
 /// subtract one from the dot product instead.
 pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f64) bool {
-    // Normalize our slopes
-    const in_slope_normal = in_slope.normalize();
-    const out_slope_normal = out_slope.normalize();
+    // Normalize our slopes, if not done already.
+    //
+    // TODO: This can probably be taken out. We never *not* normalize slopes
+    // anymore, so if this is particularly costly it probably be removed (in
+    // favor of setting the expectation that we always expect normalized slopes
+    // here).
+    const in_slope_normal = in_normal: {
+        var s = in_slope;
+        _ = s.normalize();
+        break :in_normal s;
+    };
+    const out_slope_normal = out_normal: {
+        var s = out_slope;
+        _ = s.normalize();
+        break :out_normal s;
+    };
 
     // Take the dot product of our slopes
     const in_dot_out = in_slope_normal.dx * out_slope_normal.dx + in_slope_normal.dy * out_slope_normal.dy;
@@ -152,12 +165,13 @@ pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f
     return 2 <= miter_limit * miter_limit * (1 + in_dot_out);
 }
 
-/// Returns the slope normalized to the unit vector.
+/// Updates the slope normalized to the unit vector. Returns the magnitude (the
+/// hypotenuse at the time of normalization, under non-special cases).
 ///
 /// Take care when using this method with any other comparison methods (e.g.,
 /// equal or compare); normalized slopes are only comparable with other slopes
 /// and vice versa.
-pub fn normalize(self: Slope) Slope {
+pub fn normalize(self: *Slope) f64 {
     var result_dx: f64 = undefined;
     var result_dy: f64 = undefined;
     var mag: f64 = undefined;
@@ -188,8 +202,7 @@ pub fn normalize(self: Slope) Slope {
         result_dy = self.dy / mag;
     }
 
-    return .{
-        .dx = result_dx,
-        .dy = result_dy,
-    };
+    self.dx = result_dx;
+    self.dy = result_dy;
+    return mag;
 }

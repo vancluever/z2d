@@ -65,6 +65,11 @@ const _050_fill_triangle_alpha2_gray = @import("050_fill_triangle_alpha2_gray.zi
 const _051_fill_triangle_alpha1_gray = @import("051_fill_triangle_alpha1_gray.zig");
 const _052_fill_triangle_alpha4_gray_scaledown = @import("052_fill_triangle_alpha4_gray_scaledown.zig");
 const _053_fill_triangle_alpha8_gray_scaleup = @import("053_fill_triangle_alpha8_gray_scaleup.zig");
+const _054_stroke_lines_dashed = @import("054_stroke_lines_dashed.zig");
+const _055_stroke_miter_dashed = @import("055_stroke_miter_dashed.zig");
+const _056_stroke_star_dashed = @import("056_stroke_star_dashed.zig");
+const _057_stroke_bezier_dashed = @import("057_stroke_bezier_dashed.zig");
+const _058_stroke_misc_dashes = @import("058_stroke_misc_dashes.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -125,6 +130,11 @@ pub fn main() !void {
     try pathExportRun(alloc, _051_fill_triangle_alpha1_gray);
     try pathExportRun(alloc, _052_fill_triangle_alpha4_gray_scaledown);
     try pathExportRun(alloc, _053_fill_triangle_alpha8_gray_scaleup);
+    try pathExportRun(alloc, _054_stroke_lines_dashed);
+    try pathExportRun(alloc, _055_stroke_miter_dashed);
+    try pathExportRun(alloc, _056_stroke_star_dashed);
+    try pathExportRun(alloc, _057_stroke_bezier_dashed);
+    try pathExportRun(alloc, _058_stroke_misc_dashes);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -339,6 +349,26 @@ test "052_fill_triangle_alpha4_gray_scaledown" {
 
 test "053_fill_triangle_alpha8_gray_scaleup" {
     try pathTestRun(testing.allocator, _053_fill_triangle_alpha8_gray_scaleup);
+}
+
+test "054_stroke_lines_dashed" {
+    try pathTestRun(testing.allocator, _054_stroke_lines_dashed);
+}
+
+test "055_stroke_miter_dashed" {
+    try pathTestRun(testing.allocator, _055_stroke_miter_dashed);
+}
+
+test "056_stroke_star_dashed" {
+    try pathTestRun(testing.allocator, _056_stroke_star_dashed);
+}
+
+test "057_stroke_bezier_dashed" {
+    try pathTestRun(testing.allocator, _057_stroke_bezier_dashed);
+}
+
+test "058_stroke_misc_dashes" {
+    try pathTestRun(testing.allocator, _058_stroke_misc_dashes);
 }
 
 //////////////////////////////////////////////////////////////////////////////
