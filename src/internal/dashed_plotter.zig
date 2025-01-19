@@ -472,6 +472,19 @@ const Plotter = struct {
         if (!self.dasher.on) {
             // This is intended to be used on dash step transitions, so we
             // save if the dasher state was off.
+            //
+            // Note that there are some duplication of fields from the plotter
+            // here (alloc, options, pen) to ensure that we can just use the
+            // initial polygon with our generic plotting helpers (join and
+            // plotOpenJoined). This should be of no concern and minimal
+            // overhead (allocator and opts are just pointers, and the pen
+            // solely contains an ArrayListUnmanaged so is not much more than
+            // that). The only possible concern is the fact that the pen is
+            // lazy-initialized and could be done so later than the initial
+            // polygon in a curve_to. However, in that case, it's only used for
+            // round-joining the decomposed lines and as such would not be
+            // needed for joining or capping anything connecting to the initial
+            // polygons anyway.
             self.initial_polygon = .{ .on = .{
                 .alloc = self.alloc,
                 .opts = self.opts,
