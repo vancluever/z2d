@@ -41,8 +41,8 @@ pub fn plot(
     nodes: []const nodepkg.PathNode,
     opts: PlotterOptions,
 ) Error!PolygonList {
-    if (Dasher.init(opts.dashes, opts.dash_offset)) |dasher| {
-        return dashed_plotter.plot(alloc, nodes, dasher, opts);
+    if (Dasher.validate(opts.dashes)) {
+        return dashed_plotter.plot(alloc, nodes, opts);
     }
 
     var plotter: Plotter = .{
