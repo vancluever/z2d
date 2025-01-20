@@ -140,7 +140,8 @@ Currently:
  * Filling and stroking:
    - Miter, bevel, and round join supported for stroking.
    - Butt, square, and round caps supported for stroking.
-   - Dashed lines currently not supported (planned!)
+   - Dashed lines supported along with offsets for tweaking alignment of
+     patterns to shapes, and zero-length dash stops to draw dotted lines.
  * Transformations: rotate, scale, translate, and other operations via direct
    manipulations of the affine matrix.
  * Simple composition:
