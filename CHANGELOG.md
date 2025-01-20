@@ -1,6 +1,9 @@
-## 0.5.1-pre (Unreleased)
+## 0.5.1 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Supplying a dash array of entirely zeros for stroking will now correctly
+  ignore it. [#74](https://github.com/vancluever/z2d/pull/74)
 
 ## 0.5.0 (January 19, 2025)
 
