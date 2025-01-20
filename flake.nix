@@ -36,7 +36,7 @@
           in
           pkgs.mkShell {
             packages = with pkgs; [
-              zig.packages.${system}.master-2024-12-28
+              zig.packages.${system}.master-2025-01-18
               zls.packages.${system}.zls
               python3
             ];
