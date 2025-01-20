@@ -4,22 +4,28 @@
 //! Used to keep track of dash state.
 const Dasher = @This();
 
+const testing = @import("std").testing;
+
 dashes: []const f64,
 offset: f64,
 idx: usize,
 on: bool,
 remain: f64,
 
-pub fn init(dashes: []const f64, offset: f64) ?Dasher {
-    if (dashes.len == 0) return null;
+pub fn validate(dashes: []const f64) bool {
     var valid = false;
     for (dashes) |d| {
         if (d < 0) {
-            break;
+            return false;
         }
-        valid = true;
+        if (d > 0) {
+            valid = true;
+        }
     }
-    if (!valid) return null;
+    return valid;
+}
+
+pub fn init(dashes: []const f64, offset: f64) Dasher {
     var result: Dasher = .{
         .dashes = dashes,
         .offset = offset,
@@ -66,4 +72,27 @@ pub fn step(self: *Dasher, len: f64) bool {
     }
 
     return stepped;
+}
+
+test "validate" {
+    // Good (single)
+    try testing.expect(validate(&.{1}));
+
+    // Good (even)
+    try testing.expect(validate(&.{ 1, 2 }));
+
+    // Good (odd)
+    try testing.expect(validate(&.{ 1, 2, 3 }));
+
+    // Good (zero stops)
+    try testing.expect(validate(&.{ 0, 2, 0 }));
+
+    // Bad (single zero)
+    try testing.expect(!validate(&.{0}));
+
+    // Bad (all zeroes)
+    try testing.expect(!validate(&.{ 0, 0, 0 }));
+
+    // Bad (negative value)
+    try testing.expect(!validate(&.{ 1, -2, 3 }));
 }
