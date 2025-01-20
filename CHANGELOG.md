@@ -1,3 +1,7 @@
+## 0.5.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.5.0 (January 19, 2025)
 
 DASHED LINES
