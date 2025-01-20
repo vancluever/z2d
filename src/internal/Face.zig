@@ -48,7 +48,21 @@ ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
 pub fn init(p0: Point, p1: Point, thickness: f64, ctm: Transformation) Face {
-    const dev_slope = Slope.init(p0, p1).normalize();
+    const dev_slope = dev_slope: {
+        var s = Slope.init(p0, p1);
+        _ = s.normalize();
+        break :dev_slope s;
+    };
+    return _init(p0, p1, dev_slope, thickness, ctm);
+}
+
+/// Computes a face off a single point and (normalized) device slope.
+pub fn initSingle(point: Point, dev_slope: Slope, thickness: f64, ctm: Transformation) Face {
+    return _init(point, point, dev_slope, thickness, ctm);
+}
+
+/// Computes a Face from two points in the direction of p0 -> p1.
+fn _init(p0: Point, p1: Point, dev_slope: Slope, thickness: f64, ctm: Transformation) Face {
     const half_width = thickness / 2;
     var offset_x: f64 = undefined;
     var offset_y: f64 = undefined;
@@ -62,7 +76,12 @@ pub fn init(p0: Point, p1: Point, thickness: f64, ctm: Transformation) Face {
         var dx = dev_slope.dx;
         var dy = dev_slope.dy;
         ctm.deviceToUserDistance(&dx, &dy) catch unreachable; // ctm is pre-validated
-        user_slope = (Slope{ .dx = dx, .dy = dy }).normalize(); // Save user slope for future calcs
+        // Save user slope for future calcs
+        user_slope = user_slope: {
+            var s = Slope{ .dx = dx, .dy = dy };
+            _ = s.normalize();
+            break :user_slope s;
+        };
         if (ctm.determinant() >= 0) {
             offset_x = -user_slope.dy * half_width;
             offset_y = user_slope.dx * half_width;
@@ -102,8 +121,22 @@ pub fn intersect(in: Face, out: Face, clockwise: bool) Point {
     // cairo-path-stroke-polygon.c et al.
     const in_point = if (clockwise) in.p1_ccw else in.p1_cw;
     const out_point = if (clockwise) out.p0_ccw else out.p0_cw;
-    const in_slope = in.dev_slope.normalize();
-    const out_slope = out.dev_slope.normalize();
+    // Normalize our slopes, if not done already.
+    //
+    // TODO: This can probably be taken out. We never *not* normalize slopes
+    // anymore, so if this is particularly costly it probably be removed (in
+    // favor of setting the expectation that we always expect normalized slopes
+    // here).
+    const in_slope = in_normal: {
+        var s = in.dev_slope;
+        _ = s.normalize();
+        break :in_normal s;
+    };
+    const out_slope = out_normal: {
+        var s = out.dev_slope;
+        _ = s.normalize();
+        break :out_normal s;
+    };
 
     const result_y = ((out_point.x - in_point.x) * in_slope.dy * out_slope.dy - out_point.y * out_slope.dx * in_slope.dy + in_point.y * in_slope.dx * out_slope.dy) / (in_slope.dx * out_slope.dy - out_slope.dx * in_slope.dy);
 

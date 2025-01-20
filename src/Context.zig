@@ -33,6 +33,8 @@ pattern: Pattern = .{
 },
 
 anti_aliasing_mode: options.AntiAliasMode = .default,
+dashes: []const f64 = &.{},
+dash_offset: f64 = 0,
 fill_rule: options.FillRule = .non_zero,
 line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
@@ -127,6 +129,54 @@ pub fn getLineWidth(self: *Context) f64 {
 /// at call time of `stroke`, and has no effect during path construction.
 pub fn setLineWidth(self: *Context, line_width: f64) void {
     self.line_width = line_width;
+}
+
+/// Returns the current dash array for the context.
+pub fn getDashes(self: *Context) []const f64 {
+    return self.dashes;
+}
+
+/// Sets the dash array for this context.
+///
+/// The dash array is a set of lengths representing segments that will draw a
+/// stroke using dashed lines. Drawing will alternate between "on" (dashed) and
+/// "off" (gapped), traversing over the array and wrapping after the last
+/// element.
+///
+/// Single and odd element lengths are allowed. In these cases, the wrapping
+/// effect will either alternate between even-lengthed dashes and gaps in the
+/// single-element case, or give dashes of varying lengths and gaps otherwise.
+///
+/// Zero length segments (as long as they are accompanied by other non-zero,
+/// non-negative segments) are allowed, in these cases, a dot (round cap) or
+/// square (square cap) will be made at the location of the dash stop, in the
+/// latter case, the square will be aligned to the direction of the current
+/// line segment.
+///
+/// If this value contains a negative number, or if all values are zero, or if
+/// the slice is empty (the default), dashing is disabled and this value is
+/// ignored.
+pub fn setDashes(self: *Context, dashes: []const f64) void {
+    self.dashes = dashes;
+}
+
+/// Returns the current dash offset for the context.
+pub fn getDashOffset(self: *Context) f64 {
+    return self.dash_offset;
+}
+
+/// Sets the dash offset for dashed lines (when `setDashes` has been called
+/// with a valid dash value).
+///
+/// The effect depends on whether or not a positive or negative value has been
+/// supplied. Positive values "pull", which fast-forwards the dash state,
+/// giving the effect of "pulling" the line in. Negative values "push", which
+/// rewinds the dash state, giving the effect of "pushing" the line out.
+///
+/// A value of 0 (the default) provides no effect and the pattern runs as
+/// normal.
+pub fn setDashOffset(self: *Context, dash_offset: f64) void {
+    self.dash_offset = dash_offset;
 }
 
 /// Returns the current miter limit for the context.
@@ -326,7 +376,7 @@ pub fn relCurveTo(
 /// const saved_ctm = context.getTransformation();
 /// context.translate(x + width / 2, y + height / 2);
 /// context.scale(width / 2, height / 2);
-/// try context.arc(0, 0, 1, 0, 2 + math.pi);
+/// try context.arc(0, 0, 1, 0, 2 * math.pi);
 /// context.setTransformation(saved_ctm);
 /// ```
 ///
@@ -402,6 +452,8 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
         self.path.nodes.items,
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
+            .dashes = self.dashes,
+            .dash_offset = self.dash_offset,
             .line_cap_mode = self.line_cap_mode,
             .line_join_mode = self.line_join_mode,
             .line_width = self.line_width,

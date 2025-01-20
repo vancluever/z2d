@@ -1,6 +1,21 @@
-## 0.5.0 (Unreleased)
+## 0.5.1-pre (Unreleased)
 
-IMPROVEMENTS:
+Bumped version for dev.
+
+## 0.5.0 (January 19, 2025)
+
+DASHED LINES
+
+0.5.0 brings support for dashed lines, allowing one to supply a dash pattern (a
+series of alternating on-off segment lengths) to `setDashes` in `Context` (and
+subsequently the unmanaged `painter.stroke` function) for stroking.
+`setDashOffset` can be used as well to specify an offset to allow for
+fine-tuning of the dash pattern with a particular shape.
+
+More details can be found in the documentation and
+[#70](https://github.com/vancluever/z2d/pull/70).
+
+OTHER IMPROVEMENTS:
 
 * 1, 2, and 4-bit alpha pixel types are now supported. Optimizations exist for
   these pixel formats when using them with surfaces.
@@ -14,6 +29,11 @@ IMPROVEMENTS:
 * Memory model changes to the polygon plotting portion of the rasterizer.
   [#64](https://github.com/vancluever/z2d/pull/64)
   [#67](https://github.com/vancluever/z2d/pull/67) 
+
+BUG FIXES:
+
+* Path: relative helpers now correctly operate in user space when using
+  transformations. [#69](https://github.com/vancluever/z2d/pull/69)
 
 ## 0.4.0 (November 13, 2024)
 

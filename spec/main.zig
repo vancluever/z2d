@@ -10,7 +10,8 @@ const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
 
 const z2d = @import("z2d");
-const tracy = @import("tracy");
+const tracy_enable = @import("spec_options").tracy_enable;
+const tracy = if (tracy_enable) @import("tracy") else null;
 
 const _001_smile_rgb = @import("001_smile_rgb.zig");
 const _002_smile_rgba = @import("002_smile_rgba.zig");
@@ -65,6 +66,11 @@ const _050_fill_triangle_alpha2_gray = @import("050_fill_triangle_alpha2_gray.zi
 const _051_fill_triangle_alpha1_gray = @import("051_fill_triangle_alpha1_gray.zig");
 const _052_fill_triangle_alpha4_gray_scaledown = @import("052_fill_triangle_alpha4_gray_scaledown.zig");
 const _053_fill_triangle_alpha8_gray_scaleup = @import("053_fill_triangle_alpha8_gray_scaleup.zig");
+const _054_stroke_lines_dashed = @import("054_stroke_lines_dashed.zig");
+const _055_stroke_miter_dashed = @import("055_stroke_miter_dashed.zig");
+const _056_stroke_star_dashed = @import("056_stroke_star_dashed.zig");
+const _057_stroke_bezier_dashed = @import("057_stroke_bezier_dashed.zig");
+const _058_stroke_misc_dashes = @import("058_stroke_misc_dashes.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -125,6 +131,11 @@ pub fn main() !void {
     try pathExportRun(alloc, _051_fill_triangle_alpha1_gray);
     try pathExportRun(alloc, _052_fill_triangle_alpha4_gray_scaledown);
     try pathExportRun(alloc, _053_fill_triangle_alpha8_gray_scaleup);
+    try pathExportRun(alloc, _054_stroke_lines_dashed);
+    try pathExportRun(alloc, _055_stroke_miter_dashed);
+    try pathExportRun(alloc, _056_stroke_star_dashed);
+    try pathExportRun(alloc, _057_stroke_bezier_dashed);
+    try pathExportRun(alloc, _058_stroke_misc_dashes);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -341,6 +352,26 @@ test "053_fill_triangle_alpha8_gray_scaleup" {
     try pathTestRun(testing.allocator, _053_fill_triangle_alpha8_gray_scaleup);
 }
 
+test "054_stroke_lines_dashed" {
+    try pathTestRun(testing.allocator, _054_stroke_lines_dashed);
+}
+
+test "055_stroke_miter_dashed" {
+    try pathTestRun(testing.allocator, _055_stroke_miter_dashed);
+}
+
+test "056_stroke_star_dashed" {
+    try pathTestRun(testing.allocator, _056_stroke_star_dashed);
+}
+
+test "057_stroke_bezier_dashed" {
+    try pathTestRun(testing.allocator, _057_stroke_bezier_dashed);
+}
+
+test "058_stroke_misc_dashes" {
+    try pathTestRun(testing.allocator, _058_stroke_misc_dashes);
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 fn compositorExportRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -393,22 +424,30 @@ fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
         .{ subject.filename, ".png" },
     );
     defer alloc.free(filename);
+    var exported_file: testExportPNGDetails = undefined;
 
-    var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
-    const tracy_alloc = tracy_alloc_.allocator();
+    if (tracy_enable) {
+        var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
+        const tracy_alloc = tracy_alloc_.allocator();
 
-    var surface = surface: {
-        const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: render" });
-        defer zone.deinit();
-        break :surface try subject.render(tracy_alloc);
-    };
-    defer surface.deinit(tracy_alloc);
+        var surface = surface: {
+            const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: render" });
+            defer zone.deinit();
+            break :surface try subject.render(tracy_alloc);
+        };
+        defer surface.deinit(tracy_alloc);
 
-    var exported_file = exported_file: {
-        const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: export" });
-        defer zone.deinit();
-        break :exported_file try testExportPNG(tracy_alloc, surface, filename);
-    };
+        exported_file = exported_file: {
+            const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: export" });
+            defer zone.deinit();
+            break :exported_file try testExportPNG(tracy_alloc, surface, filename);
+        };
+    } else {
+        var surface = try subject.render(alloc);
+        defer surface.deinit(alloc);
+
+        exported_file = try testExportPNG(alloc, surface, filename);
+    }
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);
@@ -428,42 +467,54 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
     );
     defer alloc.free(filename_smooth);
 
-    var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
-    const tracy_alloc = tracy_alloc_.allocator();
+    var exported_file_pixelated: testExportPNGDetails = undefined;
+    var exported_file_smooth: testExportPNGDetails = undefined;
 
-    var surface_pixelated = surface_pixelated: {
-        const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .none)" });
-        defer zone.deinit();
-        break :surface_pixelated try subject.render(tracy_alloc, .none);
-    };
-    defer surface_pixelated.deinit(tracy_alloc);
-    var surface_smooth = surface_smooth: {
-        const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .default)" });
-        defer zone.deinit();
-        break :surface_smooth try subject.render(tracy_alloc, .default);
-    };
-    defer surface_smooth.deinit(tracy_alloc);
+    if (tracy_enable) {
+        var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
+        const tracy_alloc = tracy_alloc_.allocator();
 
-    var exported_file_pixelated = exported_file_pixelated: {
-        const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .none)" });
-        defer zone.deinit();
-        break :exported_file_pixelated try testExportPNG(
-            tracy_alloc,
-            surface_pixelated,
-            filename_pixelated,
-        );
-    };
+        var surface_pixelated = surface_pixelated: {
+            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .none)" });
+            defer zone.deinit();
+            break :surface_pixelated try subject.render(tracy_alloc, .none);
+        };
+        defer surface_pixelated.deinit(tracy_alloc);
+        var surface_smooth = surface_smooth: {
+            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .default)" });
+            defer zone.deinit();
+            break :surface_smooth try subject.render(tracy_alloc, .default);
+        };
+        defer surface_smooth.deinit(tracy_alloc);
+
+        exported_file_pixelated = exported_file_pixelated: {
+            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .none)" });
+            defer zone.deinit();
+            break :exported_file_pixelated try testExportPNG(
+                tracy_alloc,
+                surface_pixelated,
+                filename_pixelated,
+            );
+        };
+        exported_file_smooth = exported_file_smooth: {
+            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .default)" });
+            defer zone.deinit();
+            break :exported_file_smooth try testExportPNG(
+                tracy_alloc,
+                surface_smooth,
+                filename_smooth,
+            );
+        };
+    } else {
+        var surface_pixelated = try subject.render(alloc, .none);
+        defer surface_pixelated.deinit(alloc);
+        var surface_smooth = try subject.render(alloc, .default);
+        defer surface_smooth.deinit(alloc);
+
+        exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
+        exported_file_smooth = try testExportPNG(alloc, surface_smooth, filename_smooth);
+    }
     defer exported_file_pixelated.cleanup();
-
-    var exported_file_smooth = exported_file_smooth: {
-        const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .default)" });
-        defer zone.deinit();
-        break :exported_file_smooth try testExportPNG(
-            tracy_alloc,
-            surface_smooth,
-            filename_smooth,
-        );
-    };
     defer exported_file_smooth.cleanup();
 
     try compareFiles(testing.allocator, exported_file_pixelated.target_path);
