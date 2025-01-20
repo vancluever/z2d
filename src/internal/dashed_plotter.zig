@@ -33,9 +33,11 @@ const Error = @import("stroke_plotter.zig").Error;
 pub fn plot(
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
-    dasher: Dasher,
     opts: PlotterOptions,
 ) Error!PolygonList {
+    // NOTE: `opts.dashes` needs to be validated separately before calling this
+    // - this is done from `stroke_plotter.plot` in normal operation. Be
+    // cognizant of this if you plan on calling this directly!
     var plotter: Plotter = .{
         .alloc = alloc,
         .nodes = nodes,
@@ -50,7 +52,7 @@ pub fn plot(
         .poly_outer = .{ .scale = opts.scale },
         .poly_inner = .{ .scale = opts.scale },
 
-        .dasher = dasher,
+        .dasher = Dasher.init(opts.dashes, opts.dash_offset),
     };
 
     errdefer {
