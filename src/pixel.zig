@@ -5,16 +5,11 @@
 
 const debug = @import("std").debug;
 const math = @import("std").math;
+const mem = @import("std").mem;
 const meta = @import("std").meta;
 const testing = @import("std").testing;
 
-/// Errors related to Pixel operations.
-pub const Error = error{
-    /// Strict pixel conversion using fromPixel failed due to the exact
-    /// concrete type not matching. To to do a less strict conversion, use
-    /// `copySrc`.
-    InvalidFormat,
-};
+const compositor = @import("compositor.zig");
 
 /// Format descriptors for the pixel formats supported by the library:
 ///
@@ -33,6 +28,62 @@ pub const Format = enum {
     alpha1,
 };
 
+/// Represents a stride (contiguous range) of pixels of a certain type.
+///
+/// "Stride" here is ambiguous, it could be a line, a sub-section of a line, or
+/// multiple lines, if those lines wrap without gaps.
+///
+/// Note that all strides represent real pixel memory, most likely residing in
+/// the `Surface` they came from. Keep this in mind when writing to their
+/// contents.
+pub const Stride = union(Format) {
+    rgb: []RGB,
+    rgba: []RGBA,
+    alpha8: []Alpha8,
+    alpha4: struct {
+        pub const T = Alpha4;
+        buf: []u8,
+        px_offset: usize,
+        px_len: usize,
+    },
+    alpha2: struct {
+        pub const T = Alpha2;
+        buf: []u8,
+        px_offset: usize,
+        px_len: usize,
+    },
+    alpha1: struct {
+        pub const T = Alpha1;
+        buf: []u8,
+        px_offset: usize,
+        px_len: usize,
+    },
+
+    /// Returns the pixel length of the stride.
+    pub fn pxLen(dst: Stride) usize {
+        return switch (dst) {
+            inline .rgb, .rgba, .alpha8 => |d| d.len,
+            inline .alpha4, .alpha2, .alpha1 => |d| d.px_len,
+        };
+    }
+
+    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
+    /// expected to be greater than or equal to `src`.
+    pub fn copy(dst: Stride, src: Stride) void {
+        switch (dst) {
+            inline .rgb, .rgba, .alpha8 => |d| @typeInfo(@TypeOf(d)).Pointer.child.copySrcStride(d, src),
+            inline .alpha4, .alpha2, .alpha1 => |d| @TypeOf(d).T.copyStride(d, src),
+        }
+    }
+
+    /// Runs the single compositor operation described by `operator` with the
+    /// supplied `dst` and `src` . `src` must be as long or longer than `dst`;
+    /// shorter strides will cause safety-checked undefined behavior.
+    pub fn composite(dst: Stride, src: Stride, operator: compositor.Operator) void {
+        compositor.StrideCompositor.run(dst, &.{ .operator = operator, .src = .{ .surface = src } });
+    }
+};
+
 /// Represents an interface as a union of the pixel formats.
 pub const Pixel = union(Format) {
     rgb: RGB,
@@ -42,29 +93,17 @@ pub const Pixel = union(Format) {
     alpha2: Alpha2,
     alpha1: Alpha1,
 
-    /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation). All pixel types with color channels
-    /// are expected to be pre-multiplied.
-    pub fn srcOver(dst: Pixel, src: Pixel) Pixel {
-        return switch (dst) {
-            inline else => |d| d.srcOver(src).asPixel(),
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation). All pixel types with color channels are
-    /// expected to be pre-multiplied.
-    pub fn dstIn(dst: Pixel, src: Pixel) Pixel {
-        return switch (dst) {
-            inline else => |d| d.dstIn(src).asPixel(),
-        };
-    }
-
     /// Returns `true` if the supplied pixels are equal.
     pub fn equal(self: Pixel, other: Pixel) bool {
         return switch (self) {
             inline else => |px| px.equal(other),
         };
+    }
+
+    /// Runs a single compositor operation described by `operator` against the
+    /// supplied pixels.
+    pub fn composite(dst: Pixel, src: Pixel, operator: compositor.Operator) Pixel {
+        return compositor.runPixel(dst, src, operator);
     }
 };
 
@@ -87,17 +126,8 @@ pub const RGB = packed struct(u32) {
         };
     }
 
-    /// Returns this pixel as an interface.
-    pub fn fromPixel(p: Pixel) Error!RGB {
-        return switch (p) {
-            Format.rgb => |q| q,
-            else => error.InvalidFormat,
-        };
-    }
-
-    /// Returns the pixel transformed by the Porter-Duff "src" operation. This
-    /// is essentially a cast from the source pixel.
-    pub fn copySrc(p: Pixel) RGB {
+    /// Returns the pixel translated to RGB.
+    pub fn fromPixel(p: Pixel) RGB {
         return switch (p) {
             .rgb => |q| q,
             .rgba => |q| .{
@@ -115,14 +145,27 @@ pub const RGB = packed struct(u32) {
         };
     }
 
+    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
+    /// expected to be greater than or equal to `src`.
+    pub fn copyStride(dst: []RGB, src: Stride) void {
+        switch (src) {
+            inline .rgb, .rgba => |_src| mem.copyForwards(RGB, dst, @ptrCast(_src)),
+            .alpha8, .alpha4, .alpha2, .alpha1 => @memset(dst, mem.zeroes(RGB)),
+        }
+    }
+
     /// Returns an average of the pixels in the supplied slice. The average of
     /// a zero-length slice is pure black.
+    ///
+    /// This function is limited to 256 entries; any higher than this is
+    /// safety-checked undefined behavior.
     pub fn average(ps: []const RGB) RGB {
+        debug.assert(ps.len <= 256);
         if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0 };
 
-        var r: u32 = 0;
-        var g: u32 = 0;
-        var b: u32 = 0;
+        var r: u16 = 0;
+        var g: u16 = 0;
+        var b: u16 = 0;
 
         for (ps) |p| {
             r += p.r;
@@ -147,70 +190,6 @@ pub const RGB = packed struct(u32) {
         return switch (other) {
             .rgb => |o| self.r == o.r and self.g == o.g and self.b == o.b,
             else => false,
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation). All pixel types with color channels
-    /// are expected to be pre-multiplied.
-    pub fn srcOver(dst: RGB, src: Pixel) RGB {
-        return switch (src) {
-            .rgb => |s| .{
-                .r = s.r,
-                .g = s.g,
-                .b = s.b,
-            },
-            .rgba => |s| .{
-                .r = srcOverColor(s.r, dst.r, s.a),
-                .g = srcOverColor(s.g, dst.g, s.a),
-                .b = srcOverColor(s.b, dst.b, s.a),
-            },
-            .alpha8 => |s| .{
-                .r = srcOverColor(0, dst.r, s.a),
-                .g = srcOverColor(0, dst.g, s.a),
-                .b = srcOverColor(0, dst.b, s.a),
-            },
-            .alpha4, .alpha2, .alpha1 => a: {
-                const s = Alpha8.copySrc(src);
-                break :a .{
-                    .r = srcOverColor(0, dst.r, s.a),
-                    .g = srcOverColor(0, dst.g, s.a),
-                    .b = srcOverColor(0, dst.b, s.a),
-                };
-            },
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation). All pixel types with color channels are
-    /// expected to be pre-multiplied.
-    pub fn dstIn(dst: RGB, src: Pixel) RGB {
-        return switch (src) {
-            // Special case for RGB: just return the destination pixel (we
-            // assume that every RGB pixel has full opacity).
-            .rgb => .{
-                .r = dst.r,
-                .g = dst.g,
-                .b = dst.b,
-            },
-            .rgba => |s| .{
-                .r = dstInColor(dst.r, s.a),
-                .g = dstInColor(dst.g, s.a),
-                .b = dstInColor(dst.b, s.a),
-            },
-            .alpha8 => |s| .{
-                .r = dstInColor(dst.r, s.a),
-                .g = dstInColor(dst.g, s.a),
-                .b = dstInColor(dst.b, s.a),
-            },
-            .alpha4, .alpha2, .alpha1 => a: {
-                const s = Alpha8.copySrc(src);
-                break :a .{
-                    .r = dstInColor(dst.r, s.a),
-                    .g = dstInColor(dst.g, s.a),
-                    .b = dstInColor(dst.b, s.a),
-                };
-            },
         };
     }
 };
@@ -244,17 +223,8 @@ pub const RGBA = packed struct(u32) {
         };
     }
 
-    /// Returns this pixel as an interface.
-    pub fn fromPixel(p: Pixel) Error!RGBA {
-        return switch (p) {
-            Format.rgba => |q| q,
-            else => error.InvalidFormat,
-        };
-    }
-
-    /// Returns the pixel transformed by the Porter-Duff "src" operation. This
-    /// is essentially a cast from the source pixel.
-    pub fn copySrc(p: Pixel) RGBA {
+    /// Returns the pixel translated to RGBA.
+    pub fn fromPixel(p: Pixel) RGBA {
         return switch (p) {
             .rgb => |q| .{
                 // Special case: we assume that RGB pixels are always opaque
@@ -276,20 +246,61 @@ pub const RGBA = packed struct(u32) {
                 .r = 0,
                 .g = 0,
                 .b = 0,
-                .a = Alpha8.copySrc(p).a,
+                .a = Alpha8.fromPixel(p).a,
             },
         };
     }
 
+    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
+    /// expected to be greater than or equal to `src`.
+    pub fn copyStride(dst: []RGBA, src: Stride) void {
+        switch (src) {
+            .rgb => |_src| {
+                for (0.._src.len) |i| dst[i] = .{
+                    .r = _src[i].r,
+                    .g = _src[i].g,
+                    .b = _src[i].b,
+                    .a = 255,
+                };
+            },
+            .rgba => |_src| @memcpy(dst, _src),
+            .alpha8 => |_src| {
+                for (0.._src.len) |i| dst[i] = .{
+                    .r = 0,
+                    .g = 0,
+                    .b = 0,
+                    .a = _src[i].a,
+                };
+            },
+            inline .alpha4, .alpha2, .alpha1 => |_src| {
+                for (0.._src.px_len) |i| {
+                    const s = Alpha8.fromPixel(
+                        @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
+                    );
+                    dst[i] = .{
+                        .r = 0,
+                        .g = 0,
+                        .b = 0,
+                        .a = s.a,
+                    };
+                }
+            },
+        }
+    }
+
     /// Returns an average of the pixels in the supplied slice. The average of
     /// a zero-length slice is transparent black.
+    ///
+    /// This function is limited to 256 entries; any higher than this is
+    /// safety-checked undefined behavior.
     pub fn average(ps: []const RGBA) RGBA {
+        debug.assert(ps.len <= 256);
         if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-        var r: u32 = 0;
-        var g: u32 = 0;
-        var b: u32 = 0;
-        var a: u32 = 0;
+        var r: u16 = 0;
+        var g: u16 = 0;
+        var b: u16 = 0;
+        var a: u16 = 0;
 
         for (ps) |p| {
             r += p.r;
@@ -323,9 +334,9 @@ pub const RGBA = packed struct(u32) {
     /// (as alpha / 255).
     pub fn multiply(self: RGBA) RGBA {
         return .{
-            .r = @intCast(@as(u32, self.r) * self.a / 255),
-            .g = @intCast(@as(u32, self.g) * self.a / 255),
-            .b = @intCast(@as(u32, self.b) * self.a / 255),
+            .r = @intCast(@as(u16, self.r) * self.a / 255),
+            .g = @intCast(@as(u16, self.g) * self.a / 255),
+            .b = @intCast(@as(u16, self.b) * self.a / 255),
             .a = self.a,
         };
     }
@@ -341,80 +352,10 @@ pub const RGBA = packed struct(u32) {
     pub fn demultiply(self: RGBA) RGBA {
         if (self.a == 0) return .{ .r = 0, .g = 0, .b = 0, .a = 0 };
         return .{
-            .r = @intCast(@as(u32, self.r) * 255 / self.a),
-            .g = @intCast(@as(u32, self.g) * 255 / self.a),
-            .b = @intCast(@as(u32, self.b) * 255 / self.a),
+            .r = @intCast(@as(u16, self.r) * 255 / self.a),
+            .g = @intCast(@as(u16, self.g) * 255 / self.a),
+            .b = @intCast(@as(u16, self.b) * 255 / self.a),
             .a = self.a,
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel over this one (the
-    /// Porter-Duff src-over operation). All pixel types with color channels
-    /// are expected to be pre-multiplied.
-    pub fn srcOver(dst: RGBA, src: Pixel) RGBA {
-        return switch (src) {
-            .rgb => |s| .{
-                .r = s.r,
-                .g = s.g,
-                .b = s.b,
-                .a = 255,
-            },
-            .rgba => |s| .{
-                .r = srcOverColor(s.r, dst.r, s.a),
-                .g = srcOverColor(s.g, dst.g, s.a),
-                .b = srcOverColor(s.b, dst.b, s.a),
-                .a = srcOverAlpha(u8, s.a, dst.a),
-            },
-            .alpha8 => |s| .{
-                .r = srcOverColor(0, dst.r, s.a),
-                .g = srcOverColor(0, dst.g, s.a),
-                .b = srcOverColor(0, dst.b, s.a),
-                .a = srcOverAlpha(u8, s.a, dst.a),
-            },
-            .alpha4, .alpha2, .alpha1 => a: {
-                const s = Alpha8.copySrc(src);
-                break :a .{
-                    .r = srcOverColor(0, dst.r, s.a),
-                    .g = srcOverColor(0, dst.g, s.a),
-                    .b = srcOverColor(0, dst.b, s.a),
-                    .a = srcOverAlpha(u8, s.a, dst.a),
-                };
-            },
-        };
-    }
-
-    /// Returns the result of compositing the supplied pixel in this one (the
-    /// Porter-Duff dst-in operation). All pixel types with color channels are
-    /// expected to be pre-multiplied.
-    pub fn dstIn(dst: RGBA, src: Pixel) RGBA {
-        return switch (src) {
-            .rgb => .{
-                .r = dst.r,
-                .g = dst.g,
-                .b = dst.b,
-                .a = dst.a,
-            },
-            .rgba => |s| .{
-                .r = dstInColor(dst.r, s.a),
-                .g = dstInColor(dst.g, s.a),
-                .b = dstInColor(dst.b, s.a),
-                .a = dstInAlpha(u8, s.a, dst.a),
-            },
-            .alpha8 => |s| .{
-                .r = dstInColor(dst.r, s.a),
-                .g = dstInColor(dst.g, s.a),
-                .b = dstInColor(dst.b, s.a),
-                .a = dstInAlpha(u8, s.a, dst.a),
-            },
-            .alpha4, .alpha2, .alpha1 => a: {
-                const s = Alpha8.copySrc(src);
-                break :a .{
-                    .r = dstInColor(dst.r, s.a),
-                    .g = dstInColor(dst.g, s.a),
-                    .b = dstInColor(dst.b, s.a),
-                    .a = dstInAlpha(u8, s.a, dst.a),
-                };
-            },
         };
     }
 };
@@ -469,34 +410,14 @@ fn Alpha(comptime fmt: Format) type {
         /// Shorthand for a fully-opaque pixel in this format.
         pub const Opaque: Self = @bitCast(MaxInt);
 
-        /// Returns this pixel as an interface.
-        pub fn fromPixel(p: Pixel) Error!Self {
-            return switch (p) {
-                fmt => |q| q,
-                else => error.InvalidFormat,
-            };
-        }
-
-        /// Returns the pixel transformed by the Porter-Duff "src" operation. This
-        /// is essentially a cast from the source pixel.
-        pub fn copySrc(p: Pixel) Self {
+        /// Returns the pixel translated to the alpha format.
+        pub fn fromPixel(p: Pixel) Self {
             return switch (p) {
                 .rgb => .{
                     // Special case: we assume that RGB pixels are always opaque
                     .a = MaxInt,
                 },
-                .rgba => |q| .{
-                    .a = shlr(IntType, q.a),
-                },
-                .alpha8 => |q| .{
-                    .a = shlr(IntType, q.a),
-                },
-                .alpha4 => |q| .{
-                    .a = shlr(IntType, q.a),
-                },
-                .alpha2 => |q| .{
-                    .a = shlr(IntType, q.a),
-                },
+                inline .rgba, .alpha8, .alpha4, .alpha2 => |q| .{ .a = shlr(IntType, q.a) },
                 .alpha1 => |q| .{
                     // Short-circuit to on/off * MaxInt
                     .a = @intCast(q.a * MaxInt),
@@ -504,7 +425,55 @@ fn Alpha(comptime fmt: Format) type {
             };
         }
 
-        inline fn shlr(
+        /// Copies the `src` stride into `dst`. The pixel length of `dst` is
+        /// expected to be greater than or equal to `src`.
+        pub fn copyStride(dst: anytype, src: Stride) void {
+            if (@TypeOf(dst) == []Self) return copyStride_unpacked(dst, src);
+            copyStride_packed(dst, src);
+        }
+
+        fn copyStride_unpacked(dst: []Self, src: Stride) void {
+            comptime debug.assert(NumBits == 8);
+            switch (src) {
+                .rgb => @memset(dst, @bitCast(MaxInt)),
+                .rgba => |_src| {
+                    for (0.._src.len) |i| dst[i] = .{ .a = _src[i].a };
+                },
+                .alpha8 => |_src| @memcpy(dst, _src),
+                inline .alpha4, .alpha2, .alpha1 => |_src| {
+                    for (0.._src.px_len) |i| {
+                        const s = fromPixel(
+                            @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
+                        );
+                        dst[i] = .{ .a = s.a };
+                    }
+                },
+            }
+        }
+
+        fn copyStride_packed(dst: anytype, src: Stride) void {
+            comptime debug.assert(NumBits < 8);
+            comptime debug.assert(@TypeOf(dst).T == Self);
+            switch (src) {
+                .rgb => paintPackedStride(dst.buf, dst.px_offset, dst.px_len, Opaque),
+                inline .rgba, .alpha8 => |_src| {
+                    for (0.._src.len) |i| {
+                        const s = fromPixel(_src[i].asPixel());
+                        setInPacked(dst.buf, i + dst.px_offset, s);
+                    }
+                },
+                inline .alpha4, .alpha2, .alpha1 => |_src| {
+                    for (0.._src.px_len) |i| {
+                        const s = fromPixel(
+                            @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
+                        );
+                        setInPacked(dst.buf, i + dst.px_offset, s);
+                    }
+                },
+            }
+        }
+
+        fn shlr(
             comptime target_T: type,
             val: anytype,
         ) target_T {
@@ -547,10 +516,14 @@ fn Alpha(comptime fmt: Format) type {
 
         /// Returns an average of the pixels in the supplied slice. The average of
         /// a zero-length slice is transparent.
+        ///
+        /// This function is limited to 256 entries; any higher than this is
+        /// safety-checked undefined behavior.
         pub fn average(ps: []const Self) Self {
+            debug.assert(ps.len <= 256);
             if (ps.len == 0) return .{ .a = 0 };
 
-            var a: u32 = 0;
+            var a: u16 = 0;
 
             for (ps) |p| {
                 a += p.a;
@@ -574,100 +547,88 @@ fn Alpha(comptime fmt: Format) type {
             };
         }
 
-        /// Returns the result of compositing the supplied pixel over this one (the
-        /// Porter-Duff src-over operation).
-        pub fn srcOver(dst: Self, src: Pixel) Self {
-            return switch (src) {
-                .rgb => .{
-                    .a = MaxInt,
-                },
-                else => a: {
-                    const sa = copySrc(src).a;
-                    break :a .{
-                        .a = srcOverAlpha(IntType, sa, dst.a),
-                    };
-                },
-            };
+        /// Utility function to get a pixel from a supplied packed buffer. Only
+        /// available for packed types, for non-packed types (e.g., `Alpha8`),
+        /// use standard indexing.
+        pub fn getFromPacked(buf: []const u8, index: usize) Self {
+            comptime debug.assert(NumBits < 8);
+            const px_int = mem.readPackedInt(IntType, buf, index * @bitSizeOf(IntType), .little);
+            return @bitCast(px_int);
         }
 
-        /// Returns the result of compositing the supplied pixel in this one (the
-        /// Porter-Duff dst-in operation).
-        pub fn dstIn(dst: Self, src: Pixel) Self {
-            return switch (src) {
-                .rgb => .{
-                    .a = dst.a,
-                },
-                else => a: {
-                    const sa = copySrc(src).a;
-                    break :a .{
-                        .a = dstInAlpha(IntType, sa, dst.a),
-                    };
-                },
+        /// Utility function to set a pixel in a supplied packed buffer. Only
+        /// available for packed types, for non-packed types (e.g., `Alpha8`),
+        /// use standard indexing.
+        pub fn setInPacked(buf: []u8, index: usize, value: Self) void {
+            comptime debug.assert(NumBits < 8);
+            const px_int = @as(IntType, @bitCast(value));
+            mem.writePackedInt(IntType, buf, index * @bitSizeOf(IntType), px_int, .little);
+        }
+
+        /// Copies a single pixel to the range starting at `index` and
+        /// proceeding for `len`.
+        ///
+        /// `len` is unbounded; going past the length of the buffer is
+        /// safety-checked undefined behavior.
+        ///
+        /// This function is only available for packed types, for non-packed
+        /// types (e.g., `Alpha8`), use standard indexing.
+        fn paintPackedStride(
+            buf: []u8,
+            index: usize,
+            len: usize,
+            value: Self,
+        ) void {
+            // This code has been ported from PackedImageSurface and trimmed
+            // down; they serve similar purposes but this is designed for
+            // utility behavior for packed alpha types.
+            comptime debug.assert(NumBits < 8);
+            const scale = 8 / NumBits;
+            const end = (index + len);
+            const slice_start: usize = index / scale;
+            const slice_end: usize = end / scale;
+            if (slice_start >= slice_end) {
+                // There's nothing we can memset, just set the range individually.
+                for (index..end) |idx| setInPacked(buf, idx, value);
+                return;
+            }
+            const start_rem = index % scale;
+            const slice_offset = @intFromBool(start_rem > 0);
+            // Set our contiguous range
+            paintPackedPixel(buf[slice_start + slice_offset .. slice_end], value);
+            // Set the ends
+            for (index..index + (scale - start_rem)) |idx| setInPacked(buf, idx, value);
+            for (end - end % scale..end) |idx| setInPacked(buf, idx, value);
+        }
+
+        /// Paints the entire buffer with px in a packed fashion.
+        ///
+        /// This function is only available for packed types, for non-packed
+        /// types (e.g., `Alpha8`), use standard indexing.
+        fn paintPackedPixel(buf: []u8, px: Self) void {
+            // This code has been ported from PackedImageSurface and trimmed
+            // down; they serve similar purposes but this is designed for
+            // utility behavior for packed alpha types.
+            comptime debug.assert(NumBits < 8);
+            if (meta.eql(px, mem.zeroes(Self))) {
+                // Short-circuit to writing zeroes if the pixel we're setting is zero
+                @memset(buf, 0);
+                return;
+            }
+
+            const px_u8: u8 = px_u8: {
+                const px_int = @as(IntType, @bitCast(px));
+                break :px_u8 @intCast(px_int);
             };
+            var packed_px: u8 = 0;
+            var sh: usize = 0;
+            while (sh <= 8 - NumBits) : (sh += NumBits) {
+                packed_px |= px_u8 << @intCast(sh);
+            }
+
+            @memset(buf, packed_px);
         }
     };
-}
-
-inline fn srcOverColor(sca: u8, dca: u8, sa: u8) u8 {
-    const _sca: u16 = @intCast(sca);
-    const _dca: u16 = @intCast(dca);
-    const _sa: u16 = @intCast(sa);
-    return @intCast(_sca + _dca * (255 - _sa) / 255);
-}
-
-inline fn srcOverAlpha(comptime T: type, sa: T, da: T) T {
-    const max: u16 = comptime max: {
-        const bits = @typeInfo(T).Int.bits;
-        debug.assert(bits <= 8);
-        break :max (1 << bits) - 1;
-    };
-    const _sa: u16 = @intCast(sa);
-    const _da: u16 = @intCast(da);
-    return @intCast(_sa + _da - _sa * _da / max);
-}
-
-inline fn dstInColor(dca: u8, sa: u8) u8 {
-    const _dca: u16 = @intCast(dca);
-    const _sa: u16 = @intCast(sa);
-    return @intCast(_dca * _sa / 255);
-}
-
-inline fn dstInAlpha(comptime T: type, sa: T, da: T) T {
-    const max: u16 = comptime max: {
-        const bits = @typeInfo(T).Int.bits;
-        debug.assert(bits <= 8);
-        break :max (1 << bits) - 1;
-    };
-    const _sa: u16 = @intCast(sa);
-    const _da: u16 = @intCast(da);
-    return @intCast(_sa * _da / max);
-}
-
-test "pixel interface, fromPixel" {
-    const rgb: RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
-    const rgba: RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
-    const alpha8: Alpha8 = .{ .a = 0xDD };
-    const alpha4: Alpha4 = .{ .a = 0xD };
-    const alpha2: Alpha2 = .{ .a = 2 };
-    const alpha1: Alpha1 = .{ .a = 1 };
-
-    try testing.expectEqual(RGB.fromPixel(.{ .rgb = rgb }), rgb);
-    try testing.expectError(error.InvalidFormat, RGB.fromPixel(.{ .rgba = rgba }));
-
-    try testing.expectEqual(RGBA.fromPixel(.{ .rgba = rgba }), rgba);
-    try testing.expectError(error.InvalidFormat, RGBA.fromPixel(.{ .rgb = rgb }));
-
-    try testing.expectEqual(Alpha8.fromPixel(.{ .alpha8 = alpha8 }), alpha8);
-    try testing.expectError(error.InvalidFormat, Alpha8.fromPixel(.{ .rgb = rgb }));
-
-    try testing.expectEqual(Alpha4.fromPixel(.{ .alpha4 = alpha4 }), alpha4);
-    try testing.expectError(error.InvalidFormat, Alpha4.fromPixel(.{ .rgb = rgb }));
-
-    try testing.expectEqual(Alpha2.fromPixel(.{ .alpha2 = alpha2 }), alpha2);
-    try testing.expectError(error.InvalidFormat, Alpha2.fromPixel(.{ .rgb = rgb }));
-
-    try testing.expectEqual(Alpha1.fromPixel(.{ .alpha1 = alpha1 }), alpha1);
-    try testing.expectError(error.InvalidFormat, Alpha1.fromPixel(.{ .rgb = rgb }));
 }
 
 test "pixel interface, asPixel" {
@@ -804,566 +765,170 @@ test "RGBA, fromClamped" {
     );
 }
 
-test "copySrc" {
+test "fromPixel" {
     // RGB
     try testing.expectEqual(
         RGB{ .r = 11, .g = 22, .b = 33 },
-        RGB.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        RGB.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         RGB{ .r = 11, .g = 22, .b = 33 },
-        RGB.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        RGB.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         RGB{ .r = 0, .g = 0, .b = 0 },
-        RGB.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        RGB.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         RGB{ .r = 0, .g = 0, .b = 0 },
-        RGB.copySrc(.{ .alpha4 = .{ .a = 10 } }),
+        RGB.fromPixel(.{ .alpha4 = .{ .a = 10 } }),
     );
     try testing.expectEqual(
         RGB{ .r = 0, .g = 0, .b = 0 },
-        RGB.copySrc(.{ .alpha2 = .{ .a = 2 } }),
+        RGB.fromPixel(.{ .alpha2 = .{ .a = 2 } }),
     );
     try testing.expectEqual(
         RGB{ .r = 0, .g = 0, .b = 0 },
-        RGB.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        RGB.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
 
     // RGBA
     try testing.expectEqual(
         RGBA{ .r = 11, .g = 22, .b = 33, .a = 255 },
-        RGBA.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        RGBA.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         RGBA{ .r = 11, .g = 22, .b = 33, .a = 128 },
-        RGBA.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        RGBA.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         RGBA{ .r = 0, .g = 0, .b = 0, .a = 128 },
-        RGBA.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        RGBA.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         RGBA{ .r = 0, .g = 0, .b = 0, .a = 102 },
-        RGBA.copySrc(.{ .alpha4 = .{ .a = 6 } }),
+        RGBA.fromPixel(.{ .alpha4 = .{ .a = 6 } }),
     );
     try testing.expectEqual(
         RGBA{ .r = 0, .g = 0, .b = 0, .a = 170 },
-        RGBA.copySrc(.{ .alpha2 = .{ .a = 2 } }),
+        RGBA.fromPixel(.{ .alpha2 = .{ .a = 2 } }),
     );
     try testing.expectEqual(
         RGBA{ .r = 0, .g = 0, .b = 0, .a = 255 },
-        RGBA.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        RGBA.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
 
     // Alpha8
     try testing.expectEqual(
         Alpha8{ .a = 255 },
-        Alpha8.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        Alpha8.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         Alpha8{ .a = 128 },
-        Alpha8.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        Alpha8.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha8{ .a = 128 },
-        Alpha8.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        Alpha8.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha8{ .a = 102 },
-        Alpha8.copySrc(.{ .alpha4 = .{ .a = 6 } }),
+        Alpha8.fromPixel(.{ .alpha4 = .{ .a = 6 } }),
     );
     try testing.expectEqual(
         Alpha8{ .a = 170 },
-        Alpha8.copySrc(.{ .alpha2 = .{ .a = 2 } }),
+        Alpha8.fromPixel(.{ .alpha2 = .{ .a = 2 } }),
     );
     try testing.expectEqual(
         Alpha8{ .a = 255 },
-        Alpha8.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        Alpha8.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
 
     // Alpha4
     try testing.expectEqual(
         Alpha4{ .a = 15 },
-        Alpha4.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        Alpha4.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         Alpha4{ .a = 8 },
-        Alpha4.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        Alpha4.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha4{ .a = 8 },
-        Alpha4.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        Alpha4.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha4{ .a = 6 },
-        Alpha4.copySrc(.{ .alpha4 = .{ .a = 6 } }),
+        Alpha4.fromPixel(.{ .alpha4 = .{ .a = 6 } }),
     );
     try testing.expectEqual(
         Alpha4{ .a = 10 },
-        Alpha4.copySrc(.{ .alpha2 = .{ .a = 2 } }),
+        Alpha4.fromPixel(.{ .alpha2 = .{ .a = 2 } }),
     );
     try testing.expectEqual(
         Alpha4{ .a = 15 },
-        Alpha4.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        Alpha4.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
 
     // Alpha2
     try testing.expectEqual(
         Alpha2{ .a = 3 },
-        Alpha2.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        Alpha2.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         Alpha2{ .a = 2 },
-        Alpha2.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        Alpha2.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha2{ .a = 2 },
-        Alpha2.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        Alpha2.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha2{ .a = 1 },
-        Alpha2.copySrc(.{ .alpha4 = .{ .a = 6 } }),
+        Alpha2.fromPixel(.{ .alpha4 = .{ .a = 6 } }),
     );
     try testing.expectEqual(
         Alpha2{ .a = 2 },
-        Alpha2.copySrc(.{ .alpha2 = .{ .a = 2 } }),
+        Alpha2.fromPixel(.{ .alpha2 = .{ .a = 2 } }),
     );
     try testing.expectEqual(
         Alpha2{ .a = 3 },
-        Alpha2.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        Alpha2.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
 
     // Alpha1
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
+        Alpha1.fromPixel(.{ .rgb = .{ .r = 11, .g = 22, .b = 33 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
+        Alpha1.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 0 },
-        Alpha1.copySrc(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 127 } }),
+        Alpha1.fromPixel(.{ .rgba = .{ .r = 11, .g = 22, .b = 33, .a = 127 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .alpha8 = .{ .a = 128 } }),
+        Alpha1.fromPixel(.{ .alpha8 = .{ .a = 128 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 0 },
-        Alpha1.copySrc(.{ .alpha8 = .{ .a = 127 } }),
+        Alpha1.fromPixel(.{ .alpha8 = .{ .a = 127 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .alpha4 = .{ .a = 15 } }),
+        Alpha1.fromPixel(.{ .alpha4 = .{ .a = 15 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .alpha2 = .{ .a = 3 } }),
+        Alpha1.fromPixel(.{ .alpha2 = .{ .a = 3 } }),
     );
     try testing.expectEqual(
         Alpha1{ .a = 1 },
-        Alpha1.copySrc(.{ .alpha1 = .{ .a = 1 } }),
+        Alpha1.fromPixel(.{ .alpha1 = .{ .a = 1 } }),
     );
-}
-
-test "srcOver" {
-    // Our colors, non-pre-multiplied.
-    //
-    // Note that some tests require the pre-multiplied alpha. For these, we do
-    // the multiplication at the relevant site, as as most casts will drop
-    // either the non-color or alpha channels.
-    const fg: RGBA = .{ .r = 54, .g = 10, .b = 63, .a = 191 }; // purple, 75% opacity
-    const bg: RGBA = .{ .r = 15, .g = 254, .b = 249, .a = 229 }; // turquoise, 90% opacity
-
-    {
-        // RGB
-        const fg_rgb = RGB.copySrc(fg.asPixel());
-        const bg_rgb = RGB.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            fg_rgb,
-            bg_rgb.srcOver(fg_rgb.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 43, .g = 70, .b = 109 },
-            bg_rgb.srcOver(fg.multiply().asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 3, .g = 63, .b = 62 },
-            bg_rgb.srcOver(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 4, .g = 67, .b = 66 },
-            bg_rgb.srcOver(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 5, .g = 84, .b = 83 },
-            bg_rgb.srcOver(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 0, .g = 0, .b = 0 },
-            bg_rgb.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // RGBA
-        const bg_mul = bg.multiply();
-        try testing.expectEqualDeep(
-            RGBA{ .r = 54, .g = 10, .b = 63, .a = 255 },
-            bg_mul.srcOver(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 43, .g = 64, .b = 102, .a = 249 },
-            bg_mul.srcOver(fg.multiply().asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 3, .g = 57, .b = 55, .a = 249 },
-            bg_mul.srcOver(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 3, .g = 60, .b = 59, .a = 249 },
-            bg_mul.srcOver(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 4, .g = 76, .b = 74, .a = 247 },
-            bg_mul.srcOver(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 0, .g = 0, .b = 0, .a = 255 },
-            bg_mul.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha8
-        const bg_alpha8 = Alpha8.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 255 },
-            bg_alpha8.srcOver(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 249 },
-            bg_alpha8.srcOver(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 249 },
-            bg_alpha8.srcOver(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 249 },
-            bg_alpha8.srcOver(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 247 },
-            bg_alpha8.srcOver(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 255 },
-            bg_alpha8.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha4
-        const bg_alpha4 = Alpha4.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 15 },
-            bg_alpha4.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha2
-        const bg_alpha2 = Alpha2.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha1
-        var bg_alpha1 = Alpha1.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.srcOver(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.srcOver(fg.asPixel()),
-        );
-        // Jack down our alpha channel by 1 to just demonstrate the error
-        // boundary when scaling down from u8 to u1.
-        var fg_127 = fg;
-        fg_127.a = 127;
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 }, // Still 1 here due to our bg opacity being 90%
-            bg_alpha1.srcOver(fg_127.asPixel()),
-        );
-
-        bg_alpha1.a = 0; // Turn off bg alpha layer for rest of testing
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 }, // Still 1 here due to our bg opacity being 90%
-            bg_alpha1.srcOver(fg_127.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.srcOver(Alpha8.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.srcOver(Alpha4.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.srcOver(Alpha2.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.srcOver(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-}
-
-test "dstIn" {
-    // Our colors, non-pre-multiplied.
-    //
-    // Note that some tests require the pre-multiplied alpha. For these, we do
-    // the multiplication at the relevant site, as as most casts will drop
-    // either the non-color or alpha channels.
-    const fg: RGBA = .{ .r = 54, .g = 10, .b = 63, .a = 191 }; // purple, 75% opacity
-    const bg: RGBA = .{ .r = 15, .g = 254, .b = 249, .a = 229 }; // turquoise, 90% opacity
-
-    {
-        // RGB
-        const fg_rgb = RGB.copySrc(fg.asPixel());
-        const bg_rgb = RGB.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            bg_rgb,
-            bg_rgb.dstIn(fg_rgb.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 11, .g = 190, .b = 186 },
-            bg_rgb.dstIn(fg.multiply().asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 11, .g = 190, .b = 186 },
-            bg_rgb.dstIn(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 11, .g = 186, .b = 182 },
-            bg_rgb.dstIn(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 10, .g = 169, .b = 166 },
-            bg_rgb.dstIn(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGB{ .r = 15, .g = 254, .b = 249 },
-            bg_rgb.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // RGBA
-        const bg_mul = bg.multiply();
-        try testing.expectEqualDeep(
-            RGBA{ .r = 13, .g = 228, .b = 223, .a = 229 },
-            bg_mul.dstIn(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 9, .g = 170, .b = 167, .a = 171 },
-            bg_mul.dstIn(fg.multiply().asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 9, .g = 170, .b = 167, .a = 171 },
-            bg_mul.dstIn(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 9, .g = 167, .b = 163, .a = 167 },
-            bg_mul.dstIn(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 8, .g = 152, .b = 148, .a = 152 },
-            bg_mul.dstIn(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            RGBA{ .r = 13, .g = 228, .b = 223, .a = 229 },
-            bg_mul.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha8
-        const bg_alpha8 = Alpha8.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 229 },
-            bg_alpha8.dstIn(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 171 },
-            bg_alpha8.dstIn(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 171 },
-            bg_alpha8.dstIn(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 167 },
-            bg_alpha8.dstIn(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 152 },
-            bg_alpha8.dstIn(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha8{ .a = 229 },
-            bg_alpha8.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha4
-        const bg_alpha4 = Alpha4.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 14 },
-            bg_alpha4.dstIn(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 10 },
-            bg_alpha4.dstIn(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 10 },
-            bg_alpha4.dstIn(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 10 },
-            bg_alpha4.dstIn(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 9 },
-            bg_alpha4.dstIn(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha4{ .a = 14 },
-            bg_alpha4.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha4
-        const bg_alpha2 = Alpha2.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.dstIn(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 2 },
-            bg_alpha2.dstIn(fg.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 2 },
-            bg_alpha2.dstIn(Alpha8.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 2 },
-            bg_alpha2.dstIn(Alpha4.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 2 },
-            bg_alpha2.dstIn(Alpha2.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha2{ .a = 3 },
-            bg_alpha2.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-    }
-
-    {
-        // Alpha1
-        const bg_alpha1 = Alpha1.copySrc(bg.asPixel());
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.dstIn(RGB.copySrc(fg.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.dstIn(fg.asPixel()),
-        );
-        // Jack down our alpha channel by 1 to just demonstrate the error
-        // boundary when scaling down from u8 to u1.
-        var fg_127 = fg;
-        fg_127.a = 127;
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.dstIn(fg_127.asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.dstIn(Alpha8.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.dstIn(Alpha4.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.dstIn(Alpha2.copySrc(fg_127.asPixel()).asPixel()),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 1 },
-            bg_alpha1.dstIn(.{ .alpha1 = .{ .a = 1 } }),
-        );
-        try testing.expectEqualDeep(
-            Alpha1{ .a = 0 },
-            bg_alpha1.dstIn(.{ .alpha1 = .{ .a = 0 } }),
-        );
-    }
 }
 
 test "Alpha, shlr" {
@@ -1475,4 +1040,13 @@ test "equal" {
     try testing.expect(alpha1_a.equal(alpha1_a));
     try testing.expect(!alpha1_a.equal(alpha1_b));
     try testing.expect(!alpha1_a.equal(rgb_a));
+}
+
+test "RGBA endianness" {
+    const rgba: RGBA = .{ .r = 13, .g = 228, .b = 223, .a = 229 }; // turquoise, 90% opacity
+    const bytes: [4]u8 = @bitCast(rgba);
+    try testing.expectEqual(13, bytes[0]);
+    try testing.expectEqual(228, bytes[1]);
+    try testing.expectEqual(223, bytes[2]);
+    try testing.expectEqual(229, bytes[3]);
 }

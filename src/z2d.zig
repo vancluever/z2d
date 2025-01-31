@@ -48,6 +48,10 @@
 //! * `surface` - The package `Surface` resides in, exposes additional types
 //! and documentation.
 //!
+//! * `compositor` - Provides access to the compositor, both the short-hand
+//! functions that are aliased within the `pixel` and `surface` packages, and
+//! also to lower-level multi-step compositor functions.
+//!
 //! * `painter` - Contains the unmanaged painter functions for filling and
 //! stroking.
 //!
@@ -55,7 +59,8 @@
 //! and documentation.
 //!
 //! * `pixel` - Contains the concrete pixel types wrapped by `Pixel`, including
-//! utility functions for various formats.
+//! utility functions for various formats, and abstractions for lower-level
+//! pixel data access (strides).
 //!
 //! * `options` - Documents option enumerations used in various parts of the
 //! library.
@@ -65,6 +70,7 @@
 pub const surface = @import("surface.zig");
 pub const pattern = @import("pattern.zig");
 pub const painter = @import("painter.zig");
+pub const compositor = @import("compositor.zig");
 pub const pixel = @import("pixel.zig");
 pub const options = @import("options.zig");
 pub const png_exporter = @import("export_png.zig");
