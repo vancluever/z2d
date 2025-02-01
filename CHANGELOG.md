@@ -1,6 +1,58 @@
-## 0.5.2-pre (Unreleased)
+## 0.6.0 (Unreleased)
 
-Bumped version for dev.
+MAJOR COMPOSITOR CHANGES
+
+This release brings some major compositor changes in preparation for the
+addition of gradients and additional blend modes (coming in this release - stay
+tuned!).
+
+`Surface` and `Pixel` now have a general `composite` function that applies any
+particular compositor operator (e.g., `in` or `over`) to surfaces and pixels.
+The respective individual `dstIn` and `srcOver` functions available on surfaces
+and all pixel types have been removed in favor of this.
+
+The `composite` functions are aliased to a batch function in the `compositor`
+package, which allows access to a multi-step compositor that you can use to
+apply multiple steps to a set of surfaces and pixels without needing to be
+written back to memory first (more on how we currently use this below).
+
+PIXEL STRIDES
+
+`Stride` has now been added to the `pixel` package. This provides a lightweight
+interface to slices of actual pixel data that can be fetched and worked with
+using `getStride` and other functions in `Surface`.
+
+For packed types, additional metadata such as the start index and the length in
+pixels are provided (you can also reflect the union field to get access to the
+pixel type).
+
+Pixel data in strides can be manipulated directly to alter the data that they
+reference. They are ultimately a lower-level interface than `getPixel` and
+`setPixel`, so keep that in mind when using them and watch out for undefined
+behavior.
+
+PERFORMANCE IMPROVEMENTS
+
+The compositor changes and the addition of strides have allowed a rewrite of
+compositor functions to process data on a stride (line-by-line for the most
+part) basis, and also to have these operations vectorized. This has led to
+significant performance improvements on modern hardware - between 20-40%
+depending on the case.
+
+In addition, the multi-step compositor also removes the need for the additional
+RGBA surface that we use along with the mask to create a final image when being
+used with anti-aliasing. This is a significant RAM savings.
+
+More details for everything above can be found in the compositor PR
+[#75](https://github.com/vancluever/z2d/pull/75)
+
+OTHER CHANGES
+
+* `fromPixel` in its form before 0.6.0 has been replaced with the functionality
+  that was previously in `copySrc`, meaning that this is now the pixel
+  conversion function. If you need to unwrap a `Pixel` from now on, the
+  recommended method is just via accessing the appropriate field within the
+  union (e.g., `px.rgba`).
 
 ## 0.5.1 (January 19, 2025)
 
