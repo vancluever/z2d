@@ -44,7 +44,7 @@ RGBA surface that we use along with the mask to create a final image when being
 used with anti-aliasing. This is a significant RAM savings.
 
 More details for everything above can be found in the compositor PR
-[#75](https://github.com/vancluever/z2d/pull/75)
+[#75](https://github.com/vancluever/z2d/pull/75).
 
 OTHER CHANGES
 
