@@ -27,6 +27,7 @@ const PolygonList = @import("internal/PolygonList.zig");
 const Transformation = @import("Transformation.zig");
 const InternalError = @import("internal/InternalError.zig").InternalError;
 const supersample_scale = @import("surface.zig").supersample_scale;
+const compositor = @import("compositor.zig");
 
 /// The size of the stack buffer portion of the allocator used to store
 /// discovered edges on a given scanline during rasterization. The value is in
@@ -225,8 +226,6 @@ pub fn stroke(
 
 const PaintError = Surface.Error || InternalError || mem.Allocator.Error;
 
-/// Direct paint, writes to surface directly, avoiding compositing. Does not
-/// use AA.
 fn paintDirect(
     alloc: mem.Allocator,
     surface: *Surface,
@@ -244,6 +243,7 @@ fn paintDirect(
         0,
         surface.getHeight() - 1,
     );
+
     var y = poly_start_y;
     while (y <= poly_end_y) : (y += 1) {
         // Make a small FBA for edge caches, falling back to the passed in
@@ -254,32 +254,28 @@ fn paintDirect(
         const edge_alloc = edge_stack_fallback.get();
         var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
+
         while (edge_list.next()) |edge_pair| {
             const start_x = math.clamp(
                 edge_pair.start,
                 0,
                 surface.getWidth() - 1,
             );
-            // Subtract 1 from the end edge as this is our pixel boundary
-            // (end_x = 100 actually means we should only fill to x=99).
             const end_x = math.clamp(
-                edge_pair.end - 1,
+                edge_pair.end,
                 0,
-                surface.getWidth() - 1,
+                surface.getWidth(),
             );
 
-            var x = start_x;
-            while (x <= end_x) : (x += 1) {
-                const src = pattern.getPixel(x, y);
-                const dst = surface.getPixel(x, y) orelse unreachable;
-                surface.putPixel(x, y, dst.srcOver(src));
-            }
+            const dst_stride = surface.getStride(start_x, y, @intCast(end_x - start_x));
+            compositor.StrideCompositor.run(dst_stride, &.{.{
+                .operator = .over,
+                .src = .{ .pixel = pattern.opaque_pattern.pixel }, // TODO: needs to change for gradients, etc
+            }});
         }
     }
 }
 
-/// Composite paint, for AA and other operations such as gradients (not yet
-/// implemented).
 fn paintComposite(
     alloc: mem.Allocator,
     surface: *Surface,
@@ -348,15 +344,12 @@ fn paintComposite(
                 const start_x = edge_pair.start;
                 const end_x = edge_pair.end;
 
-                var x = start_x;
-                // We fill up to, but not including, the end point.
-                while (x < end_x) : (x += 1) {
-                    scaled_sfc.putPixel(
-                        @intCast(x - offset_x),
-                        @intCast(y - offset_y),
-                        opaque_px,
-                    );
-                }
+                scaled_sfc.paintStride(
+                    start_x - offset_x,
+                    y - offset_y,
+                    @intCast(end_x - start_x),
+                    opaque_px,
+                );
             }
         }
 
@@ -365,93 +358,20 @@ fn paintComposite(
     };
     defer mask_sfc.deinit(alloc);
 
-    // Surface.deinit is not currently idempotent. Given that this is the only
-    // place where we might double-call deinit at this point, we can just track
-    // whether or not we need the extra de-init here, versus update the
-    // interface unnecessarily.
-    var deinit_fg = false;
-    var foreground_sfc = sfc_f: {
-        switch (pattern.*) {
-            // This is the surface that we composite our mask on to get the
-            // final image that in turn gets composited to the main surface. To
-            // support proper compositing of the mask, and in turn onto the
-            // main surface, we use RGBA with our source copied over top (other
-            // than covered alpha8 special cases below).
-            //
-            // NOTE: This is just scaffolding for now, the only pattern we have
-            // currently is the opaque single-pixel pattern, which is fast-pathed
-            // below. Once we support things like gradients and what not, we will
-            // expand this a bit more (e.g., initializing the surface with the
-            // painted gradient).
-            .opaque_pattern => {
-                const px = pattern.getPixel(0, 0);
-                switch (px) {
-                    .alpha8, .alpha4, .alpha2, .alpha1 => {
-                        // Our source is a pure-alpha format, so we can avoid a
-                        // pretty costly allocation here by just using our mask
-                        // as the foreground. We just need to check if we need
-                        // to do any composition (depending on whether or not
-                        // our source is a full opaque alpha). If the source is
-                        // fully opaque, we can just skip it, as the product
-                        // would just be the surface as it exists anyway.
-                        const dest_px_format: pixel.Format = surface.getFormat();
-                        const src_px: pixel.Pixel = switch (dest_px_format) {
-                            // This allows us to use mis-matching alpha sources
-                            // by just scaling up/down the pixel to the native
-                            // format (e.g., 4, 2, or 1 if our surface is one
-                            // of those, alpha8 for everything else).
-                            .alpha4 => pixel.Alpha4.copySrc(px).asPixel(),
-                            .alpha2 => pixel.Alpha2.copySrc(px).asPixel(),
-                            .alpha1 => pixel.Alpha1.copySrc(px).asPixel(),
-                            else => pixel.Alpha8.copySrc(px).asPixel(),
-                        };
-                        const opaque_px: pixel.Pixel = switch (dest_px_format) {
-                            .alpha4 => pixel.Alpha4.Opaque.asPixel(),
-                            .alpha2 => pixel.Alpha2.Opaque.asPixel(),
-                            .alpha1 => pixel.Alpha1.Opaque.asPixel(),
-                            else => pixel.Alpha8.Opaque.asPixel(),
-                        };
-                        if (!src_px.equal(opaque_px)) {
-                            // TODO: Move this single-pixel composition to Surface eventually
-                            var y: i32 = 0;
-                            const mask_height = mask_sfc.getHeight();
-                            const mask_width = mask_sfc.getWidth();
-                            while (y < mask_height) : (y += 1) {
-                                var x: i32 = 0;
-                                while (x < mask_width) : (x += 1) {
-                                    if (mask_sfc.getPixel(x, y)) |sfc_px|
-                                        mask_sfc.putPixel(x, y, src_px.dstIn(sfc_px))
-                                    else
-                                        unreachable;
-                                }
-                            }
-                        }
-                        break :sfc_f mask_sfc;
-                    },
-                    else => {},
-                }
-
-                var fg_sfc = try Surface.initPixel(
-                    pixel.RGBA.copySrc(pattern.getPixel(0, 0)).asPixel(),
-                    alloc,
-                    mask_sfc.getWidth(),
-                    mask_sfc.getHeight(),
-                );
-                errdefer fg_sfc.deinit(alloc);
-
-                // Image fully rendered here
-                fg_sfc.dstIn(&mask_sfc, 0, 0);
-                deinit_fg = true; // Mark foreground for deinit when done
-                break :sfc_f fg_sfc;
-            },
-        }
-    };
-    defer {
-        if (deinit_fg) foreground_sfc.deinit(alloc);
-    }
-
-    // Final compositing to main surface
-    surface.srcOver(&foreground_sfc, x0, y0);
+    // Do a fast-path combined compositing operation of the mask surface with
+    // the source color. We can do this right now very easily since we only
+    // support single-pixel sources, but the idea is to support this across as
+    // many sources as possible.
+    compositor.SurfaceCompositor.run(surface, x0, y0, 2, .{
+        .{
+            .operator = .in,
+            .dst = .{ .pixel = pattern.opaque_pattern.pixel }, // TODO: needs to change for gradients, etc
+            .src = .{ .surface = &mask_sfc },
+        },
+        .{
+            .operator = .over,
+        },
+    });
 }
 
 test "stroke uninvertible matrix error" {

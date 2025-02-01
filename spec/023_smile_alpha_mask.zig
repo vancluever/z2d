@@ -63,11 +63,11 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var foreground_sfc = try z2d.Surface.initPixel(foregrounds[0], alloc, image.width, image.height);
     defer foreground_sfc.deinit(alloc);
     // Apply mask to foreground
-    foreground_sfc.dstIn(&mask_sfc, 0, 0);
+    foreground_sfc.composite(&mask_sfc, .in, 0, 0);
     // Apply foreground to background
-    background_sfc.srcOver(&foreground_sfc, 0, 0);
+    background_sfc.composite(&foreground_sfc, .over, 0, 0);
     // Composite our working surface at our first offset co-ordinates
-    result_sfc.srcOver(&background_sfc, 12, 13);
+    result_sfc.composite(&background_sfc, .over, 12, 13);
 
     // 2nd smile
     //
@@ -75,11 +75,11 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     background_sfc.paintPixel(backgrounds[1]);
     // Re-paint foreground and apply mask
     foreground_sfc.paintPixel(foregrounds[1]);
-    foreground_sfc.dstIn(&mask_sfc, 0, 0);
+    foreground_sfc.composite(&mask_sfc, .in, 0, 0);
     // Apply foreground to background
-    background_sfc.srcOver(&foreground_sfc, 0, 0);
+    background_sfc.composite(&foreground_sfc, .over, 0, 0);
     // Composite our working surface at our second offset co-ordinates
-    result_sfc.srcOver(&background_sfc, w / 2 - 7, 13);
+    result_sfc.composite(&background_sfc, .over, w / 2 - 7, 13);
 
     // 3rd smile
     //
@@ -87,11 +87,11 @@ pub fn render(alloc: mem.Allocator) !z2d.Surface {
     background_sfc.paintPixel(backgrounds[2]);
     // Re-paint foreground and apply mask
     foreground_sfc.paintPixel(foregrounds[2]);
-    foreground_sfc.dstIn(&mask_sfc, 0, 0);
+    foreground_sfc.composite(&mask_sfc, .in, 0, 0);
     // Apply foreground to background
-    background_sfc.srcOver(&foreground_sfc, 0, 0);
+    background_sfc.composite(&foreground_sfc, .over, 0, 0);
     // Composite our working surface at our second offset co-ordinates
-    result_sfc.srcOver(&background_sfc, w / 4 + 2, h / 2 - 7);
+    result_sfc.composite(&background_sfc, .over, w / 4 + 2, h / 2 - 7);
 
     // done!
 
