@@ -270,7 +270,14 @@ fn paintDirect(
             const dst_stride = surface.getStride(start_x, y, @intCast(end_x - start_x));
             compositor.StrideCompositor.run(dst_stride, &.{.{
                 .operator = .over,
-                .src = .{ .pixel = pattern.opaque_pattern.pixel }, // TODO: needs to change for gradients, etc
+                .src = switch (pattern.*) {
+                    .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                    .linear_gradient => .{ .gradient = .{
+                        .underlying = .{ .linear = pattern.linear_gradient },
+                        .x = start_x,
+                        .y = y,
+                    } },
+                },
             }});
         }
     }
@@ -365,7 +372,10 @@ fn paintComposite(
     compositor.SurfaceCompositor.run(surface, x0, y0, 2, .{
         .{
             .operator = .in,
-            .dst = .{ .pixel = pattern.opaque_pattern.pixel }, // TODO: needs to change for gradients, etc
+            .dst = switch (pattern.*) {
+                .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                .linear_gradient => .{ .gradient = .{ .linear = pattern.linear_gradient } },
+            },
             .src = .{ .surface = &mask_sfc },
         },
         .{

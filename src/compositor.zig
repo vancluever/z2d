@@ -5,6 +5,7 @@ const debug = @import("std").debug;
 const simd = @import("std").simd;
 const testing = @import("std").testing;
 
+const gradient = @import("gradient.zig");
 const pixel = @import("pixel.zig");
 const Surface = @import("surface.zig").Surface;
 
@@ -36,6 +37,11 @@ pub const Operator = enum {
     }
 };
 
+/// The union of gradients supported for compositing.
+pub const GradientParam = union(gradient.GradientType) {
+    linear: *const gradient.Linear,
+};
+
 /// Compositor functionality that operates at surface-scoped levels of
 /// granularity.
 pub const SurfaceCompositor = struct {
@@ -56,6 +62,20 @@ pub const SurfaceCompositor = struct {
         const Param = union(enum) {
             /// No value - operation uses default/current dst/src.
             none: void,
+
+            /// Represents a gradient used for compositing.
+            ///
+            /// When supplied as the initial source, bounds the operation to
+            /// entirety of the destination. In this case, the composition must be
+            /// positioned at the origin of destination (i.e., dst_x=0, dst_y=0),
+            /// if it isn't, it's a no-op.
+            ///
+            /// Regardless of whether or not it is used as the initial source,
+            /// the gradient is aligned to the destination with regards to
+            /// device space -> pattern space, e.g., (x=50, y=50) is the same
+            /// between both destination and the pattern if no transformations
+            /// have been applied to the gradient.
+            gradient: GradientParam,
 
             /// Represents a single pixel used for the whole of the source or
             /// destination.
@@ -107,13 +127,13 @@ pub const SurfaceCompositor = struct {
             height: i32,
         } = switch (operations[0].src) {
             .none => return,
-            .pixel => pixel: {
+            .pixel, .gradient => dst_bounded: {
                 // We have a pixel source - this is allowed since we could allow
                 // blends of a single pixel across the entirety of a surface. We do
                 // have some constraints, however - specifically, dst_x and dst_y
                 // have to be zero, so that we paint the entire surface.
                 if (dst_x != 0 or dst_y != 0) return;
-                break :pixel .{
+                break :dst_bounded .{
                     .width = dst.getWidth(),
                     .height = dst.getHeight(),
                 };
@@ -153,11 +173,21 @@ pub const SurfaceCompositor = struct {
                         .surface => |sfc| .{ .stride = sfc.getStride(dst_start_x, dst_start_y, len) },
                         .none => .{ .none = {} },
                         .pixel => |px| .{ .pixel = px },
+                        .gradient => |gr| .{ .gradient = .{
+                            .underlying = gr,
+                            .x = dst_start_x,
+                            .y = dst_start_y,
+                        } },
                     };
                     stride_op[idx].src = switch (op.src) {
                         .surface => |sfc| .{ .stride = sfc.getStride(src_start_x, src_y, len) },
                         .none => .{ .none = {} },
                         .pixel => |px| .{ .pixel = px },
+                        .gradient => |gr| .{ .gradient = .{
+                            .underlying = gr,
+                            .x = dst_start_x,
+                            .y = dst_start_y,
+                        } },
                     };
                 }
                 break :stride_ops stride_op;
@@ -190,6 +220,12 @@ pub const StrideCompositor = struct {
             /// No value - operation uses default/current dst/src.
             none: void,
 
+            /// Represents a gradient used for compositing.
+            ///
+            /// An initial `x` and `y` offset must be provided, and should
+            /// align with the main destination stride.
+            gradient: Gradient,
+
             /// Represents a single pixel, used individually or broadcast across a
             /// vector depending on the operation.
             pixel: pixel.Pixel,
@@ -198,6 +234,19 @@ pub const StrideCompositor = struct {
             /// than the main destination; shorter strides will cause
             /// safety-checked undefined behavior.
             stride: pixel.Stride,
+
+            /// Represents a gradient type when supplied as a parameter for
+            /// stride-level composition operations.
+            pub const Gradient = struct {
+                /// The underlying gradient.
+                underlying: GradientParam,
+
+                /// The initial x position representing the start of the stride.
+                x: i32,
+
+                /// The initial y position representing the start of the stride.
+                y: i32,
+            };
         };
     };
 
@@ -223,6 +272,7 @@ pub const StrideCompositor = struct {
                 _src = switch (op.src) {
                     .pixel => |px| RGBA16Vec.fromPixel(px),
                     .stride => |stride| RGBA16Vec.fromStride(stride, j),
+                    .gradient => |gr| RGBA16Vec.fromGradient(gr, j),
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
@@ -231,6 +281,7 @@ pub const StrideCompositor = struct {
                 _dst = switch (op.dst) {
                     .pixel => |px| RGBA16Vec.fromPixel(px),
                     .stride => |stride| RGBA16Vec.fromStride(stride, j),
+                    .gradient => |gr| RGBA16Vec.fromGradient(gr, j),
                     .none => RGBA16Vec.fromStride(dst, j),
                 };
                 _dst = op.operator.run(_dst, _src, max_u8_vec);
@@ -246,6 +297,9 @@ pub const StrideCompositor = struct {
                 _src = switch (op.src) {
                     .pixel => |px| RGBA16.fromPixel(px),
                     .stride => |stride| RGBA16.fromPixel(getPixelFromStride(stride, i)),
+                    .gradient => |gr| switch (gr.underlying) {
+                        inline else => |_gr| RGBA16.fromPixel(_gr.getPixel(gr.x + @as(i32, @intCast(i)), gr.y)),
+                    },
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
@@ -254,6 +308,9 @@ pub const StrideCompositor = struct {
                 _dst = switch (op.dst) {
                     .pixel => |px| RGBA16.fromPixel(px),
                     .stride => |stride| RGBA16.fromPixel(getPixelFromStride(stride, i)),
+                    .gradient => |gr| switch (gr.underlying) {
+                        inline else => |_gr| RGBA16.fromPixel(_gr.getPixel(gr.x + @as(i32, @intCast(i)), gr.y)),
+                    },
                     .none => RGBA16.fromPixel(getPixelFromStride(dst, i)),
                 };
                 _dst = op.operator.run(_dst, _src, max_u8_scalar);
@@ -355,6 +412,79 @@ const RGBA16Vec = struct {
                 return result;
             },
         }
+    }
+
+    fn fromGradient(src: StrideCompositor.Operation.Param.Gradient, idx: usize) RGBA16Vec {
+        var c0_vec: RGBA16Vec = undefined;
+        var c1_vec: RGBA16Vec = undefined;
+        var offsets_vec: @Vector(vector_length, f64) = undefined;
+        for (0..vector_length) |i| {
+            switch (src.underlying) {
+                inline else => |g| {
+                    const search_result = g.stops.search(g.getOffset(
+                        src.x + @as(i32, @intCast(idx)) + @as(i32, @intCast(i)),
+                        src.y,
+                    ));
+                    c0_vec.r[i] = search_result.c0.r;
+                    c0_vec.g[i] = search_result.c0.g;
+                    c0_vec.b[i] = search_result.c0.b;
+                    c0_vec.a[i] = search_result.c0.a;
+                    c1_vec.r[i] = search_result.c1.r;
+                    c1_vec.g[i] = search_result.c1.g;
+                    c1_vec.b[i] = search_result.c1.b;
+                    c1_vec.a[i] = search_result.c1.a;
+                    offsets_vec[i] = search_result.offset;
+                },
+            }
+        }
+
+        return .{
+            .r = lerpGradient(c0_vec.r, c1_vec.r, offsets_vec),
+            .g = lerpGradient(c0_vec.g, c1_vec.g, offsets_vec),
+            .b = lerpGradient(c0_vec.b, c1_vec.b, offsets_vec),
+            .a = lerpGradient(c0_vec.a, c1_vec.a, offsets_vec),
+        };
+    }
+
+    fn lerpGradient(
+        a: @Vector(vector_length, u16),
+        b: @Vector(vector_length, u16),
+        t: @Vector(vector_length, f64),
+    ) @Vector(vector_length, u16) {
+        const max_u8_as_float: @Vector(vector_length, f64) = @splat(255.0);
+        const t_u16: @Vector(vector_length, u16) = @intFromFloat(max_u8_as_float * t);
+        // Only a small percentage of co-ordinates (~6% when testing using a
+        // 3-stop R -> G -> B linear gradient on a 100x100 surface, in varying
+        // directions) will usually fall on a mixed-conditional segment (where
+        // for all of the vector length, neither a <= b nor a > b holds). So we
+        // reduce here to see if we can fast-path it, before resorting to
+        // scalar operation on the vector.
+        //
+        // TODO: we need this somehow merged with the lerp in the gradient
+        // package so that we have a single source of truth that we can use as
+        // a pattern for other color functions that will be coming later.
+        var op: enum(u2) {
+            mixed,
+            le,
+            gt,
+        } = .mixed;
+        const all_le: u2 = @intFromBool(@reduce(.And, a <= b));
+        const all_gt: u2 = @intFromBool(@reduce(.And, a > b));
+        op = @enumFromInt(all_le | (all_gt << 1));
+        return switch (op) {
+            .le => a + (b - a) * t_u16 / max_u8_vec,
+            .gt => a - (a - b) * t_u16 / max_u8_vec,
+            .mixed => mixed: {
+                var result: @Vector(vector_length, u16) = undefined;
+                for (0..vector_length) |i| {
+                    result[i] = switch (a[i] <= b[i]) {
+                        true => @intCast(a[i] + (b[i] - a[i]) * t_u16[i] / max_u8_vec[i]),
+                        false => @intCast(a[i] - (a[i] - b[i]) * t_u16[i] / max_u8_vec[i]),
+                    };
+                }
+                break :mixed result;
+            },
+        };
     }
 
     fn toStride(self: RGBA16Vec, dst: pixel.Stride, idx: usize) void {

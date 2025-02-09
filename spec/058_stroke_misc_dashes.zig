@@ -17,7 +17,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     var context = try z2d.Context.init(alloc, &sfc);
     defer context.deinit();
-    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     context.setAntiAliasingMode(aa_mode);
     context.setLineWidth(3);
     context.setDashes(&.{ 25, 5 });
@@ -63,9 +63,9 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.arc(0, 0, 1, 0, 2 * math.pi);
     try context.closePath();
     context.setIdentity();
-    context.setSource(.{ .rgb = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA } });
     try context.fill();
-    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     try context.stroke();
     context.resetPath();
 
@@ -286,7 +286,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.stroke();
     context.resetPath();
 
-    context.setSource((z2d.pixel.RGBA{ .r = 255, .g = 0, .b = 0, .a = 127 }).multiply().asPixel());
+    context.setSourceToPixel((z2d.pixel.RGBA{ .r = 255, .g = 0, .b = 0, .a = 127 }).multiply().asPixel());
     context.setIdentity();
     context.translate(150, 1590);
     context.setDashes(&.{});

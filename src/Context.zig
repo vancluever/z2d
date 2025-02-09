@@ -62,16 +62,25 @@ pub fn deinit(self: *Context) void {
 }
 
 /// Returns the current underlying `Pixel` for the context's pattern.
-pub fn getSource(self: *Context) Pixel {
-    return switch (self.pattern) {
-        .opaque_pattern => |p| p.pixel,
-    };
+pub fn getSource(self: *Context) Pattern {
+    return self.pattern;
+}
+
+/// Sets the context's pattern to the pattern supplied; fill and stroke
+/// operations will draw with this source when they are called.
+///
+/// The default pattern is an RGBA opaque black pixel source (the equivalent of
+/// running `setSourceToPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 }
+/// })`).
+pub fn setSource(self: *Context, source: Pattern) void {
+    self.pattern = source;
 }
 
 /// Sets the context's pattern to the supplied `Pixel`. Fill and stroke
 /// operations will draw with this pixel when they are called. The default
-/// pattern is RGBA opaque black.
-pub fn setSource(self: *Context, px: Pixel) void {
+/// pattern is an RGBA opaque black pixel source (the equivalent of running
+/// `setSourceToPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 } })`).
+pub fn setSourceToPixel(self: *Context, px: Pixel) void {
     self.pattern = .{ .opaque_pattern = .{ .pixel = px } };
 }
 
