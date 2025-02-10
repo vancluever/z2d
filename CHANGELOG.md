@@ -1,10 +1,19 @@
 ## 0.6.0 (Unreleased)
 
+GRADIENTS
+
+This release marks another major feature addition for z2d - the addition of
+gradients to the library. Consumers can now utilize linear gradients as
+patterns for filling, stroking, and lower-level composition (see below for
+details on the lower-level compositor changes that make this possible).
+
+Consult the documentation and some of the examples in `spec/` for details on
+using gradients.
+
 MAJOR COMPOSITOR CHANGES
 
-This release brings some major compositor changes in preparation for the
-addition of gradients and additional blend modes (coming in this release - stay
-tuned!).
+This release also brings some major compositor changes to accommodate the
+addition of gradients and additional blend modes.
 
 `Surface` and `Pixel` now have a general `composite` function that applies any
 particular compositor operator (e.g., `in` or `over`) to surfaces and pixels.
@@ -48,6 +57,9 @@ More details for everything above can be found in the compositor PR
 
 OTHER CHANGES
 
+* `setSource` and `getSource` now take and return `Pattern` types specifically,
+  instead of pixels. This is to accommodate gradients; you can still set pixel
+  data directly as a source using `setSourceToPixel`.
 * `fromPixel` in its form before 0.6.0 has been replaced with the functionality
   that was previously in `copySrc`, meaning that this is now the pixel
   conversion function. If you need to unwrap a `Pixel` from now on, the
