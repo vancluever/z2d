@@ -15,7 +15,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     var context = try z2d.Context.init(alloc, &sfc);
     defer context.deinit();
-    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     context.setAntiAliasingMode(aa_mode);
     context.setLineCapMode(.square);
     context.setLineWidth(20);
@@ -115,7 +115,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     // We draw a hairline in the same path in red - this validates how the caps
     // and joins are aligned.
-    context.setSource(.{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } });
     context.setLineWidth(1);
 
     try context.stroke();

@@ -24,7 +24,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     var context = try z2d.Context.init(alloc, &sfc);
     defer context.deinit();
-    context.setSource(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     context.setAntiAliasingMode(aa_mode);
     context.setLineWidth(10);
 
@@ -46,7 +46,7 @@ fn line(context: *z2d.Context, i: f64, reverse: bool, round: bool) !void {
     defer context.setLineWidth(saved_line_width);
 
     const saved_source = context.getSource();
-    defer context.setSource(saved_source);
+    defer context.setSourceToPixel(saved_source.opaque_pattern.pixel);
 
     context.setLineCapMode(if (round) .round else .square);
     defer context.setLineCapMode(.butt);
@@ -86,7 +86,7 @@ fn line(context: *z2d.Context, i: f64, reverse: bool, round: bool) !void {
     try context.stroke();
 
     // Draw a hairline in red to help validate/measure
-    context.setSource(.{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xF3, .g = 0x00, .b = 0x00 } });
     context.setLineWidth(1);
 
     try context.stroke();

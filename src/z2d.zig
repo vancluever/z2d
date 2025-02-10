@@ -58,6 +58,8 @@
 //! * `pattern` - The package `Pattern` resides in, exposes additional types
 //! and documentation.
 //!
+//! * `gradient` - Contains types and utility functions for gradients.
+//!
 //! * `pixel` - Contains the concrete pixel types wrapped by `Pixel`, including
 //! utility functions for various formats, and abstractions for lower-level
 //! pixel data access (strides).
@@ -72,6 +74,7 @@ pub const pattern = @import("pattern.zig");
 pub const painter = @import("painter.zig");
 pub const compositor = @import("compositor.zig");
 pub const pixel = @import("pixel.zig");
+pub const gradient = @import("gradient.zig");
 pub const options = @import("options.zig");
 pub const png_exporter = @import("export_png.zig");
 
