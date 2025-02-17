@@ -22,6 +22,41 @@ obtain one at https://mozilla.org/MPL/2.0/.
 
 ---
 
+Portions of this code, where noted, have been derived and adapted from
+reference materials from the World Wide Web Consortium (W3C), used under the
+terms of the W3C Software and Document license. Below is a copy of the license
+notice.
+
+By obtaining and/or copying this work, you (the licensee) agree that you have
+read, understood, and will comply with the following terms and conditions.
+
+Permission to copy, modify, and distribute this work, with or without
+modification, for any purpose and without fee or royalty is hereby granted,
+provided that you include the following on ALL copies of the work or portions
+thereof, including modifications:
+
+- The full text of this NOTICE in a location viewable to users of the
+  redistributed or derivative work.
+- Any pre-existing intellectual property disclaimers, notices, or terms and
+  conditions. If none exist, the W3C software and document short notice should
+  be included.
+- Notice of any changes or modifications, through a copyright statement on the
+  new code or document such as "This software or document includes material
+  copied from or derived from [title and URI of the W3C document]. Copyright ©
+  [$year-of-document] World Wide Web Consortium.
+  https://www.w3.org/copyright/software-license-2023/"
+
+The short notice follows (year is noted in cited works):
+
+Copyright © World Wide Web Consortium. All Rights Reserved. This work is
+distributed under the W3C® Software and Document License [1] in the hope that
+it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    [1] https://www.w3.org/Consortium/Legal/copyright-software
+
+---
+
 The acceptance tests in the "spec" directory (unless otherwise specified) are
 licensed 0BSD to allow the unambiguous free use of this code in assisting the
 integration of z2d.

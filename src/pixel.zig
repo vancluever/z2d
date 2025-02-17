@@ -11,6 +11,12 @@ const testing = @import("std").testing;
 
 const compositor = @import("compositor.zig");
 
+const colorpkg = @import("color.zig");
+const Color = colorpkg.Color;
+
+const runCases = @import("internal/util.zig").runCases;
+const TestingError = @import("internal/util.zig").TestingError;
+
 /// Format descriptors for the pixel formats supported by the library:
 ///
 /// * `.rgba` is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
@@ -104,6 +110,11 @@ pub const Pixel = union(Format) {
     /// supplied pixels.
     pub fn composite(dst: Pixel, src: Pixel, operator: compositor.Operator) Pixel {
         return compositor.runPixel(dst, src, operator);
+    }
+
+    /// Initializes a wrapped RGBA pixel from the supplied color verb.
+    pub fn fromColor(color: Color.InitArgs) Pixel {
+        return colorpkg.LinearRGB.fromColor(Color.init(color)).encodeRGBA().asPixel();
     }
 };
 
@@ -1049,4 +1060,50 @@ test "RGBA endianness" {
     try testing.expectEqual(228, bytes[1]);
     try testing.expectEqual(223, bytes[2]);
     try testing.expectEqual(229, bytes[3]);
+}
+
+test "Pixel.fromColor" {
+    const name = "Pixel.fromColor";
+    const cases = [_]struct {
+        name: []const u8,
+        expected: Pixel,
+        args: Color.InitArgs,
+    }{
+        .{
+            .name = "rgb",
+            .expected = .{ .rgba = .{ .r = 63, .g = 127, .b = 191, .a = 255 } },
+            .args = .{ .rgb = .{ 0.25, 0.5, 0.75 } },
+        },
+        .{
+            .name = "rgba",
+            .expected = .{ .rgba = .{ .r = 57, .g = 114, .b = 172, .a = 229 } },
+            .args = .{ .rgba = .{ 0.25, 0.5, 0.75, 0.9 } },
+        },
+        .{
+            .name = "srgb",
+            .expected = .{ .rgba = .{ .r = 12, .g = 55, .b = 135, .a = 255 } },
+            .args = .{ .srgb = .{ 0.25, 0.5, 0.75 } },
+        },
+        .{
+            .name = "srgba",
+            .expected = .{ .rgba = .{ .r = 10, .g = 49, .b = 121, .a = 229 } },
+            .args = .{ .srgba = .{ 0.25, 0.5, 0.75, 0.9 } },
+        },
+        .{
+            .name = "hsl",
+            .expected = .{ .rgba = .{ .r = 0, .g = 255, .b = 255, .a = 255 } },
+            .args = .{ .hsl = .{ 180, 1, 0.5 } },
+        },
+        .{
+            .name = "hsla",
+            .expected = .{ .rgba = .{ .r = 0, .g = 229, .b = 229, .a = 229 } },
+            .args = .{ .hsla = .{ 180, 1, 0.5, 0.9 } },
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqualDeep(tc.expected, Pixel.fromColor(tc.args));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
 }

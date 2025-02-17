@@ -40,6 +40,10 @@
 //! * `Pixel` - A single pixel of varying format. Underlying formats are
 //! represented as `packed struct`s for guaranteed memory layout.
 //!
+//! * `Color` - A higher-level interface to providing color to pixel sources in
+//! various color spaces. Most functions outside of the `color` package will
+//! take color as its verb-based `Color.InitArgs` form to save on boilerplate.
+//!
 //! * `Transformation` - An affine transformation matrix that transforms
 //! co-ordinates between user space and device space in `Context` and `Path`.
 //!
@@ -64,6 +68,10 @@
 //! utility functions for various formats, and abstractions for lower-level
 //! pixel data access (strides).
 //!
+//! * `color` - Contains color space functionality, providing the ability to
+//! provide color and interpolation in different color spaces other than plain
+//! RGB.
+//!
 //! * `options` - Documents option enumerations used in various parts of the
 //! library.
 //!
@@ -74,6 +82,7 @@ pub const pattern = @import("pattern.zig");
 pub const painter = @import("painter.zig");
 pub const compositor = @import("compositor.zig");
 pub const pixel = @import("pixel.zig");
+pub const color = @import("color.zig");
 pub const gradient = @import("gradient.zig");
 pub const options = @import("options.zig");
 pub const png_exporter = @import("export_png.zig");
@@ -83,6 +92,7 @@ pub const Path = @import("Path.zig");
 pub const StaticPath = @import("static_path.zig").StaticPath;
 pub const Pattern = pattern.Pattern;
 pub const Pixel = pixel.Pixel;
+pub const Color = color.Color;
 pub const Surface = surface.Surface;
 pub const Transformation = @import("Transformation.zig");
 

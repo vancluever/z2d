@@ -45,11 +45,11 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
 
-    var gradient = z2d.gradient.Linear.init(0, 49, 82, 49);
+    var gradient = z2d.gradient.Linear.init(0, 49, 82, 49, .linear_rgb);
     defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgb = .{ .r = 255, .g = 0, .b = 0 } });
-    try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ .r = 0, .g = 255, .b = 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgb = .{ .r = 0, .g = 0, .b = 255 } });
+    try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
+    try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+    try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
     context.setSource(gradient.asPatternInterface());
 
     try context.moveTo(62.186, 97.000);

@@ -60,10 +60,11 @@ fn draw(
         linear_x1,
         linear_y1,
         &stop_buffer,
+        .linear_rgb,
     );
-    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ .r = 255, .g = 0, .b = 0 } });
-    gradient.stops.addAssumeCapacity(0.5, .{ .rgb = .{ .r = 0, .g = 255, .b = 0 } });
-    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ .r = 0, .g = 0, .b = 255 } });
+    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.stops.addAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
     z2d.compositor.SurfaceCompositor.run(scratch_sfc, 0, 0, 1, .{.{
         .operator = .over,
         .src = .{ .gradient = .{ .linear = &gradient } },

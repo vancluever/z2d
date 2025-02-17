@@ -74,6 +74,7 @@ const _058_stroke_misc_dashes = @import("058_stroke_misc_dashes.zig");
 const _059_stroke_star_gradient = @import("059_stroke_star_gradient.zig");
 const _060_ghostty_logo = @import("060_ghostty_logo.zig");
 const _061_linear_gradient = @import("061_linear_gradient.zig");
+const _062_hsl_gradient = @import("062_hsl_gradient.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -142,6 +143,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _059_stroke_star_gradient);
     try pathExportRun(alloc, _060_ghostty_logo);
     try compositorExportRun(alloc, _061_linear_gradient);
+    try compositorExportRun(alloc, _062_hsl_gradient);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -388,6 +390,10 @@ test "060_ghostty_logo" {
 
 test "061_linear_gradient" {
     try compositorTestRun(testing.allocator, _061_linear_gradient);
+}
+
+test "062_hsl_gradient" {
+    try compositorTestRun(testing.allocator, _062_hsl_gradient);
 }
 
 //////////////////////////////////////////////////////////////////////////////
