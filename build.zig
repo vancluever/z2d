@@ -121,13 +121,15 @@ pub fn build(b: *std.Build) void {
         "filter",
         "Test filter for \"test\" or \"spec\" target (repeat for multiple filters)",
     ) orelse &[0][]const u8{};
-    const test_run = b.addRunArtifact(b.addTest(.{
+    const test_step = b.addTest(.{
         .root_source_file = b.path("src/z2d.zig"),
         .target = target,
         .optimize = optimize,
         .filters = test_filters,
-    }));
+    });
+    const test_run = b.addRunArtifact(test_step);
     b.step("test", "Run unit tests").dependOn(&test_run.step);
+    b.step("check", "Build, but don't run, unit tests").dependOn(&test_step.step);
 
     /////////////////////////////////////////////////////////////////////////
     // Spec tests
