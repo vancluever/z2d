@@ -10,6 +10,15 @@ details on the lower-level compositor changes that make this possible).
 Consult the documentation and some of the examples in `spec/` for details on
 using gradients.
 
+COLOR
+
+The higher-level `Color` interface and `color` package have been introduced as
+a means to provide color to pixel sources (gradients, single-pixel sources,
+etc). Colors can be provided in different color spaces; rectangular ones such
+as RGB, or polar ones such as HSL. Gamma-corrected RGB is also included,
+currently, sRGB is the one color space supplied here, but others will follow in
+future releases.
+
 MAJOR COMPOSITOR CHANGES
 
 This release also brings some major compositor changes to accommodate the
