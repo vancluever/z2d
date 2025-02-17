@@ -16,8 +16,11 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const colorpkg = @import("color.zig");
 const pixel = @import("pixel.zig");
 
+const Color = colorpkg.Color;
+const InterpolationMethod = colorpkg.InterpolationMethod;
 const Pattern = @import("pattern.zig").Pattern;
 const Point = @import("internal/Point.zig");
 
@@ -39,35 +42,54 @@ pub const Linear = struct {
 
     /// Initializes a linear gradient running from `(x0, y0)` to `(x1, y1)`.
     ///
+    /// The gradient runs in the interpolation color space specified, with all
+    /// color stops converted to that space for interpolation.
+    ///
     /// Before using the gradient, it's recommended to add some stops:
     ///
     /// ```
-    /// var linear = Linear.init(0, 0, 99, 99);
+    /// var linear = Linear.init(0, 0, 99, 99, .linear_rgb);
     /// defer linear.deinit(alloc);
-    /// try gradient.stops.add(alloc, 0, .{ .rgb = .{ .r = 255, .g = 0, .b = 0 } });
-    /// try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ .r = 0, .g = 255, .b = 0 } });
-    /// try gradient.stops.add(alloc, 1, .{ .rgb = .{ .r = 0, .g = 0, .b = 255 } });
+    /// try gradient.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
+    /// try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+    /// try gradient.stops.add(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
     /// ...
     /// ```
     ///
     /// As shown in the above example, `deinit` should be called to release any
     /// stops that have been added using `Stop.List.add`.
-    pub fn init(x0: f64, y0: f64, x1: f64, y1: f64) Linear {
+    pub fn init(
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        method: InterpolationMethod,
+    ) Linear {
         return .{
             .start = .{ .x = x0, .y = y0 },
             .end = .{ .x = x1, .y = y1 },
-            .stops = .{},
+            .stops = .{ .interpolation_method = method },
         };
     }
 
     /// Initializes the gradient with externally allocated memory for the
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
     /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
-    pub fn initBuffer(x0: f64, y0: f64, x1: f64, y1: f64, stops: []Stop) Linear {
+    pub fn initBuffer(
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        stops: []Stop,
+        method: InterpolationMethod,
+    ) Linear {
         return .{
             .start = .{ .x = x0, .y = y0 },
             .end = .{ .x = x1, .y = y1 },
-            .stops = .{ .l = std.ArrayListUnmanaged(Stop).initBuffer(stops) },
+            .stops = .{
+                .l = std.ArrayListUnmanaged(Stop).initBuffer(stops),
+                .interpolation_method = method,
+            },
         };
     }
 
@@ -84,7 +106,12 @@ pub const Linear = struct {
 
     /// Gets the pixel calculated for the gradient at `(x, y)`.
     pub fn getPixel(self: *const Linear, x: i32, y: i32) pixel.Pixel {
-        return self.stops.search(self.getOffset(x, y)).lerp().asPixel();
+        const search_result = self.stops.search(self.getOffset(x, y));
+        return self.stops.interpolation_method.interpolateEncode(
+            search_result.c0,
+            search_result.c1,
+            search_result.offset,
+        ).asPixel();
     }
 
     /// Performs orthogonal projection on the gradient, transforming the
@@ -96,7 +123,7 @@ pub const Linear = struct {
     /// const result = gradient.stops.search(offset);
     /// ... // (lerp off of search result or perform other operations)
     /// ```
-    pub fn getOffset(self: *const Linear, x: i32, y: i32) f64 {
+    pub fn getOffset(self: *const Linear, x: i32, y: i32) f32 {
         return project(self.start, self.end, .{
             .x = @as(f64, @floatFromInt(x)),
             .y = @as(f64, @floatFromInt(y)),
@@ -112,25 +139,25 @@ pub const Stop = struct {
     idx: usize,
 
     /// The color for this color stop.
-    color: pixel.RGBA,
+    color: Color,
 
     /// The offset of this color stop, clamped between `0.0` and `1.0`.
-    offset: f64,
+    offset: f32,
 
     /// Represents a list of color stops. Do not copy this field directly from
     /// gradient to gradient as it may cause the index to go out of sync.
     const List = struct {
         current_idx: usize = 0,
         l: std.ArrayListUnmanaged(Stop) = .{},
+        interpolation_method: InterpolationMethod,
 
         /// Releases any memory allocated using `add`.
         fn deinit(self: *List, alloc: mem.Allocator) void {
             self.l.deinit(alloc);
         }
 
-        /// Adds a color stop with the specified offset and pixel. The pixel
-        /// will be converted to RGBA. The offset will be clamped to `0.0` and
-        /// `1.0`.
+        /// Adds a stop with the specified offset and color. The offset will be
+        /// clamped to `0.0` and `1.0`.
         ///
         /// If stops are added at identical offsets, they will be stored in the
         /// order they were added. Looking up that particular offset will yield
@@ -139,20 +166,20 @@ pub const Stop = struct {
         pub fn add(
             self: *List,
             alloc: mem.Allocator,
-            offset: f64,
-            px: pixel.Pixel,
+            offset: f32,
+            color: Color.InitArgs,
         ) mem.Allocator.Error!void {
             const newlen = self.l.items.len + 1;
             try self.l.ensureTotalCapacity(alloc, newlen);
-            self.addAssumeCapacity(offset, px);
+            self.addAssumeCapacity(offset, color);
         }
 
         /// Like `add`, but assumes the list can hold the stop.
-        pub fn addAssumeCapacity(self: *List, offset: f64, px: pixel.Pixel) void {
+        pub fn addAssumeCapacity(self: *List, offset: f32, color: Color.InitArgs) void {
             const _offset = math.clamp(offset, 0, 1);
             self.l.appendAssumeCapacity(.{
                 .idx = self.current_idx,
-                .color = pixel.RGBA.fromPixel(px),
+                .color = Color.init(color),
                 .offset = _offset,
             });
             mem.sort(Stop, self.l.items, {}, stop_sort_asc);
@@ -170,37 +197,9 @@ pub const Stop = struct {
         /// distance between the two stops), versus the absolute offset given
         /// to `search`.
         pub const SearchResult = struct {
-            c0: pixel.RGBA,
-            c1: pixel.RGBA,
-            offset: f64,
-
-            /// Performs linear interpolation on the search result, returning
-            /// the respective color.
-            pub fn lerp(self: SearchResult) pixel.RGBA {
-                debug.assert(self.offset <= 1.0 and self.offset >= 0);
-                const t_int: u16 = @intFromFloat(255.0 * self.offset);
-                const c0_16_r: u16 = self.c0.r;
-                const c0_16_g: u16 = self.c0.g;
-                const c0_16_b: u16 = self.c0.b;
-                const c0_16_a: u16 = self.c0.a;
-                const c1_16_r: u16 = self.c1.r;
-                const c1_16_g: u16 = self.c1.g;
-                const c1_16_b: u16 = self.c1.b;
-                const c1_16_a: u16 = self.c1.a;
-                return .{
-                    .r = lerp16to8(c0_16_r, c1_16_r, t_int),
-                    .g = lerp16to8(c0_16_g, c1_16_g, t_int),
-                    .b = lerp16to8(c0_16_b, c1_16_b, t_int),
-                    .a = lerp16to8(c0_16_a, c1_16_a, t_int),
-                };
-            }
-
-            fn lerp16to8(a: u16, b: u16, t: u16) u8 {
-                return switch (a <= b) {
-                    true => @intCast(a + (b - a) * t / 255),
-                    false => @intCast(a - (a - b) * t / 255),
-                };
-            }
+            c0: Color,
+            c1: Color,
+            offset: f32,
         };
 
         /// Returns a start color, an end color, and a relative offset within
@@ -209,10 +208,10 @@ pub const Stop = struct {
         /// Offset is clamped to `0.0` and `1.0`.
         ///
         /// The result of an empty list is transparent black.
-        pub fn search(self: *const List, offset: f64) SearchResult {
+        pub fn search(self: *const List, offset: f32) SearchResult {
             if (self.l.items.len == 0) return .{
-                .c0 = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
-                .c1 = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
+                .c0 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
+                .c1 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
                 .offset = 0,
             };
             const _offset = math.clamp(offset, 0, 1);
@@ -289,12 +288,12 @@ pub const Stop = struct {
     };
 };
 
-fn project(start: Point, end: Point, point: Point) f64 {
+fn project(start: Point, end: Point, point: Point) f32 {
     const start_to_end_dx = end.x - start.x;
     const start_to_end_dy = end.y - start.y;
     const start_to_p_dx = point.x - start.x;
     const start_to_p_dy = point.y - start.y;
-    return math.clamp(
+    return @floatCast(math.clamp(
         dot(
             f64,
             2,
@@ -306,7 +305,7 @@ fn project(start: Point, end: Point, point: Point) f64 {
         ),
         0,
         1,
-    );
+    ));
 }
 
 fn dotSq(x: anytype, y: anytype) @TypeOf(x, y) {
@@ -323,256 +322,305 @@ test "Stop.List.addAssumeCapacity" {
     var stops: [7]Stop = undefined;
     var stop_list: Stop.List = .{
         .l = std.ArrayListUnmanaged(Stop).initBuffer(&stops),
+        .interpolation_method = .linear_rgb,
     };
-    stop_list.addAssumeCapacity(0.75, .{ .rgba = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC } });
-    stop_list.addAssumeCapacity(0.25, .{ .rgba = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA } });
-    stop_list.addAssumeCapacity(0.9, .{ .rgba = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD } });
-    stop_list.addAssumeCapacity(0.5, .{ .rgba = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB } });
+    stop_list.addAssumeCapacity(0.75, .{ .rgb = .{ 1, 0, 0 } });
+    stop_list.addAssumeCapacity(0.25, .{ .rgb = .{ 0, 1, 0 } });
+    stop_list.addAssumeCapacity(0.9, .{ .rgb = .{ 0, 0, 1 } });
+    stop_list.addAssumeCapacity(0.5, .{ .hsl = .{ 300, 1, 0.5 } });
 
     const expected = [_]Stop{
-        .{ .idx = 1, .color = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA }, .offset = 0.25 },
-        .{ .idx = 3, .color = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB }, .offset = 0.5 },
-        .{ .idx = 0, .color = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC }, .offset = 0.75 },
-        .{ .idx = 2, .color = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD }, .offset = 0.9 },
+        .{ .idx = 1, .color = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(), .offset = 0.25 },
+        .{ .idx = 3, .color = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(), .offset = 0.5 },
+        .{ .idx = 0, .color = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(), .offset = 0.75 },
+        .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
     };
     try testing.expectEqualDeep(&expected, stop_list.l.items);
 
     // clamped
-    stop_list.addAssumeCapacity(-1.0, .{ .rgba = .{ .r = 0xEE, .g = 0xEE, .b = 0xEE, .a = 0xEE } });
-    stop_list.addAssumeCapacity(2.0, .{ .rgba = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF } });
+    stop_list.addAssumeCapacity(-1.0, .{ .srgb = .{ 1, 0, 0 } });
+    stop_list.addAssumeCapacity(2.0, .{ .srgb = .{ 0, 1, 0 } });
 
     const expected_clamped = [_]Stop{
-        .{ .idx = 4, .color = .{ .r = 0xEE, .g = 0xEE, .b = 0xEE, .a = 0xEE }, .offset = 0.0 },
-        .{ .idx = 1, .color = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA }, .offset = 0.25 },
-        .{ .idx = 3, .color = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB }, .offset = 0.5 },
-        .{ .idx = 0, .color = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC }, .offset = 0.75 },
-        .{ .idx = 2, .color = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD }, .offset = 0.9 },
-        .{ .idx = 5, .color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF }, .offset = 1.0 },
+        .{ .idx = 4, .color = colorpkg.SRGB.init(1, 0, 0, 1).asColor(), .offset = 0.0 },
+        .{ .idx = 1, .color = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(), .offset = 0.25 },
+        .{ .idx = 3, .color = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(), .offset = 0.5 },
+        .{ .idx = 0, .color = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(), .offset = 0.75 },
+        .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
+        .{ .idx = 5, .color = colorpkg.SRGB.init(0, 1, 0, 1).asColor(), .offset = 1.0 },
     };
     try testing.expectEqualDeep(&expected_clamped, stop_list.l.items);
 
     // identical offset
-    stop_list.addAssumeCapacity(0.25, .{ .rgba = .{ .r = 0x11, .g = 0x11, .b = 0x11, .a = 0x11 } });
+    stop_list.addAssumeCapacity(0.25, .{ .hsl = .{ 130, 0.9, 0.45 } });
 
     const expected_identical_offset = [_]Stop{
-        .{ .idx = 4, .color = .{ .r = 0xEE, .g = 0xEE, .b = 0xEE, .a = 0xEE }, .offset = 0.0 },
-        .{ .idx = 1, .color = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA }, .offset = 0.25 },
-        .{ .idx = 6, .color = .{ .r = 0x11, .g = 0x11, .b = 0x11, .a = 0x11 }, .offset = 0.25 },
-        .{ .idx = 3, .color = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB }, .offset = 0.5 },
-        .{ .idx = 0, .color = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC }, .offset = 0.75 },
-        .{ .idx = 2, .color = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD }, .offset = 0.9 },
-        .{ .idx = 5, .color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xFF }, .offset = 1.0 },
+        .{ .idx = 4, .color = colorpkg.SRGB.init(1, 0, 0, 1).asColor(), .offset = 0.0 },
+        .{ .idx = 1, .color = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(), .offset = 0.25 },
+        .{ .idx = 6, .color = colorpkg.HSL.init(130, 0.9, 0.45, 1).asColor(), .offset = 0.25 },
+        .{ .idx = 3, .color = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(), .offset = 0.5 },
+        .{ .idx = 0, .color = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(), .offset = 0.75 },
+        .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
+        .{ .idx = 5, .color = colorpkg.SRGB.init(0, 1, 0, 1).asColor(), .offset = 1.0 },
     };
     try testing.expectEqualDeep(&expected_identical_offset, stop_list.l.items);
 }
 
 test "Stop.List.search" {
     // Zero elements
-    var stop_list_zero: Stop.List = .{};
+    var stop_list_zero: Stop.List = .{
+        .interpolation_method = .linear_rgb,
+    };
     try testing.expectEqualDeep(Stop.List.SearchResult{
-        .c0 = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
-        .c1 = .{ .r = 0, .g = 0, .b = 0, .a = 0 },
-        .offset = 0.0,
+        .c0 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
+        .offset = 0,
     }, stop_list_zero.search(0.5));
 
     // Actual tests
     var stops: [5]Stop = undefined;
     var stop_list: Stop.List = .{
         .l = std.ArrayListUnmanaged(Stop).initBuffer(&stops),
+        .interpolation_method = .linear_rgb,
     };
 
-    stop_list.addAssumeCapacity(0.25, .{ .rgba = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA } });
-    stop_list.addAssumeCapacity(0.5, .{ .rgba = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB } });
-    stop_list.addAssumeCapacity(0.75, .{ .rgba = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC } });
-    stop_list.addAssumeCapacity(0.9, .{ .rgba = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD } });
+    stop_list.addAssumeCapacity(0.25, .{ .rgb = .{ 1, 0, 0 } });
+    stop_list.addAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+    stop_list.addAssumeCapacity(0.75, .{ .rgb = .{ 0, 0, 1 } });
+    stop_list.addAssumeCapacity(0.9, .{ .hsl = .{ 300, 1, 0.5 } });
 
     // basic
     var got = stop_list.search(0.6);
     var expected: Stop.List.SearchResult = .{
-        .c0 = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB },
-        .c1 = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC },
+        .c0 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .offset = 0.4,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // smaller interval
     got = stop_list.search(0.85);
     expected = .{
-        .c0 = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0xCC },
-        .c1 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
-        .offset = 2.0 / 3.0,
+        .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
+        .offset = 2.0 / 3.0 + math.floatEps(f32), // (rofl, in testing, this is the smallest fraction off of epsilon)
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // start
     got = stop_list.search(0.1);
     expected = .{
-        .c0 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
-        .c1 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.4,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // end
     got = stop_list.search(0.95);
     expected = .{
-        .c0 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
-        .c1 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
+        .c0 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
+        .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.05,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // exactly 0
     got = stop_list.search(0.0);
     expected = .{
-        .c0 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
-        .c1 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.0,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // exactly 1
     got = stop_list.search(1.0);
     expected = .{
-        .c0 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
-        .c1 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
+        .c0 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
+        .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.1,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // exact on stop
     got = stop_list.search(0.25);
     expected = .{
-        .c0 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
-        .c1 = .{ .r = 0xBB, .g = 0xBB, .b = 0xBB, .a = 0xBB },
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.0,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // clamped ( < 0)
     got = stop_list.search(-1.0);
     expected = .{
-        .c0 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
-        .c1 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.0,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // clamped ( > 1)
     got = stop_list.search(2.0);
     expected = .{
-        .c0 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
-        .c1 = .{ .r = 0xDD, .g = 0xDD, .b = 0xDD, .a = 0xDD },
+        .c0 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
+        .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.1,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // Double offset
     //
     // It's expected that identical stops get pulled up in the order that
     // they're added, so c0 here will be AA and c1 will be EE.
-    stop_list.addAssumeCapacity(0.25, .{ .rgba = .{ .r = 0xEE, .g = 0xEE, .b = 0xEE, .a = 0xEE } });
+    stop_list.addAssumeCapacity(0.25, .{ .hsl = .{ 130, 0.9, 0.45 } });
     got = stop_list.search(0.25);
     expected = .{
-        .c0 = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA, .a = 0xAA },
-        .c1 = .{ .r = 0xEE, .g = 0xEE, .b = 0xEE, .a = 0xEE },
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.HSL.init(130, 0.9, 0.45, 1).asColor(),
         .offset = 0.0,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f64));
+    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 }
 
 test "Linear.getPixel" {
-    const alloc = testing.allocator;
-    var gradient = Linear.init(0, 0, 99, 99);
-    defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgb = .{ .r = 255, .g = 0, .b = 0 } });
-    try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ .r = 0, .g = 255, .b = 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgb = .{ .r = 0, .g = 0, .b = 255 } });
+    {
+        const alloc = testing.allocator;
+        var gradient = Linear.init(0, 0, 99, 99, .linear_rgb);
+        defer gradient.deinit(alloc);
+        try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
+        try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+        try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
 
-    // Basic test along the gradient line, pretty much zero projection. You get
-    // to see the rounding fun that happens though with some of the midpoints.
-    // This is fine.
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(0, 0));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 127,
-        .g = 128,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(25, 25));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 255,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(49, 50));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 127,
-        .b = 128,
-        .a = 255,
-    } }, gradient.getPixel(74, 75));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .a = 255,
-    } }, gradient.getPixel(99, 99));
+        // Basic test along the gradient line, pretty much zero projection. You get
+        // to see the rounding fun that happens though with some of the midpoints.
+        // This is fine.
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 0,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(0, 0));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 126,
+            .g = 128,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(25, 25));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 255,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(49, 50));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 126,
+            .b = 128,
+            .a = 255,
+        } }, gradient.getPixel(74, 75));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 0,
+            .b = 255,
+            .a = 255,
+        } }, gradient.getPixel(99, 99));
 
-    // Projection tests, to show the effect of orthogonal projection for pixels
-    // not exactly on the gradient line (pretty much all pixels, really).
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 255,
-        .g = 0,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(-1, -1)); // Also tests past the line
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 127,
-        .g = 128,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(50, 0));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 255,
-        .b = 0,
-        .a = 255,
-    } }, gradient.getPixel(0, 99));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 127,
-        .b = 128,
-        .a = 255,
-    } }, gradient.getPixel(149, 0));
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 0,
-        .g = 0,
-        .b = 255,
-        .a = 255,
-    } }, gradient.getPixel(0, 199));
+        // Projection tests, to show the effect of orthogonal projection for pixels
+        // not exactly on the gradient line (pretty much all pixels, really).
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 0,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(-1, -1)); // Also tests past the line
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 126,
+            .g = 128,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(50, 0));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 255,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(0, 99));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 126,
+            .b = 128,
+            .a = 255,
+        } }, gradient.getPixel(149, 0));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 0,
+            .g = 0,
+            .b = 255,
+            .a = 255,
+        } }, gradient.getPixel(0, 199));
+    }
+
+    {
+        // HSL along the short path
+        const alloc = testing.allocator;
+        var gradient = Linear.init(0, 0, 99, 99, .{ .hsl = .shorter });
+        defer gradient.deinit(alloc);
+        try gradient.stops.add(alloc, 0, .{ .hsl = .{ 300, 1, 0.5 } });
+        try gradient.stops.add(alloc, 1, .{ .hsl = .{ 50, 1, 0.5 } });
+
+        // Basic test along the gradient line, pretty much zero projection. You get
+        // to see the rounding fun that happens though with some of the midpoints.
+        // This is fine.
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 0,
+            .b = 255,
+            .a = 255,
+        } }, gradient.getPixel(0, 0));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 0,
+            .b = 136,
+            .a = 255,
+        } }, gradient.getPixel(25, 25));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 0,
+            .b = 21,
+            .a = 255,
+        } }, gradient.getPixel(49, 50));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 96,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(74, 75));
+        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+            .r = 255,
+            .g = 212,
+            .b = 0,
+            .a = 255,
+        } }, gradient.getPixel(99, 99));
+    }
 }

@@ -5,6 +5,7 @@ const debug = @import("std").debug;
 const simd = @import("std").simd;
 const testing = @import("std").testing;
 
+const colorpkg = @import("color.zig");
 const gradient = @import("gradient.zig");
 const pixel = @import("pixel.zig");
 const Surface = @import("surface.zig").Surface;
@@ -14,6 +15,12 @@ const Surface = @import("surface.zig").Surface;
 /// extensions that Zig does not recognize. Architectures with SIMD registers
 /// smaller than 128 bits will just have the 8 vectors serialized into 2
 /// batches of 4.
+///
+/// Note that some packages outside of the compositor may use vectors wider
+/// than 16 bits, while still using this value. This is to ensure symmetry with
+/// the compositor to ensure those values can eventually flow to here. Care is
+/// taken to ensure optimal path on these values (e.g., completion of those
+/// operations before u16-aligned operations take place).
 pub const vector_length = @max(simd.suggestVectorLength(u16) orelse 8, 8); // TODO: scalar fallback?
 
 /// The list of supported operators.
@@ -415,9 +422,9 @@ const RGBA16Vec = struct {
     }
 
     fn fromGradient(src: StrideCompositor.Operation.Param.Gradient, idx: usize) RGBA16Vec {
-        var c0_vec: RGBA16Vec = undefined;
-        var c1_vec: RGBA16Vec = undefined;
-        var offsets_vec: @Vector(vector_length, f64) = undefined;
+        var c0_vec: [vector_length]colorpkg.Color = undefined;
+        var c1_vec: [vector_length]colorpkg.Color = undefined;
+        var offsets_vec: [vector_length]f32 = undefined;
         for (0..vector_length) |i| {
             switch (src.underlying) {
                 inline else => |g| {
@@ -425,65 +432,24 @@ const RGBA16Vec = struct {
                         src.x + @as(i32, @intCast(idx)) + @as(i32, @intCast(i)),
                         src.y,
                     ));
-                    c0_vec.r[i] = search_result.c0.r;
-                    c0_vec.g[i] = search_result.c0.g;
-                    c0_vec.b[i] = search_result.c0.b;
-                    c0_vec.a[i] = search_result.c0.a;
-                    c1_vec.r[i] = search_result.c1.r;
-                    c1_vec.g[i] = search_result.c1.g;
-                    c1_vec.b[i] = search_result.c1.b;
-                    c1_vec.a[i] = search_result.c1.a;
+                    c0_vec[i] = search_result.c0;
+                    c1_vec[i] = search_result.c1;
                     offsets_vec[i] = search_result.offset;
                 },
             }
         }
-
-        return .{
-            .r = lerpGradient(c0_vec.r, c1_vec.r, offsets_vec),
-            .g = lerpGradient(c0_vec.g, c1_vec.g, offsets_vec),
-            .b = lerpGradient(c0_vec.b, c1_vec.b, offsets_vec),
-            .a = lerpGradient(c0_vec.a, c1_vec.a, offsets_vec),
+        const result_rgba8 = switch (src.underlying) {
+            inline else => |g| g.stops.interpolation_method.interpolateEncodeVec(
+                c0_vec,
+                c1_vec,
+                offsets_vec,
+            ),
         };
-    }
-
-    fn lerpGradient(
-        a: @Vector(vector_length, u16),
-        b: @Vector(vector_length, u16),
-        t: @Vector(vector_length, f64),
-    ) @Vector(vector_length, u16) {
-        const max_u8_as_float: @Vector(vector_length, f64) = @splat(255.0);
-        const t_u16: @Vector(vector_length, u16) = @intFromFloat(max_u8_as_float * t);
-        // Only a small percentage of co-ordinates (~6% when testing using a
-        // 3-stop R -> G -> B linear gradient on a 100x100 surface, in varying
-        // directions) will usually fall on a mixed-conditional segment (where
-        // for all of the vector length, neither a <= b nor a > b holds). So we
-        // reduce here to see if we can fast-path it, before resorting to
-        // scalar operation on the vector.
-        //
-        // TODO: we need this somehow merged with the lerp in the gradient
-        // package so that we have a single source of truth that we can use as
-        // a pattern for other color functions that will be coming later.
-        var op: enum(u2) {
-            mixed,
-            le,
-            gt,
-        } = .mixed;
-        const all_le: u2 = @intFromBool(@reduce(.And, a <= b));
-        const all_gt: u2 = @intFromBool(@reduce(.And, a > b));
-        op = @enumFromInt(all_le | (all_gt << 1));
-        return switch (op) {
-            .le => a + (b - a) * t_u16 / max_u8_vec,
-            .gt => a - (a - b) * t_u16 / max_u8_vec,
-            .mixed => mixed: {
-                var result: @Vector(vector_length, u16) = undefined;
-                for (0..vector_length) |i| {
-                    result[i] = switch (a[i] <= b[i]) {
-                        true => @intCast(a[i] + (b[i] - a[i]) * t_u16[i] / max_u8_vec[i]),
-                        false => @intCast(a[i] - (a[i] - b[i]) * t_u16[i] / max_u8_vec[i]),
-                    };
-                }
-                break :mixed result;
-            },
+        return .{
+            .r = @intCast(result_rgba8.r),
+            .g = @intCast(result_rgba8.g),
+            .b = @intCast(result_rgba8.b),
+            .a = @intCast(result_rgba8.a),
         };
     }
 
