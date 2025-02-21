@@ -277,6 +277,11 @@ fn paintDirect(
                         .x = start_x,
                         .y = y,
                     } },
+                    .radial_gradient => .{ .gradient = .{
+                        .underlying = .{ .radial = pattern.radial_gradient },
+                        .x = start_x,
+                        .y = y,
+                    } },
                 },
             }});
         }
@@ -375,6 +380,7 @@ fn paintComposite(
             .dst = switch (pattern.*) {
                 .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
                 .linear_gradient => .{ .gradient = .{ .linear = pattern.linear_gradient } },
+                .radial_gradient => .{ .gradient = .{ .radial = pattern.radial_gradient } },
             },
             .src = .{ .surface = &mask_sfc },
         },
