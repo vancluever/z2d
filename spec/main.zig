@@ -75,6 +75,8 @@ const _059_stroke_star_gradient = @import("059_stroke_star_gradient.zig");
 const _060_ghostty_logo = @import("060_ghostty_logo.zig");
 const _061_linear_gradient = @import("061_linear_gradient.zig");
 const _062_hsl_gradient = @import("062_hsl_gradient.zig");
+const _063_radial_gradient = @import("063_radial_gradient.zig");
+const _064_radial_source = @import("064_radial_source.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -144,6 +146,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _060_ghostty_logo);
     try compositorExportRun(alloc, _061_linear_gradient);
     try compositorExportRun(alloc, _062_hsl_gradient);
+    try compositorExportRun(alloc, _063_radial_gradient);
+    try pathExportRun(alloc, _064_radial_source);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -394,6 +398,14 @@ test "061_linear_gradient" {
 
 test "062_hsl_gradient" {
     try compositorTestRun(testing.allocator, _062_hsl_gradient);
+}
+
+test "063_radial_gradient" {
+    try compositorTestRun(testing.allocator, _063_radial_gradient);
+}
+
+test "064_radial_source" {
+    try pathTestRun(testing.allocator, _064_radial_source);
 }
 
 //////////////////////////////////////////////////////////////////////////////

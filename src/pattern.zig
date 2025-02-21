@@ -26,18 +26,21 @@ const Pixel = @import("pixel.zig").Pixel;
 pub const PatternType = enum {
     opaque_pattern,
     linear_gradient,
+    radial_gradient,
 };
 
 /// Represents an interface as a union of all patterns.
 pub const Pattern = union(PatternType) {
     opaque_pattern: OpaquePattern,
     linear_gradient: *const gradient.Linear,
+    radial_gradient: *const gradient.Radial,
 
     /// Gets the pixel data at the co-ordinates specified.
     pub fn getPixel(self: Pattern, x: i32, y: i32) Pixel {
         return switch (self) {
             .opaque_pattern => |s| s.pixel,
             .linear_gradient => |s| s.getPixel(x, y),
+            .radial_gradient => |s| s.getPixel(x, y),
         };
     }
 };
