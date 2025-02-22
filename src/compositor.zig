@@ -48,6 +48,7 @@ pub const Operator = enum {
 pub const GradientParam = union(gradient.GradientType) {
     linear: *const gradient.Linear,
     radial: *const gradient.Radial,
+    conic: *const gradient.Conic,
 };
 
 /// Compositor functionality that operates at surface-scoped levels of
