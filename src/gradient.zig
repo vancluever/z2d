@@ -33,6 +33,7 @@ const vector_length = @import("compositor.zig").vector_length;
 pub const GradientType = enum {
     linear,
     radial,
+    conic,
 };
 
 /// Represents a linear gradient along a line.
@@ -429,6 +430,112 @@ pub const Radial = struct {
     }
 };
 
+/// Represents a conic (or "sweep") gradient, centered at a point and offset at
+/// a certain point. The gradient sweeps the full circle across the stops
+/// defined.
+pub const Conic = struct {
+    center: Point,
+    angle: f64,
+
+    /// The stops contained within the gradient. Add stops using
+    /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
+    stops: Stop.List,
+
+    /// Initializes a conic gradient centered at `(x, y)` with the offset angle
+    /// of `angle` (supplied in radians, normalized to the 0 to 2 * math.pi
+    /// range).
+    ///
+    /// The gradient runs in the interpolation color space specified, with all
+    /// color stops converted to that space for interpolation.
+    ///
+    /// Before using the gradient, it's recommended to add some stops:
+    ///
+    /// ```
+    /// var conic = Conic.init(50, 50, math.pi / 4, .linear_rgb);
+    /// defer conic.deinit(alloc);
+    /// try conic.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
+    /// try conic.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+    /// try conic.stops.add(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
+    /// ...
+    /// ```
+    ///
+    /// As shown in the above example, `deinit` should be called to release any
+    /// stops that have been added using `Stop.List.add`.
+    pub fn init(
+        x: f64,
+        y: f64,
+        angle: f64,
+        method: InterpolationMethod,
+    ) Conic {
+        return initBuffer(
+            x,
+            y,
+            angle,
+            &[_]Stop{},
+            method,
+        );
+    }
+
+    /// Initializes the gradient with externally allocated memory for the
+    /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
+    /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
+    pub fn initBuffer(
+        x: f64,
+        y: f64,
+        angle: f64,
+        stops: []Stop,
+        method: InterpolationMethod,
+    ) Conic {
+        return .{
+            .center = .{ .x = x, .y = y },
+            .angle = @mod(angle, math.pi * 2),
+            .stops = .{
+                .l = std.ArrayListUnmanaged(Stop).initBuffer(stops),
+                .interpolation_method = method,
+            },
+        };
+    }
+
+    /// Releases any stops that have been added using `Stop.List.add`. Must use
+    /// the same allocator that was used there.
+    pub fn deinit(self: *Conic, alloc: mem.Allocator) void {
+        self.stops.deinit(alloc);
+    }
+
+    /// Returns this gradient as a pattern.
+    pub fn asPatternInterface(self: *const Conic) Pattern {
+        return .{ .conic_gradient = self };
+    }
+
+    /// Gets the pixel calculated for the gradient at `(x, y)`.
+    pub fn getPixel(self: *const Conic, x: i32, y: i32) pixel.Pixel {
+        const search_result = self.stops.search(self.getOffset(x, y));
+        return self.stops.interpolation_method.interpolateEncode(
+            search_result.c0,
+            search_result.c1,
+            search_result.offset,
+        ).asPixel();
+    }
+
+    /// Performs orthogonal projection on the gradient, transforming the
+    /// supplied (x, y) co-ordinates into an offset. This offset can be used to
+    /// manually search on the gradient's stops using `Stop.List.search`.
+    ///
+    /// ```
+    /// const offset = gradient.getOffset(50, 50);
+    /// const result = gradient.stops.search(offset);
+    /// ... // (lerp off of search result or perform other operations)
+    /// ```
+    pub fn getOffset(self: *const Conic, x: i32, y: i32) f32 {
+        const px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
+        const py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        const dx = px - self.center.x;
+        const dy = py - self.center.y;
+        const angle = @mod(math.atan2(dy, dx) - self.angle, math.pi * 2);
+        return @floatCast(angle / (math.pi * 2));
+    }
+};
+
 /// Represents a color stop in a gradient.
 pub const Stop = struct {
     idx: usize,
@@ -455,9 +562,20 @@ pub const Stop = struct {
         /// clamped to `0.0` and `1.0`.
         ///
         /// If stops are added at identical offsets, they will be stored in the
-        /// order they were added. Looking up that particular offset will yield
-        /// the first stop given, but going past that stop will start the next
-        /// blend at last stop added.
+        /// order they were added. This can be used to define "hard stops" -
+        /// parts of gradients that transition from one color to another
+        /// directly without interpolation.
+        ///
+        /// Note that hard stops are not anti-aliased. To achieve a similar
+        /// smoothing effect, one can add a slightly small offset to one side
+        /// of the hard stop to produce a small amount of interpolation:
+        ///
+        /// ```
+        /// try gradient.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
+        /// try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 1, 0, 0 } });
+        /// try gradient.stops.add(alloc, 0.501, .{ .rgb = .{ 0, 1, 0 } });
+        /// try gradient.stops.add(alloc, 1,   .{ .rgb = .{ 0, 1, 0 } });
+        /// ```
         pub fn add(
             self: *List,
             alloc: mem.Allocator,
@@ -541,17 +659,6 @@ pub const Stop = struct {
                     left = mid + 1;
                     continue;
                 }
-            }
-
-            // Our mid is now our "match": start = mid, end = mid + 1, at least
-            // on our non-edge case. We do need to do some checking on edge
-            // cases though, so do that now.
-            while (mid > 0 and self.l.items[mid].offset == self.l.items[mid - 1].offset) {
-                // We guarantee an order here for identical stops in that the
-                // last one added is the last one returned, so in the event
-                // that we land on a section of identical items, we need to
-                // rewind until we are at the first entry.
-                mid -= 1;
             }
 
             if (mid == self.l.items.len - 1) {
@@ -770,19 +877,66 @@ test "Stop.List.search" {
     try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
 
     // Double offset
-    //
-    // It's expected that identical stops get pulled up in the order that
-    // they're added, so c0 here will be AA and c1 will be EE.
     stop_list.addAssumeCapacity(0.25, .{ .hsl = .{ 130, 0.9, 0.45 } });
     got = stop_list.search(0.25);
     expected = .{
-        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
-        .c1 = colorpkg.HSL.init(130, 0.9, 0.45, 1).asColor(),
+        .c0 = colorpkg.HSL.init(130, 0.9, 0.45, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.0,
     };
     try testing.expectEqualDeep(expected.c0, got.c0);
     try testing.expectEqualDeep(expected.c1, got.c1);
     try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+}
+
+test "Stop.List.search, hard stops" {
+    var stop_buffer: [6]Stop = undefined;
+    var stops: Stop.List = .{
+        .l = std.ArrayListUnmanaged(Stop).initBuffer(&stop_buffer),
+        .interpolation_method = .linear_rgb,
+    };
+    stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    stops.addAssumeCapacity(1.0 / 3.0, .{ .rgb = .{ 1, 0, 0 } });
+    stops.addAssumeCapacity(1.0 / 3.0, .{ .rgb = .{ 0, 1, 0 } });
+    stops.addAssumeCapacity(2.0 / 3.0, .{ .rgb = .{ 0, 1, 0 } });
+    stops.addAssumeCapacity(2.0 / 3.0, .{ .rgb = .{ 0, 0, 1 } });
+    stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
+
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .offset = 0.0,
+    }, stops.search(0));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .offset = 0.5,
+    }, stops.search(1.0 / 6.0));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
+        .offset = 0.0,
+    }, stops.search(1.0 / 3.0));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
+        .offset = 0.49999997,
+    }, stops.search(0.5));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .offset = 0.0,
+    }, stops.search(2.0 / 3.0));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .offset = 0.4999999,
+    }, stops.search(5.0 / 6.0));
+    try testing.expectEqualDeep(Stop.List.SearchResult{
+        .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
+        .offset = 0,
+    }, stops.search(1));
 }
 
 test "Linear.getPixel" {
@@ -1237,4 +1391,212 @@ test "Radial.getPixel" {
         .b = 0,
         .a = 255,
     } }, gradient.getPixel(49, 74));
+}
+
+test "Conic.init" {
+    const name = "Conic.init";
+    const cases = [_]struct {
+        name: []const u8,
+        expected: Conic,
+        x: f64,
+        y: f64,
+        angle: f64,
+        method: InterpolationMethod,
+    }{
+        .{
+            .name = "basic",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi / 4.0,
+                .stops = .{ .interpolation_method = .linear_rgb },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi / 4.0,
+            .method = .linear_rgb,
+        },
+        .{
+            .name = "angle over 2 x pi",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi * 0.5,
+                .stops = .{ .interpolation_method = .linear_rgb },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi * 2.5,
+            .method = .linear_rgb,
+        },
+        .{
+            .name = "negative angle",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi * 1.5,
+                .stops = .{ .interpolation_method = .linear_rgb },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi * -0.5,
+            .method = .linear_rgb,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqualDeep(tc.expected, Conic.init(
+                tc.x,
+                tc.y,
+                tc.angle,
+                tc.method,
+            ));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "Conic.initBuffer" {
+    const name = "Conic.initBuffer";
+    var buf = [_]Stop{
+        .{
+            .idx = 0,
+            .color = Color.init(.{ .rgb = .{ 1, 0, 0 } }),
+            .offset = 0.5,
+        },
+    };
+    const cases = [_]struct {
+        name: []const u8,
+        expected: Conic,
+        x: f64,
+        y: f64,
+        angle: f64,
+        buffer: []Stop,
+        method: InterpolationMethod,
+    }{
+        .{
+            .name = "basic",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi / 4.0,
+                .stops = .{
+                    .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
+                    .interpolation_method = .linear_rgb,
+                },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi / 4.0,
+            .buffer = &buf,
+            .method = .linear_rgb,
+        },
+        .{
+            .name = "angle over 2 x pi",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi * 0.5,
+                .stops = .{
+                    .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
+                    .interpolation_method = .linear_rgb,
+                },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi * 2.5,
+            .buffer = &buf,
+            .method = .linear_rgb,
+        },
+        .{
+            .name = "negative angle",
+            .expected = .{
+                .center = .{ .x = 49, .y = 49 },
+                .angle = math.pi * 1.5,
+                .stops = .{
+                    .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
+                    .interpolation_method = .linear_rgb,
+                },
+            },
+            .x = 49,
+            .y = 49,
+            .angle = math.pi * -0.5,
+            .buffer = &buf,
+            .method = .linear_rgb,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqualDeep(tc.expected, Conic.initBuffer(
+                tc.x,
+                tc.y,
+                tc.angle,
+                tc.buffer,
+                tc.method,
+            ));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "Conic.getOffset" {
+    const name = "Conic.getOffset";
+    const cases = [_]struct {
+        name: []const u8,
+        expected: f32,
+        center_x: f64,
+        center_y: f64,
+        angle: f64,
+        x: i32,
+        y: i32,
+    }{
+        .{
+            .name = "basic",
+            .expected = 0.25,
+            .center_x = 49.5,
+            .center_y = 49,
+            .angle = 0,
+            .x = 49,
+            .y = 99,
+        },
+        .{
+            .name = "relative start",
+            .expected = 0.125,
+            .center_x = 49.5,
+            .center_y = 49,
+            .angle = math.pi / 4.0,
+            .x = 49,
+            .y = 99,
+        },
+        .{
+            .name = "relative ccw from start",
+            .expected = 0.875,
+            .center_x = 49,
+            .center_y = 49.5,
+            .angle = math.pi / 4.0,
+            .x = 99,
+            .y = 49,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            var gradient = Conic.init(
+                tc.center_x,
+                tc.center_y,
+                tc.angle,
+                .linear_rgb,
+            );
+            try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "Conic.getPixel" {
+    const alloc = testing.allocator;
+    var gradient = Conic.init(49, 49.5, 0, .linear_rgb);
+    defer gradient.deinit(alloc);
+    try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
+    try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 1, 0 } });
+    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        .r = 127,
+        .g = 127,
+        .b = 0,
+        .a = 255,
+    } }, gradient.getPixel(0, 49));
 }

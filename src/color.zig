@@ -486,12 +486,18 @@ pub const HSL = struct {
 
     /// Returns a value with the fields appropriately set.
     ///
-    /// * `h` (hue) is normalized to the 0-360 range.
+    /// * `h` (hue) is normalized to the 0-360 range (see below).
     /// * `s` (saturation), `l` (lightness), and `a` (alpha) are clamped
     /// between 0 and 1.
+    ///
+    /// Note that angles over 360 degrees are fully normalized to a 0-359 range
+    /// (e.g., hue of 720 is converted to 0). Specifying a hue of 360 is an
+    /// exception to this and is not wrapped so that one can interpolate the
+    /// whole of the hue range (example: from 0 degrees (red) to 360 degrees
+    /// (red).
     pub fn init(h: f32, s: f32, l: f32, a: f32) HSL {
         return .{
-            .h = @mod(h, 360),
+            .h = if (h < 0 or h > 360) @mod(h, 360) else h,
             .s = math.clamp(s, 0, 1),
             .l = math.clamp(l, 0, 1),
             .a = math.clamp(a, 0, 1),
@@ -1551,6 +1557,18 @@ test "HSL.init" {
     }
 
     {
+        // Exactly 360 degrees
+        const got = HSL.init(360, 1, 0.5, 1);
+        const expected: HSL = .{
+            .h = 360,
+            .s = 1,
+            .l = 0.5,
+            .a = 1,
+        };
+        try testing.expectEqualDeep(expected, got);
+    }
+
+    {
         // Clamped (above 360 degrees)
         const got = HSL.init(540, -1.25, 2.0, -3);
         const expected: HSL = .{
@@ -1903,6 +1921,14 @@ test "HSL.interpolate, HSL.interpolateEncode" {
             .a = HSL.init(85.94, 0.6879, 0.6693, 0.4),
             .b = HSL.init(337.7, 0.8935, 0.535, 0.6),
             .method = .shorter,
+            .t = 0.5,
+        },
+        .{
+            .name = "increasing path, 0 to 360 degrees",
+            .expected = HSL.init(180, 1, 0.5, 1),
+            .a = HSL.init(0, 1, 0.5, 1),
+            .b = HSL.init(360, 1, 0.5, 1),
+            .method = .increasing,
             .t = 0.5,
         },
     };
