@@ -3,9 +3,10 @@
 GRADIENTS
 
 This release marks another major feature addition for z2d - the addition of
-gradients to the library. Consumers can now utilize linear and radial gradients
-as patterns for filling, stroking, and lower-level composition (see below for
-details on the lower-level compositor changes that make this possible).
+gradients to the library. Consumers can now utilize linear, radial, and conic
+gradients as patterns for filling, stroking, and lower-level composition (see
+below for details on the lower-level compositor changes that make this
+possible).
 
 Consult the documentation and some of the examples in `spec/` for details on
 using gradients.
