@@ -33,9 +33,9 @@ pub const PatternType = enum {
 /// Represents an interface as a union of all patterns.
 pub const Pattern = union(PatternType) {
     opaque_pattern: OpaquePattern,
-    linear_gradient: *const gradient.Linear,
-    radial_gradient: *const gradient.Radial,
-    conic_gradient: *const gradient.Conic,
+    linear_gradient: *gradient.Linear,
+    radial_gradient: *gradient.Radial,
+    conic_gradient: *gradient.Conic,
 
     /// Gets the pixel data at the co-ordinates specified.
     pub fn getPixel(self: Pattern, x: i32, y: i32) Pixel {

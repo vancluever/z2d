@@ -19,4 +19,5 @@ pub fn runCases(name: []const u8, cases: anytype, f: *const fn (case: anytype) T
 pub const TestingError = error{
     TestExpectedEqual,
     TestExpectedApproxEqAbs,
+    InvalidMatrix, // Transformation.Error.InvalidMatrix
 };
