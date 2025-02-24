@@ -72,7 +72,20 @@ pub fn getSource(self: *Context) Pattern {
 /// The default pattern is an RGBA opaque black pixel source (the equivalent of
 /// running `setSourceToPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 }
 /// })`).
+///
+/// Note that for patterns that take a transformation matrix (e.g., gradients),
+/// this locks the current transformation matrix (CTM) to the gradient. Any
+/// further changes to the CTM will not affect the pattern). Additionally, the
+/// inverse of the CTM is applied, and the whole operation is a no-op if the
+/// CTM is not invertible.
 pub fn setSource(self: *Context, source: Pattern) void {
+    switch (source) {
+        inline .linear_gradient,
+        .radial_gradient,
+        .conic_gradient,
+        => |g| g.setTransformation(self.transformation) catch return,
+        else => {},
+    }
     self.pattern = source;
 }
 

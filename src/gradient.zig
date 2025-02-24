@@ -23,6 +23,7 @@ const Color = colorpkg.Color;
 const InterpolationMethod = colorpkg.InterpolationMethod;
 const Pattern = @import("pattern.zig").Pattern;
 const Point = @import("internal/Point.zig");
+const Transformation = @import("Transformation.zig");
 
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
@@ -40,6 +41,7 @@ pub const GradientType = enum {
 pub const Linear = struct {
     start: Point,
     end: Point,
+    transformation: Transformation = Transformation.identity,
 
     /// The stops contained within the gradient. Add stops using
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
@@ -108,8 +110,24 @@ pub const Linear = struct {
     }
 
     /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *const Linear) Pattern {
+    pub fn asPatternInterface(self: *Linear) Pattern {
         return .{ .linear_gradient = self };
+    }
+
+    /// Sets the transformation matrix for this gradient.
+    ///
+    /// When working with this function, keep in mind that gradients are
+    /// expected to operate in _pattern space_ in the overall pattern space ->
+    /// user space -> device space co-ordinate model. This effectively means
+    /// that the inverse of whatever matrix is supplied here is used. If
+    /// working with gradients directly and you are looking for a
+    /// transformation, make sure you keep this in mind when setting the matrix
+    /// (either apply the inverse or manually invert your transformations
+    /// before applying them).
+    ///
+    /// `Context` runs this function when `Context.setPattern` is called.
+    pub fn setTransformation(self: *Linear, tr: Transformation) Transformation.Error!void {
+        self.transformation = try tr.inverse();
     }
 
     /// Gets the pixel calculated for the gradient at `(x, y)`.
@@ -136,12 +154,16 @@ pub const Linear = struct {
     /// and is valid to give to `Stop.List.search` (will return a transparent
     /// black color result).
     pub fn getOffset(self: *const Linear, x: i32, y: i32) f32 {
-        const px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
-        const py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
+        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        if (!self.transformation.equal(Transformation.identity)) {
+            self.transformation.userToDevice(&px, &py);
+        }
         const start_to_end_dx = self.end.x - self.start.x;
         const start_to_end_dy = self.end.y - self.start.y;
         const gradient_distance = dotSq(start_to_end_dx, start_to_end_dy);
         if (gradient_distance == 0) return -1;
+        const inv_dist = 1 / gradient_distance;
         const start_to_p_dx = px - self.start.x;
         const start_to_p_dy = py - self.start.y;
         return @floatCast(math.clamp(
@@ -150,7 +172,7 @@ pub const Linear = struct {
                 2,
                 .{ start_to_end_dx, start_to_end_dy },
                 .{ start_to_p_dx, start_to_p_dy },
-            ) / gradient_distance,
+            ) * inv_dist,
             0,
             1,
         ));
@@ -165,6 +187,7 @@ pub const Radial = struct {
     inner_radius: f64,
     outer: Point,
     outer_radius: f64,
+    transformation: Transformation = Transformation.identity,
 
     // pre-calculation fields for finding the t value that can be done ahead of
     // time
@@ -278,8 +301,24 @@ pub const Radial = struct {
     }
 
     /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *const Radial) Pattern {
+    pub fn asPatternInterface(self: *Radial) Pattern {
         return .{ .radial_gradient = self };
+    }
+
+    /// Sets the transformation matrix for this gradient.
+    ///
+    /// When working with this function, keep in mind that gradients are
+    /// expected to operate in _pattern space_ in the overall pattern space ->
+    /// user space -> device space co-ordinate model. This effectively means
+    /// that the inverse of whatever matrix is supplied here is used. If
+    /// working with gradients directly and you are looking for a
+    /// transformation, make sure you keep this in mind when setting the matrix
+    /// (either apply the inverse or manually invert your transformations
+    /// before applying them).
+    ///
+    /// `Context` runs this function when `Context.setPattern` is called.
+    pub fn setTransformation(self: *Radial, tr: Transformation) Transformation.Error!void {
+        self.transformation = try tr.inverse();
     }
 
     /// Gets the pixel calculated for the gradient at `(x, y)`.
@@ -427,8 +466,13 @@ pub const Radial = struct {
         // least be able to catch it without this).
         if (self.inner_radius == 0 and self.outer_radius == 0) return -1;
 
-        const pdx: f64 = @as(f64, @floatFromInt(x)) + 0.5 - self.inner.x;
-        const pdy: f64 = @as(f64, @floatFromInt(y)) + 0.5 - self.inner.y;
+        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
+        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        if (!self.transformation.equal(Transformation.identity)) {
+            self.transformation.userToDevice(&px, &py);
+        }
+        const pdx: f64 = px - self.inner.x;
+        const pdy: f64 = py - self.inner.y;
 
         const b = dot(f64, 3, .{ pdx, pdy, self.inner_radius }, .{ self.cdx, self.cdy, self.dr });
         const c = dot(f64, 3, .{ pdx, pdy, -self.inner_radius }, .{ pdx, pdy, self.inner_radius });
@@ -466,6 +510,7 @@ pub const Radial = struct {
 pub const Conic = struct {
     center: Point,
     angle: f64,
+    transformation: Transformation = Transformation.identity,
 
     /// The stops contained within the gradient. Add stops using
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
@@ -533,8 +578,24 @@ pub const Conic = struct {
     }
 
     /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *const Conic) Pattern {
+    pub fn asPatternInterface(self: *Conic) Pattern {
         return .{ .conic_gradient = self };
+    }
+
+    /// Sets the transformation matrix for this gradient.
+    ///
+    /// When working with this function, keep in mind that gradients are
+    /// expected to operate in _pattern space_ in the overall pattern space ->
+    /// user space -> device space co-ordinate model. This effectively means
+    /// that the inverse of whatever matrix is supplied here is used. If
+    /// working with gradients directly and you are looking for a
+    /// transformation, make sure you keep this in mind when setting the matrix
+    /// (either apply the inverse or manually invert your transformations
+    /// before applying them).
+    ///
+    /// `Context` runs this function when `Context.setPattern` is called.
+    pub fn setTransformation(self: *Conic, tr: Transformation) Transformation.Error!void {
+        self.transformation = try tr.inverse();
     }
 
     /// Gets the pixel calculated for the gradient at `(x, y)`.
@@ -547,9 +608,10 @@ pub const Conic = struct {
         ).asPixel();
     }
 
-    /// Performs orthogonal projection on the gradient, transforming the
-    /// supplied (x, y) co-ordinates into an offset. This offset can be used to
-    /// manually search on the gradient's stops using `Stop.List.search`.
+    /// Transforms the supplied (x, y) co-ordinates into an offset based on the
+    /// angular position of the point on the gradient's circle. This offset can
+    /// be used to manually search on the gradient's stops using
+    /// `Stop.List.search`.
     ///
     /// ```
     /// const offset = gradient.getOffset(50, 50);
@@ -557,8 +619,11 @@ pub const Conic = struct {
     /// ... // (lerp off of search result or perform other operations)
     /// ```
     pub fn getOffset(self: *const Conic, x: i32, y: i32) f32 {
-        const px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
-        const py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
+        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        if (!self.transformation.equal(Transformation.identity)) {
+            self.transformation.userToDevice(&px, &py);
+        }
         const dx = px - self.center.x;
         const dy = py - self.center.y;
         const angle = @mod(math.atan2(dy, dx) - self.angle, math.pi * 2);
@@ -969,6 +1034,57 @@ test "Stop.List.search, hard stops" {
     }, stops.search(1));
 }
 
+test "Linear.getOffset" {
+    const name = "Linear.getOffset";
+    const cases = [_]struct {
+        name: []const u8,
+        expected: f32,
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        matrix: Transformation = Transformation.identity,
+        x: i32,
+        y: i32,
+    }{
+        .{
+            .name = "basic",
+            .expected = 0.5,
+            .x0 = 0,
+            .y0 = 0,
+            .x1 = 49,
+            .y1 = 49,
+            .x = 24,
+            .y = 24,
+        },
+        .{
+            .name = "with matrix",
+            .expected = 0.24872449,
+            .x0 = 0,
+            .y0 = 0,
+            .x1 = 49,
+            .y1 = 49,
+            .matrix = Transformation.identity.scale(2, 4),
+            .x = 24,
+            .y = 48,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            var gradient = Linear.init(
+                tc.x0,
+                tc.y0,
+                tc.x1,
+                tc.y1,
+                .linear_rgb,
+            );
+            try gradient.setTransformation(tc.matrix);
+            try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
 test "Linear.getPixel" {
     {
         const alloc = testing.allocator;
@@ -1104,6 +1220,7 @@ test "Radial.getOffset" {
         outer_y: f64,
         outer_radius: f64,
         interpolation_method: InterpolationMethod,
+        matrix: Transformation = Transformation.identity,
         x: i32,
         y: i32,
     }{
@@ -1172,6 +1289,20 @@ test "Radial.getOffset" {
             .x = 19,
             .y = 19,
         },
+        .{
+            .name = "with matrix",
+            .expected = 0.7124123,
+            .inner_x = 49,
+            .inner_y = 49,
+            .inner_radius = 0,
+            .outer_x = 49,
+            .outer_y = 49,
+            .outer_radius = 50,
+            .interpolation_method = .linear_rgb,
+            .matrix = Transformation.identity.scale(2, 4),
+            .x = 148,
+            .y = 296,
+        },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
@@ -1184,6 +1315,7 @@ test "Radial.getOffset" {
                 tc.outer_radius,
                 tc.interpolation_method,
             );
+            try gradient.setTransformation(tc.matrix);
             try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
         }
     };
@@ -1572,6 +1704,7 @@ test "Conic.getOffset" {
         center_x: f64,
         center_y: f64,
         angle: f64,
+        matrix: Transformation = Transformation.identity,
         x: i32,
         y: i32,
     }{
@@ -1602,6 +1735,16 @@ test "Conic.getOffset" {
             .x = 99,
             .y = 49,
         },
+        .{
+            .name = "with matrix",
+            .expected = 0.25079378,
+            .center_x = 49.5,
+            .center_y = 49,
+            .angle = 0,
+            .matrix = Transformation.identity.scale(2, 4),
+            .x = 98,
+            .y = 396,
+        },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
@@ -1611,6 +1754,7 @@ test "Conic.getOffset" {
                 tc.angle,
                 .linear_rgb,
             );
+            try gradient.setTransformation(tc.matrix);
             try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
         }
     };
@@ -1629,4 +1773,18 @@ test "Conic.getPixel" {
         .b = 0,
         .a = 255,
     } }, gradient.getPixel(0, 49));
+}
+
+test "Linear.setTransformation" {
+    const matrix = Transformation.identity.scale(2, 3);
+    var gradient = Linear.init(1, 1, 10, 10, .linear_rgb);
+    try gradient.setTransformation(matrix);
+    try testing.expectEqualDeep(Linear{
+        .start = .{ .x = 1, .y = 1 },
+        .end = .{ .x = 10, .y = 10 },
+        .transformation = try matrix.inverse(),
+        .stops = .{
+            .interpolation_method = .linear_rgb,
+        },
+    }, gradient);
 }
