@@ -144,10 +144,16 @@ Currently:
      patterns to shapes, and zero-length dash stops to draw dotted lines.
  * Transformations: rotate, scale, translate, and other operations via direct
    manipulations of the affine matrix.
- * Simple composition:
-   - Currently only opaque pixel sources supported, gradients/etc planned.
+ * Composition:
+   - Single pixel sources and linear, radial, and conic gradients supported.
+     Access to lower-level compositor primitives is supplied to allow for
+     manipulation of surfaces outside of higher-level drawing operations.
  * Pixel formats:
    - RGBA, RGB, and alpha-only in 8, 4, 2, and 1-bit formats.
+ * Color spaces:
+   - Linear, sRGB, and HSL currently supported for specifying high-level color.
+     Interpolation supported in certain color spaces (conversion and
+     interpolation always done in linear space). More color spaces are planed.
  * Exporting:
    - Rudimentary PNG export supported; alpha-channel formats export to
      greyscale.

@@ -71,6 +71,15 @@ const _055_stroke_miter_dashed = @import("055_stroke_miter_dashed.zig");
 const _056_stroke_star_dashed = @import("056_stroke_star_dashed.zig");
 const _057_stroke_bezier_dashed = @import("057_stroke_bezier_dashed.zig");
 const _058_stroke_misc_dashes = @import("058_stroke_misc_dashes.zig");
+const _059_stroke_star_gradient = @import("059_stroke_star_gradient.zig");
+const _060_ghostty_logo = @import("060_ghostty_logo.zig");
+const _061_linear_gradient = @import("061_linear_gradient.zig");
+const _062_hsl_gradient = @import("062_hsl_gradient.zig");
+const _063_radial_gradient = @import("063_radial_gradient.zig");
+const _064_radial_source = @import("064_radial_source.zig");
+const _065_conic_gradient = @import("065_conic_gradient.zig");
+const _066_conic_pie_gradient = @import("066_conic_pie_gradient.zig");
+const _067_gradient_transforms = @import("067_gradient_transforms.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -136,6 +145,15 @@ pub fn main() !void {
     try pathExportRun(alloc, _056_stroke_star_dashed);
     try pathExportRun(alloc, _057_stroke_bezier_dashed);
     try pathExportRun(alloc, _058_stroke_misc_dashes);
+    try pathExportRun(alloc, _059_stroke_star_gradient);
+    try pathExportRun(alloc, _060_ghostty_logo);
+    try compositorExportRun(alloc, _061_linear_gradient);
+    try compositorExportRun(alloc, _062_hsl_gradient);
+    try compositorExportRun(alloc, _063_radial_gradient);
+    try pathExportRun(alloc, _064_radial_source);
+    try compositorExportRun(alloc, _065_conic_gradient);
+    try pathExportRun(alloc, _066_conic_pie_gradient);
+    try pathExportRun(alloc, _067_gradient_transforms);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -370,6 +388,42 @@ test "057_stroke_bezier_dashed" {
 
 test "058_stroke_misc_dashes" {
     try pathTestRun(testing.allocator, _058_stroke_misc_dashes);
+}
+
+test "059_stroke_star_gradient" {
+    try pathTestRun(testing.allocator, _059_stroke_star_gradient);
+}
+
+test "060_ghostty_logo" {
+    try pathTestRun(testing.allocator, _060_ghostty_logo);
+}
+
+test "061_linear_gradient" {
+    try compositorTestRun(testing.allocator, _061_linear_gradient);
+}
+
+test "062_hsl_gradient" {
+    try compositorTestRun(testing.allocator, _062_hsl_gradient);
+}
+
+test "063_radial_gradient" {
+    try compositorTestRun(testing.allocator, _063_radial_gradient);
+}
+
+test "064_radial_source" {
+    try pathTestRun(testing.allocator, _064_radial_source);
+}
+
+test "065_conic_gradient" {
+    try compositorTestRun(testing.allocator, _065_conic_gradient);
+}
+
+test "066_conic_pie_gradient" {
+    try pathTestRun(testing.allocator, _066_conic_pie_gradient);
+}
+
+test "067_gradient_transforms" {
+    try pathTestRun(testing.allocator, _067_gradient_transforms);
 }
 
 //////////////////////////////////////////////////////////////////////////////

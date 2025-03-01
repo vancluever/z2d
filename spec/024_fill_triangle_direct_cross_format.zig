@@ -17,7 +17,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     var context = try z2d.Context.init(alloc, &sfc);
     defer context.deinit();
-    context.setSource(.{ .rgba = .{ .r = 0xFF, .g = 0x8a, .b = 0xa5, .a = 0xFF } });
+    context.setSourceToPixel(.{ .rgba = .{ .r = 0xFF, .g = 0x8a, .b = 0xa5, .a = 0xFF } });
     context.setAntiAliasingMode(aa_mode);
 
     const margin = 10;

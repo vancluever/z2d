@@ -15,11 +15,13 @@
 //! details.
 
 const std = @import("std");
+const debug = @import("std").debug;
 const heap = @import("std").heap;
 const mem = @import("std").mem;
 const meta = @import("std").meta;
 const testing = @import("std").testing;
 
+const compositor = @import("compositor.zig");
 const pixel = @import("pixel.zig");
 
 /// The scale factor used for super-sample anti-aliasing. Any functionality
@@ -199,22 +201,23 @@ pub const Surface = union(SurfaceType) {
         }
     }
 
-    /// Composites the source surface onto this surface using the Porter-Duff
-    /// src-over operation at the destination. Any parts of the source outside
-    /// of the destination are ignored.
-    pub fn srcOver(dst: *Surface, src: *const Surface, dst_x: i32, dst_y: i32) void {
-        return switch (dst.*) {
-            inline else => |*s| s.srcOver(src, dst_x, dst_y),
-        };
-    }
-
-    /// Composites the source surface onto this surface using the Porter-Duff
-    /// dst-in operation at the destination. Any parts of the source outside
-    /// of the destination are ignored.
-    pub fn dstIn(dst: *Surface, src: *const Surface, dst_x: i32, dst_y: i32) void {
-        return switch (dst.*) {
-            inline else => |*s| s.dstIn(src, dst_x, dst_y),
-        };
+    /// Runs the single compositor operation described by `operator` with the
+    /// supplied `dst` and `src` at `(dst_x, dst_y)`. Any parts of the source
+    /// outside of the destination are ignored.
+    pub fn composite(
+        dst: *Surface,
+        src: *const Surface,
+        operator: compositor.Operator,
+        dst_x: i32,
+        dst_y: i32,
+    ) void {
+        compositor.SurfaceCompositor.run(
+            dst,
+            dst_x,
+            dst_y,
+            1,
+            .{.{ .operator = operator, .src = .{ .surface = src } }},
+        );
     }
 
     /// Gets the width of the surface.
@@ -246,6 +249,20 @@ pub const Surface = union(SurfaceType) {
         };
     }
 
+    /// Returns the range of pixels starting at `(x, y)` and proceeding for
+    /// `len`, as a pixel stride.
+    ///
+    /// Out-of-range start co-ordinates return an empty stride.
+    ///
+    /// `len` is unbounded and will wrap if going past the x-boundary of the
+    /// surface. Going past the actual length of the buffer is safety-checked
+    /// undefined behavior.
+    pub fn getStride(self: Surface, x: i32, y: i32, len: usize) pixel.Stride {
+        return switch (self) {
+            inline else => |s| s.getStride(x, y, len),
+        };
+    }
+
     /// Puts a single pixel at the x and y co-ordinates. This is a no-op if the
     /// co-ordinates are out of range.
     pub fn putPixel(self: *Surface, x: i32, y: i32, px: pixel.Pixel) void {
@@ -254,10 +271,36 @@ pub const Surface = union(SurfaceType) {
         };
     }
 
+    /// Puts the supplied stride at `(x, y)`, proceeding for its full length.
+    ///
+    /// Out-of-range start co-ordinates cause a no-op.
+    ///
+    /// It's expected that src will fit; overruns are safety-checked undefined
+    /// behavior.
+    pub fn putStride(self: *Surface, x: i32, y: i32, src: pixel.Stride) void {
+        return switch (self.*) {
+            inline else => |*s| s.putStride(x, y, src),
+        };
+    }
+
     /// Replaces the surface with the supplied pixel.
     pub fn paintPixel(self: *Surface, px: pixel.Pixel) void {
         return switch (self.*) {
             inline else => |*s| s.paintPixel(px),
+        };
+    }
+
+    /// Copies a single pixel to the range starting at `(x, y)` and proceeding
+    /// for `len`.
+    ///
+    /// Out-of-range start co-ordinates cause a no-op.
+    ///
+    /// `len` is unbounded and will wrap if going past the x-boundary of the
+    /// surface. Going past the actual length of the buffer is safety-checked
+    /// undefined behavior.
+    pub fn paintStride(self: *Surface, x: i32, y: i32, len: usize, px: pixel.Pixel) void {
+        return switch (self.*) {
+            inline else => |*s| s.paintStride(x, y, len, px),
         };
     }
 };
@@ -378,66 +421,6 @@ pub fn ImageSurface(comptime T: type) type {
             }
         }
 
-        /// Composites the source surface onto this surface using the
-        /// Porter-Duff src-over operation at the destination. Any parts of the
-        /// source outside of the destination are ignored.
-        pub fn srcOver(
-            dst: *ImageSurface(T),
-            src: *const Surface,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            return dst.composite(src, T.srcOver, dst_x, dst_y);
-        }
-
-        /// Composites the source surface onto this surface using the
-        /// Porter-Duff dst-in operation at the destination. Any parts of the
-        /// source outside of the destination are ignored.
-        pub fn dstIn(
-            dst: *ImageSurface(T),
-            src: *const Surface,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            return dst.composite(src, T.dstIn, dst_x, dst_y);
-        }
-
-        fn composite(
-            dst: *ImageSurface(T),
-            src: *const Surface,
-            op: fn (T, pixel.Pixel) T,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            if (dst_x >= dst.width or dst_y >= dst.height) return;
-
-            const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
-            const src_start_x: i32 = if (dst_x < 0) @intCast(@abs(dst_x)) else 0;
-
-            const height = if (src.getHeight() + dst_y > dst.height)
-                dst.height - dst_y
-            else
-                src.getHeight();
-            const width = if (src.getWidth() + dst_x > dst.width)
-                dst.width - dst_x
-            else
-                src.getWidth();
-
-            var src_y = src_start_y;
-            while (src_y < height) : (src_y += 1) {
-                var src_x = src_start_x;
-                while (src_x < width) : (src_x += 1) {
-                    const dst_put_x = src_x + dst_x;
-                    const dst_put_y = src_y + dst_y;
-                    const dst_idx: usize = @intCast(dst.width * dst_put_y + dst_put_x);
-                    if (src.getPixel(@intCast(src_x), @intCast(src_y))) |src_px| {
-                        const dst_px = dst.buf[dst_idx];
-                        dst.buf[dst_idx] = op(dst_px, src_px);
-                    }
-                }
-            }
-        }
-
         /// Returns a `Surface` interface for this surface.
         pub fn asSurfaceInterface(self: ImageSurface(T)) Surface {
             return switch (T.format) {
@@ -455,16 +438,58 @@ pub fn ImageSurface(comptime T: type) type {
             return self.buf[@intCast(self.width * y + x)].asPixel();
         }
 
+        /// Returns the range of pixels starting at `(x, y)` and proceeding for
+        /// `len`, as a pixel stride.
+        ///
+        /// Out-of-range start co-ordinates return an empty stride.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer is
+        /// safety-checked undefined behavior.
+        pub fn getStride(self: *const ImageSurface(T), x: i32, y: i32, len: usize) pixel.Stride {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
+                return @unionInit(pixel.Stride, @tagName(T.format), &.{});
+            }
+            const start: usize = @intCast(self.width * y + x);
+            return @unionInit(pixel.Stride, @tagName(T.format), self.buf[start .. start + len]);
+        }
+
         /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
         /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf[@intCast(self.width * y + x)] = T.copySrc(px);
+            self.buf[@intCast(self.width * y + x)] = T.fromPixel(px);
+        }
+
+        /// Puts the supplied stride at `(x, y)`, proceeding for its full
+        /// length.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// It's expected that src will fit; overruns are
+        /// safety-checked undefined behavior.
+        pub fn putStride(self: *ImageSurface(T), x: i32, y: i32, src: pixel.Stride) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            self.getStride(x, y, src.pxLen()).copy(src);
         }
 
         /// Replaces the surface with the supplied pixel.
         pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) void {
-            @memset(self.buf, T.copySrc(px));
+            @memset(self.buf, T.fromPixel(px));
+        }
+
+        /// Copies a single pixel to the range starting at `(x, y)` and
+        /// proceeding for `len`.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer is
+        /// safety-checked undefined behavior.
+        pub fn paintStride(self: *ImageSurface(T), x: i32, y: i32, len: usize, px: pixel.Pixel) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            const start: usize = @intCast(self.width * y + x);
+            @memset(self.buf[start .. start + len], T.fromPixel(px));
         }
     };
 }
@@ -596,66 +621,6 @@ pub fn PackedImageSurface(comptime T: type) type {
             }
         }
 
-        /// Composites the source surface onto this surface using the
-        /// Porter-Duff src-over operation at the destination. Any parts of the
-        /// source outside of the destination are ignored.
-        pub fn srcOver(
-            dst: *PackedImageSurface(T),
-            src: *const Surface,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            return dst.composite(src, T.srcOver, dst_x, dst_y);
-        }
-
-        /// Composites the source surface onto this surface using the
-        /// Porter-Duff dst-in operation at the destination. Any parts of the
-        /// source outside of the destination are ignored.
-        pub fn dstIn(
-            dst: *PackedImageSurface(T),
-            src: *const Surface,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            return dst.composite(src, T.dstIn, dst_x, dst_y);
-        }
-
-        fn composite(
-            dst: *PackedImageSurface(T),
-            src: *const Surface,
-            op: fn (T, pixel.Pixel) T,
-            dst_x: i32,
-            dst_y: i32,
-        ) void {
-            if (dst_x >= dst.width or dst_y >= dst.height) return;
-
-            const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
-            const src_start_x: i32 = if (dst_x < 0) @intCast(@abs(dst_x)) else 0;
-
-            const height = if (src.getHeight() + dst_y > dst.height)
-                dst.height - dst_y
-            else
-                src.getHeight();
-            const width = if (src.getWidth() + dst_x > dst.width)
-                dst.width - dst_x
-            else
-                src.getWidth();
-
-            var src_y = src_start_y;
-            while (src_y < height) : (src_y += 1) {
-                var src_x = src_start_x;
-                while (src_x < width) : (src_x += 1) {
-                    const dst_put_x = src_x + dst_x;
-                    const dst_put_y = src_y + dst_y;
-                    const dst_idx: usize = @intCast(dst.width * dst_put_y + dst_put_x);
-                    if (src.getPixel(@intCast(src_x), @intCast(src_y))) |src_px| {
-                        const dst_px = dst._get(dst_idx);
-                        dst._set(dst_idx, op(dst_px, src_px));
-                    }
-                }
-            }
-        }
-
         /// Returns a `Surface` interface for this surface.
         pub fn asSurfaceInterface(self: PackedImageSurface(T)) Surface {
             return switch (T.format) {
@@ -673,16 +638,100 @@ pub fn PackedImageSurface(comptime T: type) type {
             return self._get(@intCast(self.width * y + x)).asPixel();
         }
 
+        /// Returns the range of pixels starting at `(x, y)` and proceeding for
+        /// `len`, as a pixel stride.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer, or
+        /// providing negative co-ordinates, is safety-checked undefined
+        /// behavior.
+        pub fn getStride(self: *const PackedImageSurface(T), x: i32, y: i32, len: usize) pixel.Stride {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
+                return @unionInit(pixel.Stride, @tagName(T.format), .{
+                    .buf = &.{},
+                    .px_offset = 0,
+                    .px_len = 0,
+                });
+            }
+            const scale = 8 / @bitSizeOf(T);
+            const px_start: usize = @intCast(self.width * y + x);
+            const px_offset = px_start % scale;
+            const slice_start = px_start / scale;
+            const slice_len = ((len + px_offset) * @bitSizeOf(T) + 7) / 8;
+            return @unionInit(pixel.Stride, @tagName(T.format), .{
+                .buf = self.buf[slice_start .. slice_start + slice_len],
+                .px_offset = px_offset,
+                .px_len = len,
+            });
+        }
+
         /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
         /// pixel is out of range.
         pub fn putPixel(self: *PackedImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self._set(@intCast(self.width * y + x), T.copySrc(px));
+            self._set(@intCast(self.width * y + x), T.fromPixel(px));
+        }
+
+        /// Puts the supplied stride at `(x, y)`, proceeding for its full
+        /// length.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// It's expected that src will fit; overruns are safety-checked
+        /// undefined behavior.
+        pub fn putStride(self: *PackedImageSurface(T), x: i32, y: i32, src: pixel.Stride) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            self.getStride(x, y, src.pxLen()).copy(src);
         }
 
         /// Replaces the surface with the supplied pixel.
         pub fn paintPixel(self: *PackedImageSurface(T), px: pixel.Pixel) void {
-            _paintPixel(self.buf, T.copySrc(px));
+            _paintPixel(self.buf, T.fromPixel(px));
+        }
+
+        /// Copies a single pixel to the range starting at `(x, y)` and
+        /// proceeding for `len`.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer is
+        /// safety-checked undefined behavior.
+        pub fn paintStride(
+            self: *PackedImageSurface(T),
+            x: i32,
+            y: i32,
+            len: usize,
+            px: pixel.Pixel,
+        ) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            // Because we are doing a partial paint here, we need to be a bit
+            // more careful than we would be with paintPixel. We can do the
+            // majority still with our internal _paintPixel routine, but we
+            // need to slice off the contiguous part of memory to do so.
+            //
+            // We've already properly aligned our buffer, so we can check the
+            // start and end to make sure they're evenly divisible against our
+            // bit size. The remainders are the leftovers we need to
+            // individually set, if they exist.
+            const src_px = T.fromPixel(px);
+            const scale = 8 / @bitSizeOf(T);
+            const start: usize = @intCast(self.width * y + x);
+            const end = (start + len);
+            const slice_start: usize = start / scale;
+            const slice_end: usize = end / scale;
+            if (slice_start >= slice_end) {
+                // There's nothing we can memset, just set the range individually.
+                for (start..end) |idx| self._set(idx, src_px);
+                return;
+            }
+            const start_rem = start % scale;
+            const slice_offset = @intFromBool(start_rem > 0);
+            // Set our contiguous range
+            _paintPixel(self.buf[slice_start + slice_offset .. slice_end], src_px);
+            // Set the ends
+            for (start..start + (scale - start_rem)) |idx| self._set(idx, src_px);
+            for (end - end % scale..end) |idx| self._set(idx, src_px);
         }
 
         fn _get(self: *const PackedImageSurface(T), index: usize) T {
@@ -714,7 +763,7 @@ pub fn PackedImageSurface(comptime T: type) type {
             // will end up with even copies of the smaller-width integer since
             // we fill the whole byte, so the order of where it ends up in the
             // intCast should not matter.
-            if (meta.eql(px, std.mem.zeroes(T))) {
+            if (meta.eql(px, mem.zeroes(T))) {
                 // Short-circuit to writing zeroes if the pixel we're setting is zero
                 @memset(buf, 0);
                 return;
@@ -745,7 +794,7 @@ test "Surface interface" {
         inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
             const surface_type: SurfaceType = @enumFromInt(f.value);
             const pixel_type = surface_type.toPixelType();
-            const pix = pixel_type.copySrc(rgba.asPixel()).asPixel();
+            const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
             var sfc_if = try Surface.init(surface_type, testing.allocator, 1, 1);
             defer sfc_if.deinit(testing.allocator);
@@ -766,7 +815,7 @@ test "Surface interface" {
         inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
             const surface_type: SurfaceType = @enumFromInt(f.value);
             const pixel_type = surface_type.toPixelType();
-            const pix = pixel_type.copySrc(rgba.asPixel()).asPixel();
+            const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
             var sfc_if = try Surface.initPixel(pix, testing.allocator, 1, 1);
             defer sfc_if.deinit(testing.allocator);
@@ -785,7 +834,7 @@ test "Surface interface" {
             const surface_type: SurfaceType = @enumFromInt(f.value);
             const pixel_type = surface_type.toPixelType();
             const buffer_type = surface_type.toBufferType();
-            const pix = pixel_type.copySrc(rgba.asPixel()).asPixel();
+            const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
             var buf: [1]buffer_type = undefined;
             var sfc_if = Surface.initBuffer(surface_type, null, &buf, 1, 1);
@@ -956,6 +1005,64 @@ test "PackedImageSurface, alpha4" {
         try testing.expectEqual(1, sfc.height);
         try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 7 } }, sfc.getPixel(0, 0));
     }
+
+    {
+        // getStride
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.putPixel(0, 1, .{ .alpha4 = .{ .a = 15 } });
+        const stride = sfc.getStride(0, 1, 4);
+
+        try testing.expectEqual(3, stride.alpha4.buf.len);
+        try testing.expectEqual(0xF0, stride.alpha4.buf[0]);
+        try testing.expectEqual(0x00, stride.alpha4.buf[1]);
+        try testing.expectEqual(0x00, stride.alpha4.buf[2]);
+        try testing.expectEqual(1, stride.alpha4.px_offset);
+        try testing.expectEqual(4, stride.alpha4.px_len);
+    }
+
+    {
+        // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
+        // make sure only a very specific range of pixels were touched.
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.paintStride(1, 0, 6, .{ .alpha4 = .{ .a = 15 } });
+
+        try testing.expectEqual(5, sfc.buf.len);
+        try testing.expectEqual(0xF0, sfc.buf[0]);
+        try testing.expectEqual(0xFF, sfc.buf[1]);
+        try testing.expectEqual(0xFF, sfc.buf[2]);
+        try testing.expectEqual(0x0F, sfc.buf[3]);
+        try testing.expectEqual(0x00, sfc.buf[4]);
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+
+        sfc.paintPixel(.{ .alpha4 = .{ .a = 0 } });
+        sfc.paintStride(0, 1, 6, .{ .alpha4 = .{ .a = 15 } });
+        try testing.expectEqual(0x00, sfc.buf[0]);
+        try testing.expectEqual(0xF0, sfc.buf[1]);
+        try testing.expectEqual(0xFF, sfc.buf[2]);
+        try testing.expectEqual(0xFF, sfc.buf[3]);
+        try testing.expectEqual(0x0F, sfc.buf[4]);
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 2));
+    }
 }
 
 test "PackedImageSurface, alpha2" {
@@ -1031,6 +1138,60 @@ test "PackedImageSurface, alpha2" {
         try testing.expectEqual(1, sfc.width);
         try testing.expectEqual(1, sfc.height);
         try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 2 } }, sfc.getPixel(0, 0));
+    }
+
+    {
+        // getStride
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.putPixel(0, 1, .{ .alpha2 = .{ .a = 2 } });
+        const stride = sfc.getStride(0, 1, 6);
+
+        try testing.expectEqual(3, stride.alpha2.buf.len);
+        try testing.expectEqual(0x80, stride.alpha2.buf[0]);
+        try testing.expectEqual(0x00, stride.alpha2.buf[1]);
+        try testing.expectEqual(0x00, stride.alpha2.buf[2]);
+        try testing.expectEqual(3, stride.alpha2.px_offset);
+        try testing.expectEqual(6, stride.alpha2.px_len);
+    }
+
+    {
+        // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
+        // make sure only a very specific range of pixels were touched.
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.paintStride(1, 0, 6, .{ .alpha2 = .{ .a = 3 } });
+
+        try testing.expectEqual(3, sfc.buf.len);
+        try testing.expectEqual(0xFC, sfc.buf[0]);
+        try testing.expectEqual(0x3F, sfc.buf[1]);
+        try testing.expectEqual(0x00, sfc.buf[2]);
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+
+        sfc.paintPixel(.{ .alpha2 = .{ .a = 0 } });
+        sfc.paintStride(0, 1, 6, .{ .alpha2 = .{ .a = 3 } });
+        try testing.expectEqual(0xC0, sfc.buf[0]);
+        try testing.expectEqual(0xFF, sfc.buf[1]);
+        try testing.expectEqual(0x03, sfc.buf[2]);
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 2));
     }
 }
 
@@ -1120,5 +1281,56 @@ test "PackedImageSurface, alpha1" {
         try testing.expectEqual(1, sfc.width);
         try testing.expectEqual(1, sfc.height);
         try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+    }
+
+    {
+        // getStride
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.putPixel(0, 2, .{ .alpha1 = .{ .a = 1 } });
+        const stride = sfc.getStride(0, 2, 3);
+
+        try testing.expectEqual(2, stride.alpha1.buf.len);
+        try testing.expectEqual(0x40, stride.alpha1.buf[0]);
+        try testing.expectEqual(0x00, stride.alpha1.buf[1]);
+        try testing.expectEqual(6, stride.alpha1.px_offset);
+        try testing.expectEqual(3, stride.alpha1.px_len);
+    }
+
+    {
+        // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
+        // make sure only a very specific range of pixels were touched.
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(testing.allocator, 3, 3, null);
+        defer sfc.deinit(testing.allocator);
+
+        sfc.paintStride(1, 0, 6, .{ .alpha1 = .{ .a = 1 } });
+
+        try testing.expectEqual(2, sfc.buf.len);
+        try testing.expectEqual(0b1111110, sfc.buf[0]);
+        try testing.expectEqual(0, sfc.buf[1]);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+
+        sfc.paintPixel(.{ .alpha1 = .{ .a = 0 } });
+        sfc.paintStride(0, 1, 6, .{ .alpha1 = .{ .a = 1 } });
+        try testing.expectEqual(0b11111000, sfc.buf[0]);
+        try testing.expectEqual(1, sfc.buf[1]);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 2));
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
     }
 }
