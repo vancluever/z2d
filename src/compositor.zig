@@ -397,7 +397,7 @@ const RGBA16Vec = struct {
     fn fromStride(src: pixel.Stride, idx: usize) RGBA16Vec {
         switch (src) {
             inline .rgb, .rgba, .alpha8 => |_src| {
-                const src_t = @typeInfo(@TypeOf(_src)).Pointer.child;
+                const src_t = @typeInfo(@TypeOf(_src)).pointer.child;
                 const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
                 const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
                 return .{
@@ -458,7 +458,7 @@ const RGBA16Vec = struct {
     fn toStride(self: RGBA16Vec, dst: pixel.Stride, idx: usize) void {
         switch (dst) {
             inline .rgb, .rgba, .alpha8 => |_dst| {
-                const dst_t = @typeInfo(@TypeOf(_dst)).Pointer.child;
+                const dst_t = @typeInfo(@TypeOf(_dst)).pointer.child;
                 const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
                 const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
                 if (has_color) transposeFromVec(_dst[idx .. idx + vector_length], self.r, .r);
@@ -512,7 +512,7 @@ fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
 fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
     return switch (dst) {
         inline .rgb, .rgba, .alpha8 => |_dst| {
-            _dst[idx] = @typeInfo(@TypeOf(_dst)).Pointer.child.fromPixel(px);
+            _dst[idx] = @typeInfo(@TypeOf(_dst)).pointer.child.fromPixel(px);
         },
         inline .alpha4, .alpha2, .alpha1 => |_dst| {
             const dst_t = @TypeOf(_dst).T;

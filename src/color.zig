@@ -764,18 +764,18 @@ pub const HSL = struct {
 /// `@Vector(vector_length, T)`, to allow for SIMD and ease of utilization by
 /// the compositor.
 fn vectorize(comptime T: type) type {
-    var new_fields: [@typeInfo(T).Struct.fields.len]builtin.Type.StructField = undefined;
-    for (@typeInfo(T).Struct.fields, 0..) |f, i| {
+    var new_fields: [@typeInfo(T).@"struct".fields.len]builtin.Type.StructField = undefined;
+    for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
         new_fields[i] = .{
             .name = f.name,
             .type = @Vector(vector_length, f.type),
-            .default_value = null,
+            .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
     }
     return @Type(.{
-        .Struct = .{
+        .@"struct" = .{
             .layout = .auto,
             .fields = &new_fields,
             .decls = &.{},
