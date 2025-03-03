@@ -1109,13 +1109,13 @@ test "Linear.getPixel" {
         try testing.expectEqualDeep(pixel.Pixel{
             .rgba = .{
                 .r = 252, // (0, 0) is technically (0.5, 0.5)
-                .g = 2,
+                .g = 3,
                 .b = 0,
                 .a = 255,
             },
         }, gradient.getPixel(0, 0));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-            .r = 123,
+            .r = 124,
             .g = 131,
             .b = 0,
             .a = 255,
@@ -1129,7 +1129,7 @@ test "Linear.getPixel" {
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 126,
-            .b = 128,
+            .b = 129,
             .a = 255,
         } }, gradient.getPixel(74, 74));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
@@ -1143,19 +1143,19 @@ test "Linear.getPixel" {
         // not exactly on the gradient line (pretty much all pixels, really).
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 126,
-            .g = 128,
+            .g = 129,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(49, 0));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 252,
-            .b = 2,
+            .b = 3,
             .a = 255,
         } }, gradient.getPixel(0, 99));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
-            .g = 123,
+            .g = 124,
             .b = 131,
             .a = 255,
         } }, gradient.getPixel(149, 0));
@@ -1195,13 +1195,13 @@ test "Linear.getPixel" {
         } }, gradient.getPixel(49, 49));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
-            .g = 96,
+            .g = 97,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(74, 74));
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
-            .g = 212,
+            .g = 213,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(99, 99));
@@ -1548,7 +1548,7 @@ test "Radial.getPixel" {
     try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
     try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 1, 0 } });
     try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 124,
+        .r = 125,
         .g = 130,
         .b = 0,
         .a = 255,
@@ -1768,8 +1768,8 @@ test "Conic.getPixel" {
     try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
     try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 1, 0 } });
     try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
-        .r = 127,
-        .g = 127,
+        .r = 128,
+        .g = 128,
         .b = 0,
         .a = 255,
     } }, gradient.getPixel(0, 49));

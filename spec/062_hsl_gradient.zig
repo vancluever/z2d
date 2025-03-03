@@ -108,7 +108,7 @@ fn draw(
 ) !void {
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);
     defer scratch_sfc.deinit(alloc);
-    var stop_buffer: [3]z2d.gradient.Stop = undefined;
+    var stop_buffer: [2]z2d.gradient.Stop = undefined;
     var gradient = z2d.gradient.Linear.initBuffer(
         linear_x0,
         linear_y0,

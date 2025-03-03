@@ -80,6 +80,7 @@ const _064_radial_source = @import("064_radial_source.zig");
 const _065_conic_gradient = @import("065_conic_gradient.zig");
 const _066_conic_pie_gradient = @import("066_conic_pie_gradient.zig");
 const _067_gradient_transforms = @import("067_gradient_transforms.zig");
+const _068_gradient_deband = @import("068_gradient_deband.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -154,6 +155,7 @@ pub fn main() !void {
     try compositorExportRun(alloc, _065_conic_gradient);
     try pathExportRun(alloc, _066_conic_pie_gradient);
     try pathExportRun(alloc, _067_gradient_transforms);
+    try compositorExportRun(alloc, _068_gradient_deband);
 }
 
 //////////////////////////////////////////////////////////////////////////////
