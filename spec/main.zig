@@ -81,6 +81,7 @@ const _065_conic_gradient = @import("065_conic_gradient.zig");
 const _066_conic_pie_gradient = @import("066_conic_pie_gradient.zig");
 const _067_gradient_transforms = @import("067_gradient_transforms.zig");
 const _068_gradient_deband = @import("068_gradient_deband.zig");
+const _069_gradient_dither_context = @import("069_gradient_dither_context.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -156,6 +157,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _066_conic_pie_gradient);
     try pathExportRun(alloc, _067_gradient_transforms);
     try compositorExportRun(alloc, _068_gradient_deband);
+    try pathExportRun(alloc, _069_gradient_dither_context);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -426,6 +428,14 @@ test "066_conic_pie_gradient" {
 
 test "067_gradient_transforms" {
     try pathTestRun(testing.allocator, _067_gradient_transforms);
+}
+
+test "068_gradient_deband" {
+    try compositorTestRun(testing.allocator, _068_gradient_deband);
+}
+
+test "069_gradient_dither_context" {
+    try pathTestRun(testing.allocator, _069_gradient_dither_context);
 }
 
 //////////////////////////////////////////////////////////////////////////////

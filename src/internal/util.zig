@@ -54,3 +54,21 @@ pub fn vectorize(comptime T: type) type {
 pub fn splat(comptime T: type, value: anytype) @Vector(vector_length, T) {
     return @splat(value);
 }
+
+/// Internal function for vector gather, allows for array lookup via an index
+/// of vectors.
+///
+/// Based on https://github.com/ziglang/zig/issues/12815#issuecomment-1243043038
+pub fn gather(slice: anytype, index: anytype) @Vector(
+    @typeInfo(@TypeOf(index)).Vector.len,
+    @typeInfo(@TypeOf(slice)).Pointer.child,
+) {
+    const vector_len = @typeInfo(@TypeOf(index)).Vector.len;
+    const Elem = @typeInfo(@TypeOf(slice)).Pointer.child;
+    var result: [vector_len]Elem = undefined;
+    comptime var vec_i = 0;
+    inline while (vec_i < vector_len) : (vec_i += 1) {
+        result[vec_i] = slice[index[vec_i]];
+    }
+    return result;
+}

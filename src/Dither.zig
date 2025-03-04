@@ -21,8 +21,10 @@ const pixelpkg = @import("pixel.zig");
 const Color = colorpkg.Color;
 const Pixel = pixelpkg.Pixel;
 
+const dither_blue_noise_64x64 = @import("internal/blue_noise.zig").dither_blue_noise_64x64;
 const vector_length = @import("compositor.zig").vector_length;
 
+const gather = @import("internal/util.zig").gather;
 const splat = @import("internal/util.zig").splat;
 const vectorize = @import("internal/util.zig").vectorize;
 const runCases = @import("internal/util.zig").runCases;
@@ -35,6 +37,10 @@ pub const Type = enum {
 
     /// Ordered dithering using a Bayer 8x8 matrix.
     bayer,
+
+    /// Ordered dithering using a pre-generated 64x64 blue noise matrix (aka
+    /// void-and-cluster).
+    blue_noise,
 };
 
 /// The types of dithering sources supported.
@@ -91,6 +97,7 @@ pub fn getPixel(self: *const Dither, x: i32, y: i32) Pixel {
     const m: f32 = switch (self.type) {
         .none => return rgba.encodeRGBA().asPixel(),
         .bayer => mBayer8x8(x, y),
+        .blue_noise => mBlueNoise64x64(x, y),
     };
     const scale: f32 = 1.0 / @as(f32, @floatFromInt((@as(usize, 1) << self.scale) - 1));
     return colorpkg.LinearRGB.encodeRGBA(.{
@@ -152,6 +159,7 @@ pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) 
     const m: @Vector(vector_length, f32) = switch (self.type) {
         .none => return colorpkg.LinearRGB.encodeRGBAVec(rgba),
         .bayer => mBayer8x8Vec(x, y),
+        .blue_noise => mBlueNoise64x64Vec(x, y),
     };
     const scale = splat(f32, 1.0 / @as(
         f32,
@@ -182,6 +190,9 @@ fn apply_dither(value: anytype, m: anytype, scale: anytype) @TypeOf(value) {
 //
 // And then normalized with the pre-calculation applied, as shown in:
 //   Mpre(i,j) = Mint(i,j) / n^2 – 0.5 * maxValue
+//
+// Values are normally looked up in a ordered dithering matrix via (mod(x),
+// mod(y).
 //
 // The bit shifting technique (explained below) makes it easy to roll the
 // modulus that needs to happen on each lookup (which would normally happen
@@ -239,6 +250,33 @@ fn mBayer8x8Vec(x: i32, y: i32) @Vector(vector_length, f32) {
         (_y & _x2) << sh2 | (_x & _x2) << sh1 |
         (_y & _x4) >> sh1 | (_x & _x4) >> sh2);
     return @as(@Vector(vector_length, f32), @floatFromInt(m)) * (_f2 / _f128) - (_f63 / _f128);
+}
+
+fn mBlueNoise64x64(x: i32, y: i32) f32 {
+    // The index for looking up into the blue noise matrix (any matrix for
+    // ordered dithering, actually) is (mod(x), mod(y)). Our blue noise matrix
+    // is flat (not multidimensional), so we just OR these values to get our
+    // index (avoids the mul + add).
+    const idx: usize = @intCast(@mod(x, 64) << 6 | @mod(y, 64));
+    const m = dither_blue_noise_64x64[idx];
+    // As with the bayer 8x8, we apply the normalized offset w/epsilon.
+    return @as(f32, @floatFromInt(m)) * (2.0 / 8192.0) - (4095.0 / 8192.0);
+}
+
+fn mBlueNoise64x64Vec(x: i32, y: i32) @Vector(vector_length, f32) {
+    var _x: @Vector(vector_length, i32) = undefined;
+    for (0..vector_length) |i| _x[i] = x + @as(i32, @intCast(i));
+    const _y = splat(i32, y);
+
+    const _i64 = splat(i32, 64);
+    const sh6 = splat(u5, 6);
+    const _f2 = splat(f32, 2.0);
+    const _f4095 = splat(f32, 4095.0);
+    const _f8192 = splat(f32, 8192.0);
+
+    const idx: @Vector(vector_length, usize) = @intCast(@mod(_x, _i64) << sh6 | @mod(_y, _i64));
+    const m = gather(@as([]const u16, @ptrCast(&dither_blue_noise_64x64)), idx);
+    return @as(@Vector(vector_length, f32), @floatFromInt(m)) * (_f2 / _f8192) - (_f4095 / _f8192);
 }
 
 // Note that most of our tests will end up only doing rudimentary tests here
@@ -331,6 +369,15 @@ test "Dither.getPixel" {
             .x = 0,
             .y = 0,
         },
+        .{
+            .name = "blue noise",
+            .expected = .{ .rgba = .{ .r = 127, .g = 127, .b = 127, .a = 255 } },
+            .type = .blue_noise,
+            .source = .{ .gradient = .conic },
+            .scale = 8,
+            .x = 0,
+            .y = 49,
+        },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
@@ -415,6 +462,14 @@ test "Dither.getRGBAVec" {
         .{
             .name = "gradient (conic)",
             .type = .bayer,
+            .source = .{ .gradient = .conic },
+            .scale = 8,
+            .x = 0,
+            .y = 49,
+        },
+        .{
+            .name = "blue noise",
+            .type = .blue_noise,
             .source = .{ .gradient = .conic },
             .scale = 8,
             .x = 0,
