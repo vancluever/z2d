@@ -20,6 +20,7 @@ const testing = @import("std").testing;
 
 const gradient = @import("gradient.zig");
 
+const Dither = @import("Dither.zig");
 const Pixel = @import("pixel.zig").Pixel;
 
 /// Interface tags for pattern types.
@@ -28,6 +29,7 @@ pub const PatternType = enum {
     linear_gradient,
     radial_gradient,
     conic_gradient,
+    dither,
 };
 
 /// Represents an interface as a union of all patterns.
@@ -36,12 +38,13 @@ pub const Pattern = union(PatternType) {
     linear_gradient: *gradient.Linear,
     radial_gradient: *gradient.Radial,
     conic_gradient: *gradient.Conic,
+    dither: Dither,
 
     /// Gets the pixel data at the co-ordinates specified.
     pub fn getPixel(self: Pattern, x: i32, y: i32) Pixel {
         return switch (self) {
             .opaque_pattern => |s| s.pixel,
-            inline .linear_gradient, .radial_gradient, .conic_gradient => |s| s.getPixel(x, y),
+            inline else => |s| s.getPixel(x, y),
         };
     }
 };

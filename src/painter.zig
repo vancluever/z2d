@@ -287,6 +287,11 @@ fn paintDirect(
                         .x = start_x,
                         .y = y,
                     } },
+                    .dither => .{ .dither = .{
+                        .underlying = pattern.dither,
+                        .x = start_x,
+                        .y = y,
+                    } },
                 },
             }});
         }
@@ -387,6 +392,7 @@ fn paintComposite(
                 .linear_gradient => .{ .gradient = .{ .linear = pattern.linear_gradient } },
                 .radial_gradient => .{ .gradient = .{ .radial = pattern.radial_gradient } },
                 .conic_gradient => .{ .gradient = .{ .conic = pattern.conic_gradient } },
+                .dither => .{ .dither = pattern.dither },
             },
             .src = .{ .surface = &mask_sfc },
         },

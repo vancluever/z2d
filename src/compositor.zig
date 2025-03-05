@@ -44,6 +44,9 @@ pub const Operator = enum {
     }
 };
 
+/// Wraps other patterns for dithering.
+pub const DitherParam = @import("Dither.zig");
+
 /// The union of gradients supported for compositing.
 pub const GradientParam = union(gradient.GradientType) {
     linear: *const gradient.Linear,
@@ -71,6 +74,11 @@ pub const SurfaceCompositor = struct {
         const Param = union(enum) {
             /// No value - operation uses default/current dst/src.
             none: void,
+
+            /// Represents a dither pattern. Dither patterns wrap other
+            /// patterns and apply noise to smooth out color bands and other
+            /// artifacts that can arise in their use.
+            dither: DitherParam,
 
             /// Represents a gradient used for compositing.
             ///
@@ -136,7 +144,7 @@ pub const SurfaceCompositor = struct {
             height: i32,
         } = switch (operations[0].src) {
             .none => return,
-            .pixel, .gradient => dst_bounded: {
+            .pixel, .gradient, .dither => dst_bounded: {
                 // We have a pixel source - this is allowed since we could allow
                 // blends of a single pixel across the entirety of a surface. We do
                 // have some constraints, however - specifically, dst_x and dst_y
@@ -187,6 +195,11 @@ pub const SurfaceCompositor = struct {
                             .x = dst_start_x,
                             .y = dst_start_y,
                         } },
+                        .dither => |d| .{ .dither = .{
+                            .underlying = d,
+                            .x = dst_start_x,
+                            .y = dst_start_y,
+                        } },
                     };
                     stride_op[idx].src = switch (op.src) {
                         .surface => |sfc| .{ .stride = sfc.getStride(src_start_x, src_y, len) },
@@ -194,6 +207,11 @@ pub const SurfaceCompositor = struct {
                         .pixel => |px| .{ .pixel = px },
                         .gradient => |gr| .{ .gradient = .{
                             .underlying = gr,
+                            .x = dst_start_x,
+                            .y = dst_start_y,
+                        } },
+                        .dither => |d| .{ .dither = .{
+                            .underlying = d,
                             .x = dst_start_x,
                             .y = dst_start_y,
                         } },
@@ -229,6 +247,14 @@ pub const StrideCompositor = struct {
             /// No value - operation uses default/current dst/src.
             none: void,
 
+            /// Represents a dithering pattern, which wraps other patterns and
+            /// applies noise to smooth out color bands and other artifacts that
+            /// can arise in their use.
+            ///
+            /// An initial `x` and `y` offset must be provided, and should
+            /// align with the main destination stride.
+            dither: Dither,
+
             /// Represents a gradient used for compositing.
             ///
             /// An initial `x` and `y` offset must be provided, and should
@@ -249,6 +275,19 @@ pub const StrideCompositor = struct {
             pub const Gradient = struct {
                 /// The underlying gradient.
                 underlying: GradientParam,
+
+                /// The initial x position representing the start of the stride.
+                x: i32,
+
+                /// The initial y position representing the start of the stride.
+                y: i32,
+            };
+
+            /// Represents dithering parameters for stride-level composition
+            /// operations.
+            pub const Dither = struct {
+                /// The underlying dither pattern.
+                underlying: DitherParam,
 
                 /// The initial x position representing the start of the stride.
                 x: i32,
@@ -282,6 +321,7 @@ pub const StrideCompositor = struct {
                     .pixel => |px| RGBA16Vec.fromPixel(px),
                     .stride => |stride| RGBA16Vec.fromStride(stride, j),
                     .gradient => |gr| RGBA16Vec.fromGradient(gr, j),
+                    .dither => |d| RGBA16Vec.fromDither(d, j),
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
@@ -291,6 +331,7 @@ pub const StrideCompositor = struct {
                     .pixel => |px| RGBA16Vec.fromPixel(px),
                     .stride => |stride| RGBA16Vec.fromStride(stride, j),
                     .gradient => |gr| RGBA16Vec.fromGradient(gr, j),
+                    .dither => |d| RGBA16Vec.fromDither(d, j),
                     .none => RGBA16Vec.fromStride(dst, j),
                 };
                 _dst = op.operator.run(_dst, _src, max_u8_vec);
@@ -309,6 +350,7 @@ pub const StrideCompositor = struct {
                     .gradient => |gr| switch (gr.underlying) {
                         inline else => |_gr| RGBA16.fromPixel(_gr.getPixel(gr.x + @as(i32, @intCast(i)), gr.y)),
                     },
+                    .dither => |d| RGBA16.fromPixel(d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y)),
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
@@ -320,6 +362,7 @@ pub const StrideCompositor = struct {
                     .gradient => |gr| switch (gr.underlying) {
                         inline else => |_gr| RGBA16.fromPixel(_gr.getPixel(gr.x + @as(i32, @intCast(i)), gr.y)),
                     },
+                    .dither => |d| RGBA16.fromPixel(d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y)),
                     .none => RGBA16.fromPixel(getPixelFromStride(dst, i)),
                 };
                 _dst = op.operator.run(_dst, _src, max_u8_scalar);
@@ -452,6 +495,16 @@ const RGBA16Vec = struct {
             .g = @intCast(result_rgba8.g),
             .b = @intCast(result_rgba8.b),
             .a = @intCast(result_rgba8.a),
+        };
+    }
+
+    fn fromDither(src: StrideCompositor.Operation.Param.Dither, idx: usize) RGBA16Vec {
+        const result = src.underlying.getRGBAVec(src.x + @as(i32, @intCast(idx)), src.y);
+        return .{
+            .r = @intCast(result.r),
+            .g = @intCast(result.g),
+            .b = @intCast(result.b),
+            .a = @intCast(result.a),
         };
     }
 

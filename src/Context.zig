@@ -17,6 +17,7 @@ const mem = @import("std").mem;
 const options = @import("options.zig");
 const painter = @import("painter.zig");
 
+const Dither = @import("Dither.zig");
 const Path = @import("Path.zig");
 const Pixel = @import("pixel.zig").Pixel;
 const Pattern = @import("pattern.zig").Pattern;
@@ -35,6 +36,7 @@ pattern: Pattern = .{
 anti_aliasing_mode: options.AntiAliasMode = .default,
 dashes: []const f64 = &.{},
 dash_offset: f64 = 0,
+dither: Dither.Type = .none,
 fill_rule: options.FillRule = .non_zero,
 line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
@@ -66,6 +68,11 @@ pub fn getSource(self: *Context) Pattern {
     return self.pattern;
 }
 
+/// Returns the current dither type set in the context.
+pub fn getDither(self: *Context) Dither {
+    return self.dither;
+}
+
 /// Sets the context's pattern to the pattern supplied; fill and stroke
 /// operations will draw with this source when they are called.
 ///
@@ -95,6 +102,13 @@ pub fn setSource(self: *Context, source: Pattern) void {
 /// `setSourceToPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 } })`).
 pub fn setSourceToPixel(self: *Context, px: Pixel) void {
     self.pattern = .{ .opaque_pattern = .{ .pixel = px } };
+}
+
+/// Sets the dithering method to the method supplied. Dithering can be used to
+/// apply noise to smooth out artifacts in patterns such as gradients (where it
+/// prevents color banding).
+pub fn setDither(self: *Context, dither: Dither.Type) void {
+    self.dither = dither;
 }
 
 /// Returns the current anti-aliasing mode.
@@ -443,10 +457,11 @@ pub fn isPathClosed(self: *Context) bool {
 /// Runs a fill operation for the current path and any subpaths. All paths in
 /// the set must be closed. This is a no-op if there are no nodes.
 pub fn fill(self: *Context) painter.FillError!void {
+    const wrapped_pattern = self.wrapDither();
     try painter.fill(
         self.alloc,
         self.surface,
-        &self.pattern,
+        &wrapped_pattern,
         self.path.nodes.items,
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
@@ -467,10 +482,11 @@ pub fn fill(self: *Context) painter.FillError!void {
 ///
 /// This is a no-op if there are no nodes.
 pub fn stroke(self: *Context) painter.StrokeError!void {
+    const wrapped_pattern = self.wrapDither();
     try painter.stroke(
         self.alloc,
         self.surface,
-        &self.pattern,
+        &wrapped_pattern,
         self.path.nodes.items,
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
@@ -484,4 +500,28 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
             .transformation = self.transformation,
         },
     );
+}
+
+fn wrapDither(self: *Context) Pattern {
+    return switch (self.dither) {
+        .none => self.pattern,
+        else => .{
+            .dither = .{
+                .type = self.dither,
+                .source = switch (self.pattern) {
+                    .opaque_pattern => |p| .{ .pixel = p.pixel },
+                    .linear_gradient => |g| .{ .gradient = .{ .linear = g } },
+                    .radial_gradient => |g| .{ .gradient = .{ .radial = g } },
+                    .conic_gradient => |g| .{ .gradient = .{ .conic = g } },
+                    else => return self.pattern,
+                },
+                .scale = switch (self.surface.*) {
+                    .image_surface_alpha1 => 1,
+                    .image_surface_alpha2 => 2,
+                    .image_surface_alpha4 => 4,
+                    else => 8,
+                },
+            },
+        },
+    };
 }
