@@ -20,6 +20,20 @@ as RGB, or polar ones such as HSL. Gamma-corrected RGB is also included,
 currently, sRGB is the one color space supplied here, but others will follow in
 future releases.
 
+DITHERING
+
+Along with gradients, support for dithering has been added (for both opaque and
+gradient sources, with more to come as more sources are added). The most
+current practical use is to reduce any possible banding that comes from the use
+of certain gradients.
+
+Currently ordered dither methods are supported, using a Bayer 8x8 or 64x64 blue
+noise matrix.
+
+Dithering can be accessed via using `setDither` in a context, or wrapping the
+pattern to be dithered in the special dither pattern in either direct paint or
+the compositor.
+
 MAJOR COMPOSITOR CHANGES
 
 This release also brings some major compositor changes to accommodate the
