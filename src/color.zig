@@ -2068,10 +2068,6 @@ test "HSL.interpolate, HSL.interpolateEncode" {
             const got_rgba = HSL.interpolateEncode(tc.a, tc.b, tc.t, tc.method);
             const expected_rgba = tc.expected.toRGB().encodeRGBA();
             try testing.expectEqualDeep(tc.expected, got);
-            // try testing.expectApproxEqAbs(tc.expected.h, got.h, math.floatEps(f32));
-            // try testing.expectApproxEqAbs(tc.expected.s, got.s, math.floatEps(f32));
-            // try testing.expectApproxEqAbs(tc.expected.l, got.l, math.floatEps(f32));
-            // try testing.expectApproxEqAbs(tc.expected.a, got.a, math.floatEps(f32));
             try testing.expectEqualDeep(expected_rgba, got_rgba);
         }
     };
