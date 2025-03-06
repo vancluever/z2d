@@ -1,15 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
 
-//! Gradients are patterns that can be used to draw colors in a
-//! position-dependent fashion, transitioning through a series of colors along
-//! a specific axis.
-//!
-//! Gradients operate off of the higher-level `Color` types, returning these
-//! values with which further interpolation can be done (when manually
-//! searching off of `Stop.List.search`), or translated to an RGBA pixel value
-//! using `getPixel`.
-
 const std = @import("std");
 const debug = @import("std").debug;
 const math = @import("std").math;
@@ -37,6 +28,241 @@ pub const GradientType = enum {
     conic,
 };
 
+/// Gradients are patterns that can be used to draw colors in a
+/// position-dependent fashion, transitioning through a series of colors along
+/// a specific axis.
+///
+/// Gradients operate off of the higher-level `Color` types, returning these
+/// values with which further interpolation can be done (when manually
+/// searching off of `searchInStops`), or translated to an RGBA pixel value
+/// using `getPixel`.
+///
+/// Any methods that require an allocator must use the same allocator for the
+/// life of the gradient.
+pub const Gradient = union(GradientType) {
+    linear: Linear,
+    radial: Radial,
+    conic: Conic,
+
+    /// Arguments for the `init` function.
+    pub const InitArgs = struct {
+        /// The type of the gradient along with the parameters common to that
+        /// gradient for initialization.
+        type: union(GradientType) {
+            /// Represents a linear gradient going from `(x0, y0)` to `(x1, y1)`.
+            linear: struct {
+                x0: f64,
+                y0: f64,
+                x1: f64,
+                y1: f64,
+            },
+
+            /// Represents a radial gradient represented by two circles,
+            /// positioned at `(inner_x, inner_y)` and `(outer_x, outer_y)`,
+            /// with radii `inner_radius` and `outer_radius`.
+            ///
+            /// To understand how this gradient works, you can imagine looking
+            /// at the gradient from 3D space as a cone, looking down from the
+            /// inner circle at the top.
+            ///
+            /// To represent a basic single-point radial gradient, use the same
+            /// co-ordinates for both circles and make `inner_radius` zero.
+            radial: struct {
+                inner_x: f64,
+                inner_y: f64,
+                inner_radius: f64,
+                outer_x: f64,
+                outer_y: f64,
+                outer_radius: f64,
+            },
+
+            /// Represents a conic (sweep) gradient, centered at `(x, y)`. The
+            /// gradient runs around the center point starting at `angle`.
+            conic: struct {
+                x: f64,
+                y: f64,
+                angle: f64,
+            },
+        },
+
+        /// The interpolation method to use with this gradient.
+        method: InterpolationMethod = .linear_rgb,
+
+        /// Can be used to supply a static buffer for color stops. If you use
+        /// this, use `addStopAssumeCapacity` and don't call `deinit` when you
+        /// are finished with the gradient.
+        stops: []Stop = &[_]Stop{},
+    };
+
+    /// Initializes the gradient with the specified type and arguments.
+    ///
+    /// Before using the gradient, it's recommended to add some stops:
+    ///
+    /// ```
+    /// var gradient = Gradient.init(.{
+    ///     .type = .{ .linear = .{
+    ///         .x0 = 0,  .y0 = 0,
+    ///         .x1 = 99, .y1 = 99,
+    ///     }},
+    ///     .method = .linear_rgb,
+    /// });
+    /// defer gradient.deinit(alloc);
+    /// try gradient.addStop(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
+    /// try gradient.addStop(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+    /// try gradient.addStop(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
+    /// ...
+    /// ```
+    ///
+    /// Stop memory can be managed by either using `addStop` with an allocator;
+    /// if using this method `deinit` must be called to release the stops. You
+    /// can also supply your own buffer via `InitArgs.stops` and using
+    /// `addStopAssumeCapacity`; if done this way, `deinit` should not be
+    /// called.
+    pub fn init(args: InitArgs) Gradient {
+        return switch (args.type) {
+            .linear => |l| Linear.initBuffer(
+                l.x0,
+                l.y0,
+                l.x1,
+                l.y1,
+                args.stops,
+                args.method,
+            ).asGradientInterface(),
+            .radial => |r| Radial.initBuffer(
+                r.inner_x,
+                r.inner_y,
+                r.inner_radius,
+                r.outer_x,
+                r.outer_y,
+                r.outer_radius,
+                args.stops,
+                args.method,
+            ).asGradientInterface(),
+            .conic => |c| Conic.initBuffer(
+                c.x,
+                c.y,
+                c.angle,
+                args.stops,
+                args.method,
+            ).asGradientInterface(),
+        };
+    }
+
+    /// Releases any stops that have been added using `addStop`. Must use the
+    /// same allocator that was used there.
+    pub fn deinit(self: *Gradient, alloc: mem.Allocator) void {
+        switch (self.*) {
+            inline else => |*g| g.deinit(alloc),
+        }
+    }
+
+    /// Shorthand for returning the gradient as a pattern.
+    pub fn asPattern(self: *Gradient) Pattern {
+        return .{ .gradient = self };
+    }
+
+    /// Adds a stop with the specified offset and color. The offset will be
+    /// clamped to `0.0` and `1.0`.
+    ///
+    /// If stops are added at identical offsets, they will be stored in the
+    /// order they were added. This can be used to define "hard stops" - parts
+    /// of gradients that transition from one color to another directly without
+    /// interpolation.
+    ///
+    /// Note that hard stops are not anti-aliased. To achieve a similar
+    /// smoothing effect, one can add a slightly small offset to one side of
+    /// the hard stop to produce a small amount of interpolation:
+    ///
+    /// ```
+    /// try gradient.addStop(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
+    /// try gradient.addStop(alloc, 0.5, .{ .rgb = .{ 1, 0, 0 } });
+    /// try gradient.addStop(alloc, 0.501, .{ .rgb = .{ 0, 1, 0 } });
+    /// try gradient.addStop(alloc, 1,   .{ .rgb = .{ 0, 1, 0 } });
+    /// ```
+    pub fn addStop(
+        self: *Gradient,
+        alloc: mem.Allocator,
+        offset: f32,
+        color: Color.InitArgs,
+    ) mem.Allocator.Error!void {
+        return switch (self.*) {
+            inline else => |*g| g.stops.add(alloc, offset, color),
+        };
+    }
+
+    /// Like `addStop`, but assumes the list can hold the stop.
+    pub fn addStopAssumeCapacity(self: *Gradient, offset: f32, color: Color.InitArgs) void {
+        switch (self.*) {
+            inline else => |*g| g.stops.addAssumeCapacity(offset, color),
+        }
+    }
+
+    /// Sets the transformation matrix for this gradient.
+    ///
+    /// When working with this function, keep in mind that gradients are
+    /// expected to operate in _pattern space_ in the overall pattern space ->
+    /// user space -> device space co-ordinate model. This effectively means
+    /// that the inverse of whatever matrix is supplied here is used. If
+    /// working with gradients directly and you are looking for a
+    /// transformation, make sure you keep this in mind when setting the matrix
+    /// (either apply the inverse or manually invert your transformations
+    /// before applying them).
+    ///
+    /// `Context` runs this function when `Context.setPattern` is called.
+    pub fn setTransformation(self: *Gradient, tr: Transformation) Transformation.Error!void {
+        return switch (self.*) {
+            inline else => |*g| g.setTransformation(tr),
+        };
+    }
+
+    /// Gets the pixel calculated for the gradient at `(x, y)`.
+    pub fn getPixel(self: *const Gradient, x: i32, y: i32) pixel.Pixel {
+        return switch (self.*) {
+            inline else => |*g| g.getPixel(x, y),
+        };
+    }
+
+    /// Returns the offset on the gradient for the specific (x, y)
+    /// co-ordinates. This offset can be used to manually search on the
+    /// gradient's stops using `searchInStops`.
+    ///
+    /// ```
+    /// const offset = gradient.getOffset(50, 50);
+    /// const result = gradient.searchInStops(offset);
+    /// ... // (lerp off of search result or perform other operations)
+    /// ```
+    ///
+    /// Negative values denote an invalid result due to a zero-length gradient
+    /// and is valid to give to `searchInStops` (will return a transparent
+    /// black color result).
+    pub fn getOffset(self: *const Gradient, x: i32, y: i32) f32 {
+        return switch (self.*) {
+            inline else => |*g| g.getOffset(x, y),
+        };
+    }
+
+    /// Returns a start color, an end color, and a relative offset within the
+    /// stop list, suitable for linear interpolation.
+    ///
+    /// Offset is clamped to `0.0` and `1.0`, with the exception of negative
+    /// values (our way to denote an invalid t result from `getOffset` calls)
+    /// which return transparent black.
+    ///
+    /// The result of a gradient with no stops is also transparent black.
+    pub fn searchInStops(self: *const Gradient, offset: f32) Stop.List.SearchResult {
+        return switch (self.*) {
+            inline else => |*g| g.stops.search(offset),
+        };
+    }
+
+    /// Returns the interpolation method for the gradient.
+    pub fn getInterpolationMethod(self: *const Gradient) InterpolationMethod {
+        return switch (self.*) {
+            inline else => |*g| g.stops.interpolation_method,
+        };
+    }
+};
+
 /// Represents a linear gradient along a line.
 pub const Linear = struct {
     start: Point,
@@ -46,41 +272,6 @@ pub const Linear = struct {
     /// The stops contained within the gradient. Add stops using
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
     stops: Stop.List,
-
-    /// Initializes a linear gradient running from `(x0, y0)` to `(x1, y1)`.
-    ///
-    /// The gradient runs in the interpolation color space specified, with all
-    /// color stops converted to that space for interpolation.
-    ///
-    /// Before using the gradient, it's recommended to add some stops:
-    ///
-    /// ```
-    /// var linear = Linear.init(0, 0, 99, 99, .linear_rgb);
-    /// defer linear.deinit(alloc);
-    /// try linear.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
-    /// try linear.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
-    /// try linear.stops.add(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
-    /// ...
-    /// ```
-    ///
-    /// As shown in the above example, `deinit` should be called to release any
-    /// stops that have been added using `Stop.List.add`.
-    pub fn init(
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
-        method: InterpolationMethod,
-    ) Linear {
-        return initBuffer(
-            x0,
-            y0,
-            x1,
-            y1,
-            &[_]Stop{},
-            method,
-        );
-    }
 
     /// Initializes the gradient with externally allocated memory for the
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
@@ -109,9 +300,9 @@ pub const Linear = struct {
         self.stops.deinit(alloc);
     }
 
-    /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *Linear) Pattern {
-        return .{ .linear_gradient = self };
+    /// Returns this gradient as a higher-level gradient interface.
+    pub fn asGradientInterface(self: Linear) Gradient {
+        return .{ .linear = self };
     }
 
     /// Sets the transformation matrix for this gradient.
@@ -189,8 +380,8 @@ pub const Radial = struct {
     outer_radius: f64,
     transformation: Transformation = Transformation.identity,
 
-    // pre-calculation fields for finding the t value that can be done ahead of
-    // time
+    // Pre-calculation fields for finding the t value that can be done ahead of
+    // time.
     cdx: f64,
     cdy: f64,
     dr: f64,
@@ -201,56 +392,6 @@ pub const Radial = struct {
     /// The stops contained within the gradient. Add stops using
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
     stops: Stop.List,
-
-    /// Initializes a radial gradient centered with the two provided circles.
-    ///
-    /// To produce a basic gradient going out from the center, use the same
-    /// co-ordinates, with the inner radius being zero.
-    ///
-    /// To naturally control the rate of projection over the radius, use two
-    /// circles with different radii and the same co-ordinates with the inner
-    /// radius being smaller.
-    ///
-    /// To create a "squished" effect on any side, create an inner circle with
-    /// a smaller radius, and an outer circle with a larger radius, off-center
-    /// from the inner.
-    ///
-    /// The gradient runs in the interpolation color space specified, with all
-    /// color stops converted to that space for interpolation.
-    ///
-    /// Before using the gradient, it's recommended to add some stops:
-    ///
-    /// ```
-    /// var radial = Radial.init(0, 0, 99, 0, 0, 99, .linear_rgb);
-    /// defer radial.deinit(alloc);
-    /// try radial.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
-    /// try radial.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
-    /// try radial.stops.add(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
-    /// ...
-    /// ```
-    ///
-    /// As shown in the above example, `deinit` should be called to release any
-    /// stops that have been added using `Stop.List.add`.
-    pub fn init(
-        inner_x: f64,
-        inner_y: f64,
-        inner_radius: f64,
-        outer_x: f64,
-        outer_y: f64,
-        outer_radius: f64,
-        method: InterpolationMethod,
-    ) Radial {
-        return initBuffer(
-            inner_x,
-            inner_y,
-            inner_radius,
-            outer_x,
-            outer_y,
-            outer_radius,
-            &[_]Stop{},
-            method,
-        );
-    }
 
     /// Initializes the gradient with externally allocated memory for the
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
@@ -300,9 +441,9 @@ pub const Radial = struct {
         self.stops.deinit(alloc);
     }
 
-    /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *Radial) Pattern {
-        return .{ .radial_gradient = self };
+    /// Returns this gradient as a higher-level gradient interface.
+    pub fn asGradientInterface(self: Radial) Gradient {
+        return .{ .radial = self };
     }
 
     /// Sets the transformation matrix for this gradient.
@@ -516,41 +657,6 @@ pub const Conic = struct {
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
     stops: Stop.List,
 
-    /// Initializes a conic gradient centered at `(x, y)` with the offset angle
-    /// of `angle` (supplied in radians, normalized to the 0 to 2 * math.pi
-    /// range).
-    ///
-    /// The gradient runs in the interpolation color space specified, with all
-    /// color stops converted to that space for interpolation.
-    ///
-    /// Before using the gradient, it's recommended to add some stops:
-    ///
-    /// ```
-    /// var conic = Conic.init(50, 50, math.pi / 4, .linear_rgb);
-    /// defer conic.deinit(alloc);
-    /// try conic.stops.add(alloc, 0,   .{ .rgb = .{ 1, 0, 0 } });
-    /// try conic.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
-    /// try conic.stops.add(alloc, 1,   .{ .rgb = .{ 0, 0, 1 } });
-    /// ...
-    /// ```
-    ///
-    /// As shown in the above example, `deinit` should be called to release any
-    /// stops that have been added using `Stop.List.add`.
-    pub fn init(
-        x: f64,
-        y: f64,
-        angle: f64,
-        method: InterpolationMethod,
-    ) Conic {
-        return initBuffer(
-            x,
-            y,
-            angle,
-            &[_]Stop{},
-            method,
-        );
-    }
-
     /// Initializes the gradient with externally allocated memory for the
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
     /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
@@ -577,9 +683,9 @@ pub const Conic = struct {
         self.stops.deinit(alloc);
     }
 
-    /// Returns this gradient as a pattern.
-    pub fn asPatternInterface(self: *Conic) Pattern {
-        return .{ .conic_gradient = self };
+    /// Returns this gradient as a higher-level gradient interface.
+    pub fn asGradientInterface(self: Conic) Gradient {
+        return .{ .conic = self };
     }
 
     /// Sets the transformation matrix for this gradient.
@@ -1071,11 +1177,12 @@ test "Linear.getOffset" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var gradient = Linear.init(
+            var gradient = Linear.initBuffer(
                 tc.x0,
                 tc.y0,
                 tc.x1,
                 tc.y1,
+                &[_]Stop{},
                 .linear_rgb,
             );
             try gradient.setTransformation(tc.matrix);
@@ -1087,12 +1194,11 @@ test "Linear.getOffset" {
 
 test "Linear.getPixel" {
     {
-        const alloc = testing.allocator;
-        var gradient = Linear.init(0, 0, 99, 99, .linear_rgb);
-        defer gradient.deinit(alloc);
-        try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
-        try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
-        try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
+        var stop_buffer: [3]Stop = undefined;
+        var gradient = Linear.initBuffer(0, 0, 99, 99, &stop_buffer, .linear_rgb);
+        gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+        gradient.stops.addAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+        gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
 
         // Basic test along the gradient line, pretty much zero projection. You get
         // to see the rounding fun that happens though with some of the midpoints.
@@ -1169,11 +1275,10 @@ test "Linear.getPixel" {
 
     {
         // HSL along the short path
-        const alloc = testing.allocator;
-        var gradient = Linear.init(0, 0, 99, 99, .{ .hsl = .shorter });
-        defer gradient.deinit(alloc);
-        try gradient.stops.add(alloc, 0, .{ .hsl = .{ 300, 1, 0.5 } });
-        try gradient.stops.add(alloc, 1, .{ .hsl = .{ 50, 1, 0.5 } });
+        var stop_buffer: [2]Stop = undefined;
+        var gradient = Linear.initBuffer(0, 0, 99, 99, &stop_buffer, .{ .hsl = .shorter });
+        gradient.stops.addAssumeCapacity(0, .{ .hsl = .{ 300, 1, 0.5 } });
+        gradient.stops.addAssumeCapacity(1, .{ .hsl = .{ 50, 1, 0.5 } });
 
         try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
@@ -1306,116 +1411,18 @@ test "Radial.getOffset" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var gradient = Radial.init(
+            var gradient = Radial.initBuffer(
                 tc.inner_x,
                 tc.inner_y,
                 tc.inner_radius,
                 tc.outer_x,
                 tc.outer_y,
                 tc.outer_radius,
+                &[_]Stop{},
                 tc.interpolation_method,
             );
             try gradient.setTransformation(tc.matrix);
             try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
-        }
-    };
-    try runCases(name, cases, TestFn.f);
-}
-
-test "Radial.init" {
-    const name = "Radial.init";
-    const cases = [_]struct {
-        name: []const u8,
-        expected: Radial,
-        outer_x: f64,
-        outer_y: f64,
-        outer_radius: f64,
-        inner_x: f64,
-        inner_y: f64,
-        inner_radius: f64,
-        method: InterpolationMethod,
-    }{
-        .{
-            .name = "basic",
-            .expected = .{
-                .inner = .{ .x = 24, .y = 25 },
-                .inner_radius = 26,
-                .outer = .{ .x = 49, .y = 50 },
-                .outer_radius = 51,
-                .stops = .{ .interpolation_method = .linear_rgb },
-                .cdx = 25,
-                .cdy = 25,
-                .dr = 25,
-                .min_dr = -26,
-                .a = 625,
-                .inv_a = 0.0016,
-            },
-            .inner_x = 24,
-            .inner_y = 25,
-            .inner_radius = 26,
-            .outer_x = 49,
-            .outer_y = 50,
-            .outer_radius = 51,
-            .method = .linear_rgb,
-        },
-        .{
-            .name = "below zero radii",
-            .expected = .{
-                .inner = .{ .x = 24, .y = 25 },
-                .inner_radius = 0,
-                .outer = .{ .x = 49, .y = 50 },
-                .outer_radius = 0,
-                .stops = .{ .interpolation_method = .linear_rgb },
-                .cdx = 25,
-                .cdy = 25,
-                .dr = 0,
-                .min_dr = -0.0,
-                .a = 1250,
-                .inv_a = 0.0008,
-            },
-            .inner_x = 24,
-            .inner_y = 25,
-            .inner_radius = -1,
-            .outer_x = 49,
-            .outer_y = 50,
-            .outer_radius = -1,
-            .method = .linear_rgb,
-        },
-        .{
-            .name = "degenerate points (a == 0)",
-            .expected = .{
-                .inner = .{ .x = 0, .y = 0 },
-                .inner_radius = 0,
-                .outer = .{ .x = 0, .y = 50 },
-                .outer_radius = 50,
-                .stops = .{ .interpolation_method = .linear_rgb },
-                .cdx = 0,
-                .cdy = 50,
-                .dr = 50,
-                .min_dr = -0.0,
-                .a = 0,
-                .inv_a = 0,
-            },
-            .inner_x = 0,
-            .inner_y = 0,
-            .inner_radius = 0,
-            .outer_x = 0,
-            .outer_y = 50,
-            .outer_radius = 50,
-            .method = .linear_rgb,
-        },
-    };
-    const TestFn = struct {
-        fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Radial.init(
-                tc.inner_x,
-                tc.inner_y,
-                tc.inner_radius,
-                tc.outer_x,
-                tc.outer_y,
-                tc.outer_radius,
-                tc.method,
-            ));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1542,77 +1549,16 @@ test "Radial.initBuffer" {
 }
 
 test "Radial.getPixel" {
-    const alloc = testing.allocator;
-    var gradient = Radial.init(49, 49, 0, 49, 49, 50, .linear_rgb);
-    defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 1, 0 } });
+    var stop_buffer: [2]Stop = undefined;
+    var gradient = Radial.initBuffer(49, 49, 0, 49, 49, 50, &stop_buffer, .linear_rgb);
+    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 1, 0 } });
     try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
         .r = 125,
         .g = 130,
         .b = 0,
         .a = 255,
     } }, gradient.getPixel(49, 74));
-}
-
-test "Conic.init" {
-    const name = "Conic.init";
-    const cases = [_]struct {
-        name: []const u8,
-        expected: Conic,
-        x: f64,
-        y: f64,
-        angle: f64,
-        method: InterpolationMethod,
-    }{
-        .{
-            .name = "basic",
-            .expected = .{
-                .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi / 4.0,
-                .stops = .{ .interpolation_method = .linear_rgb },
-            },
-            .x = 49,
-            .y = 49,
-            .angle = math.pi / 4.0,
-            .method = .linear_rgb,
-        },
-        .{
-            .name = "angle over 2 x pi",
-            .expected = .{
-                .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi * 0.5,
-                .stops = .{ .interpolation_method = .linear_rgb },
-            },
-            .x = 49,
-            .y = 49,
-            .angle = math.pi * 2.5,
-            .method = .linear_rgb,
-        },
-        .{
-            .name = "negative angle",
-            .expected = .{
-                .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi * 1.5,
-                .stops = .{ .interpolation_method = .linear_rgb },
-            },
-            .x = 49,
-            .y = 49,
-            .angle = math.pi * -0.5,
-            .method = .linear_rgb,
-        },
-    };
-    const TestFn = struct {
-        fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Conic.init(
-                tc.x,
-                tc.y,
-                tc.angle,
-                tc.method,
-            ));
-        }
-    };
-    try runCases(name, cases, TestFn.f);
 }
 
 test "Conic.initBuffer" {
@@ -1748,10 +1694,11 @@ test "Conic.getOffset" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var gradient = Conic.init(
+            var gradient = Conic.initBuffer(
                 tc.center_x,
                 tc.center_y,
                 tc.angle,
+                &[_]Stop{},
                 .linear_rgb,
             );
             try gradient.setTransformation(tc.matrix);
@@ -1762,11 +1709,10 @@ test "Conic.getOffset" {
 }
 
 test "Conic.getPixel" {
-    const alloc = testing.allocator;
-    var gradient = Conic.init(49, 49.5, 0, .linear_rgb);
-    defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 1, 0 } });
+    var stop_buffer: [2]Stop = undefined;
+    var gradient = Conic.initBuffer(49, 49.5, 0, &stop_buffer, .linear_rgb);
+    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 1, 0 } });
     try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
         .r = 128,
         .g = 128,
@@ -1777,7 +1723,7 @@ test "Conic.getPixel" {
 
 test "Linear.setTransformation" {
     const matrix = Transformation.identity.scale(2, 3);
-    var gradient = Linear.init(1, 1, 10, 10, .linear_rgb);
+    var gradient = Linear.initBuffer(1, 1, 10, 10, &[_]Stop{}, .linear_rgb);
     try gradient.setTransformation(matrix);
     try testing.expectEqualDeep(Linear{
         .start = .{ .x = 1, .y = 1 },
@@ -1787,4 +1733,112 @@ test "Linear.setTransformation" {
             .interpolation_method = .linear_rgb,
         },
     }, gradient);
+}
+
+test "Gradient interface" {
+    const name = "Gradient interface";
+    const cases = [_]struct {
+        name: []const u8,
+        args: Gradient.InitArgs,
+        expected: Gradient,
+    }{
+        .{
+            .name = "linear",
+            .args = .{
+                .type = .{ .linear = .{
+                    .x0 = 0,
+                    .y0 = 0,
+                    .x1 = 99,
+                    .y1 = 99,
+                } },
+            },
+            .expected = .{
+                .linear = Linear.initBuffer(0, 0, 99, 99, &[_]Stop{}, .linear_rgb),
+            },
+        },
+        .{
+            .name = "radial",
+            .args = .{
+                .type = .{ .radial = .{
+                    .inner_x = 100,
+                    .inner_y = 100,
+                    .inner_radius = 0,
+                    .outer_x = 150,
+                    .outer_y = 150,
+                    .outer_radius = 100,
+                } },
+            },
+            .expected = .{
+                .radial = Radial.initBuffer(100, 100, 0, 150, 150, 100, &[_]Stop{}, .linear_rgb),
+            },
+        },
+        .{
+            .name = "conic",
+            .args = .{
+                .type = .{ .conic = .{
+                    .x = 100,
+                    .y = 150,
+                    .angle = 45,
+                } },
+            },
+            .expected = .{
+                .conic = Conic.initBuffer(100, 150, 45, &[_]Stop{}, .linear_rgb),
+            },
+        },
+        .{
+            .name = "non-default interpolation method",
+            .args = .{
+                .type = .{ .conic = .{
+                    .x = 100,
+                    .y = 150,
+                    .angle = 45,
+                } },
+                .method = .{ .hsl = .increasing },
+            },
+            .expected = .{
+                .conic = Conic.initBuffer(100, 150, 45, &[_]Stop{}, .{ .hsl = .increasing }),
+            },
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            {
+                const alloc = testing.allocator;
+                var got = Gradient.init(tc.args);
+                try testing.expectEqual(tc.expected, got);
+                defer got.deinit(alloc);
+                try got.addStop(alloc, 0.0, .{ .rgb = .{ 0, 0, 0 } });
+                try got.addStop(alloc, 1.0, .{ .rgb = .{ 1, 1, 1 } });
+                debug.assert(@TypeOf(got.getPixel(0, 0)) == pixel.Pixel);
+                debug.assert(@TypeOf(got.getOffset(0, 0)) == f32);
+                try testing.expectEqualDeep(
+                    Stop.List.SearchResult{
+                        .c0 = .{ .linear_rgb = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 } },
+                        .c1 = .{ .linear_rgb = .{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 } },
+                        .offset = 0.5,
+                    },
+                    got.searchInStops(0.5),
+                );
+                try testing.expectEqual(tc.args.method, got.getInterpolationMethod());
+            }
+
+            {
+                var stops: [2]Stop = undefined;
+                var args = tc.args;
+                args.stops = &stops;
+                var got = Gradient.init(args);
+                got.addStopAssumeCapacity(0.0, .{ .rgb = .{ 0, 0, 0 } });
+                got.addStopAssumeCapacity(1.0, .{ .rgb = .{ 1, 1, 1 } });
+                try testing.expectEqualDeep(
+                    Stop.List.SearchResult{
+                        .c0 = .{ .linear_rgb = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 } },
+                        .c1 = .{ .linear_rgb = .{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 } },
+                        .offset = 0.5,
+                    },
+                    got.searchInStops(0.5),
+                );
+            }
+        }
+    };
+    try runCases(name, cases, TestFn.f);
 }

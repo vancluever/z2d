@@ -44,6 +44,10 @@
 //! various color spaces. Most functions outside of the `color` package will
 //! take color as its verb-based `Color.InitArgs` form to save on boilerplate.
 //!
+//! * `Gradient` - The color gradient pattern type, providing the ability to
+//! provide transitions between colors in various patterns (linear, radial, and
+//! conic).
+//!
 //! * `Transformation` - An affine transformation matrix that transforms
 //! co-ordinates between user space and device space in `Context` and `Path`.
 //!
@@ -93,6 +97,7 @@ pub const StaticPath = @import("static_path.zig").StaticPath;
 pub const Pattern = pattern.Pattern;
 pub const Pixel = pixel.Pixel;
 pub const Color = color.Color;
+pub const Gradient = gradient.Gradient;
 pub const Surface = surface.Surface;
 pub const Transformation = @import("Transformation.zig");
 

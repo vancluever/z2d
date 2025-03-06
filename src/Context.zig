@@ -87,10 +87,7 @@ pub fn getDither(self: *Context) Dither {
 /// CTM is not invertible.
 pub fn setSource(self: *Context, source: Pattern) void {
     switch (source) {
-        inline .linear_gradient,
-        .radial_gradient,
-        .conic_gradient,
-        => |g| g.setTransformation(self.transformation) catch return,
+        .gradient => |g| g.setTransformation(self.transformation) catch return,
         else => {},
     }
     self.pattern = source;
@@ -510,9 +507,7 @@ fn wrapDither(self: *Context) Pattern {
                 .type = self.dither,
                 .source = switch (self.pattern) {
                     .opaque_pattern => |p| .{ .pixel = p.pixel },
-                    .linear_gradient => |g| .{ .gradient = .{ .linear = g } },
-                    .radial_gradient => |g| .{ .gradient = .{ .radial = g } },
-                    .conic_gradient => |g| .{ .gradient = .{ .conic = g } },
+                    .gradient => |g| .{ .gradient = g },
                     else => return self.pattern,
                 },
                 .scale = switch (self.surface.*) {

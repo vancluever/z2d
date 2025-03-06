@@ -43,7 +43,7 @@ fn draw(
     sfc_y: i32,
     grayscale: bool,
     bits: u4,
-    dither: z2d.compositor.DitherParam.Type,
+    dither: z2d.compositor.Dither.Type,
 ) !void {
     var scratch_sfc: z2d.Surface = try z2d.Surface.init(switch (grayscale) {
         true => switch (bits) {
@@ -54,14 +54,15 @@ fn draw(
     }, alloc, 500, 100);
     defer scratch_sfc.deinit(alloc);
     var stop_buffer: [2]z2d.gradient.Stop = undefined;
-    var gradient = z2d.gradient.Linear.initBuffer(
-        0,
-        50,
-        500,
-        50,
-        &stop_buffer,
-        .linear_rgb,
-    );
+    var gradient = z2d.Gradient.init(.{
+        .type = .{ .linear = .{
+            .x0 = 0,
+            .y0 = 50,
+            .x1 = 500,
+            .y1 = 50,
+        } },
+        .stops = &stop_buffer,
+    });
     if (grayscale) {
         // NOTE: We're not doing true grayscale here, since we're trying to
         // demonstrate the effect of gradients on lower bit-depth surfaces, of
@@ -70,18 +71,18 @@ fn draw(
         // and then exporting that would work as expected). So what we do is
         // start from white (transparent, which shows white as well since
         // that's what we have on the main surface) to opaque black.
-        gradient.stops.addAssumeCapacity(0, .{ .rgba = .{ 1, 1, 1, 0 } });
-        gradient.stops.addAssumeCapacity(1, .{ .rgba = .{ 0, 0, 0, 1 } });
+        gradient.addStopAssumeCapacity(0, .{ .rgba = .{ 1, 1, 1, 0 } });
+        gradient.addStopAssumeCapacity(1, .{ .rgba = .{ 0, 0, 0, 1 } });
     } else {
-        gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 27.0 / 255.0, 93.0 / 255.0, 124.0 / 255.0 } });
-        gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 38.0 / 255.0, 32.0 / 255.0, 16.0 / 255.0 } });
+        gradient.addStopAssumeCapacity(0, .{ .rgb = .{ 27.0 / 255.0, 93.0 / 255.0, 124.0 / 255.0 } });
+        gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 38.0 / 255.0, 32.0 / 255.0, 16.0 / 255.0 } });
     }
     z2d.compositor.SurfaceCompositor.run(&scratch_sfc, 0, 0, 1, .{.{
         .operator = .over,
         .src = .{
             .dither = .{
                 .type = dither,
-                .source = .{ .gradient = .{ .linear = &gradient } },
+                .source = .{ .gradient = &gradient },
                 .scale = bits,
             },
         },
