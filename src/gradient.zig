@@ -1142,6 +1142,58 @@ test "Stop.List.search, hard stops" {
     }, stops.search(1));
 }
 
+test "Linear.initBuffer" {
+    const name = "Linear.initBuffer";
+    var buf = [_]Stop{
+        .{
+            .idx = 0,
+            .color = Color.init(.{ .rgb = .{ 1, 0, 0 } }),
+            .offset = 0.5,
+        },
+    };
+    const cases = [_]struct {
+        name: []const u8,
+        expected: Linear,
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        buffer: []Stop,
+        method: InterpolationMethod,
+    }{
+        .{
+            .name = "basic",
+            .expected = .{
+                .start = .{ .x = 0, .y = 0 },
+                .end = .{ .x = 99, .y = 99 },
+                .stops = .{
+                    .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
+                    .interpolation_method = .linear_rgb,
+                },
+            },
+            .x0 = 0,
+            .y0 = 0,
+            .x1 = 99,
+            .y1 = 99,
+            .buffer = &buf,
+            .method = .linear_rgb,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqualDeep(tc.expected, Linear.initBuffer(
+                tc.x0,
+                tc.y0,
+                tc.x1,
+                tc.y1,
+                tc.buffer,
+                tc.method,
+            ));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
 test "Linear.getOffset" {
     const name = "Linear.getOffset";
     const cases = [_]struct {
