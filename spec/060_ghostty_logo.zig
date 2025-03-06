@@ -45,12 +45,17 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
 
-    var gradient = z2d.gradient.Linear.init(0, 49, 82, 49, .linear_rgb);
+    var gradient = z2d.Gradient.init(.{ .type = .{ .linear = .{
+        .x0 = 0,
+        .y0 = 49,
+        .x1 = 82,
+        .y1 = 49,
+    } } });
     defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
-    try gradient.stops.add(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
-    context.setSource(gradient.asPatternInterface());
+    try gradient.addStop(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
+    try gradient.addStop(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
+    try gradient.addStop(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
+    context.setSource(gradient.asPattern());
 
     try context.moveTo(62.186, 97.000);
     try context.curveTo(58.431, 97.000, 54.746, 95.875, 51.637, 93.800);
@@ -92,7 +97,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.closePath();
     try context.fill();
 
-    context.setSource(gradient.asPatternInterface());
+    context.setSource(gradient.asPattern());
     context.resetPath();
     try context.moveTo(72.736, 41.088);
     try context.lineTo(72.736, 77.849);

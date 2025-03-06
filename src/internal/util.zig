@@ -23,6 +23,7 @@ pub const TestingError = error{
     TestExpectedEqual,
     TestExpectedApproxEqAbs,
     InvalidMatrix, // Transformation.Error.InvalidMatrix
+    OutOfMemory, // std.mem.Allocator.Error
 };
 
 /// Internal vectorization function. Turns each field into a

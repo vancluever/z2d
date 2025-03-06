@@ -16,9 +16,10 @@ const mem = @import("std").mem;
 const testing = @import("std").testing;
 
 const colorpkg = @import("color.zig");
-const gradient = @import("gradient.zig");
+const gradientpkg = @import("gradient.zig");
 const pixelpkg = @import("pixel.zig");
 const Color = colorpkg.Color;
+const Gradient = gradientpkg.Gradient;
 const Pixel = pixelpkg.Pixel;
 
 const dither_blue_noise_64x64 = @import("internal/blue_noise.zig").dither_blue_noise_64x64;
@@ -54,11 +55,7 @@ pub const Source = union(enum) {
 
     /// A gradient. After interpolation, the result is converted to linear RGB
     /// and the dither is applied.
-    gradient: union(gradient.GradientType) {
-        linear: *gradient.Linear,
-        radial: *gradient.Radial,
-        conic: *gradient.Conic,
-    },
+    gradient: *Gradient,
 };
 
 /// The dithering type in use.
@@ -83,15 +80,13 @@ pub fn getPixel(self: *const Dither, x: i32, y: i32) Pixel {
     const rgba: colorpkg.LinearRGB = switch (self.source) {
         .pixel => |src| colorpkg.LinearRGB.decodeRGBA(pixelpkg.RGBA.fromPixel(src)),
         .color => |src| colorpkg.LinearRGB.fromColor(Color.init(src)),
-        .gradient => |src| switch (src) {
-            inline else => |g| g: {
-                const search_result = g.stops.search(g.getOffset(x, y));
-                break :g colorpkg.LinearRGB.fromColor(g.stops.interpolation_method.interpolate(
-                    search_result.c0,
-                    search_result.c1,
-                    search_result.offset,
-                ));
-            },
+        .gradient => |src| g: {
+            const search_result = src.searchInStops(src.getOffset(x, y));
+            break :g colorpkg.LinearRGB.fromColor(src.getInterpolationMethod().interpolate(
+                search_result.c0,
+                search_result.c1,
+                search_result.offset,
+            ));
         },
     };
     const m: f32 = switch (self.type) {
@@ -135,25 +130,19 @@ pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) 
             var c1_vec: [vector_length]colorpkg.Color = undefined;
             var offsets_vec: [vector_length]f32 = undefined;
             for (0..vector_length) |i| {
-                switch (src) {
-                    inline else => |g| {
-                        const search_result = g.stops.search(g.getOffset(
-                            x + @as(i32, @intCast(i)),
-                            y,
-                        ));
-                        c0_vec[i] = search_result.c0;
-                        c1_vec[i] = search_result.c1;
-                        offsets_vec[i] = search_result.offset;
-                    },
-                }
+                const search_result = src.searchInStops(src.getOffset(
+                    x + @as(i32, @intCast(i)),
+                    y,
+                ));
+                c0_vec[i] = search_result.c0;
+                c1_vec[i] = search_result.c1;
+                offsets_vec[i] = search_result.offset;
             }
-            break :c switch (src) {
-                inline else => |g| g.stops.interpolation_method.interpolateVec(
-                    c0_vec,
-                    c1_vec,
-                    offsets_vec,
-                ),
-            };
+            break :c src.getInterpolationMethod().interpolateVec(
+                c0_vec,
+                c1_vec,
+                offsets_vec,
+            );
         },
     };
     const m: @Vector(vector_length, f32) = switch (self.type) {
@@ -292,7 +281,7 @@ test "Dither.getPixel" {
         source: union(enum) {
             pixel: Pixel,
             color: Color.InitArgs,
-            gradient: gradient.GradientType,
+            gradient: void,
         },
         scale: u4,
         x: i32,
@@ -326,30 +315,12 @@ test "Dither.getPixel" {
             .y = 0,
         },
         .{
-            .name = "gradient (linear)",
-            .expected = .{ .rgba = .{ .r = 128, .g = 128, .b = 128, .a = 255 } },
-            .type = .bayer,
-            .source = .{ .gradient = .linear },
-            .scale = 8,
-            .x = 49,
-            .y = 20,
-        },
-        .{
-            .name = "gradient (radial)",
-            .expected = .{ .rgba = .{ .r = 135, .g = 135, .b = 135, .a = 255 } },
-            .type = .bayer,
-            .source = .{ .gradient = .radial },
-            .scale = 8,
-            .x = 75,
-            .y = 49,
-        },
-        .{
-            .name = "gradient (conic)",
+            .name = "gradient",
             .expected = .{ .rgba = .{ .r = 127, .g = 127, .b = 127, .a = 255 } },
             .type = .bayer,
-            .source = .{ .gradient = .conic },
+            .source = .gradient,
             .scale = 8,
-            .x = 0,
+            .x = 49,
             .y = 49,
         },
         .{
@@ -373,29 +344,29 @@ test "Dither.getPixel" {
             .name = "blue noise",
             .expected = .{ .rgba = .{ .r = 127, .g = 127, .b = 127, .a = 255 } },
             .type = .blue_noise,
-            .source = .{ .gradient = .conic },
+            .source = .gradient,
             .scale = 8,
-            .x = 0,
+            .x = 49,
             .y = 49,
         },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var stop_buffer: [2]gradient.Stop = undefined;
-            var tg: TestGradient = switch (tc.source) {
-                .gradient => |g| TestGradient.init(g, &stop_buffer),
-                else => undefined,
-            };
+            var stop_buffer: [2]gradientpkg.Stop = undefined;
+            var g: Gradient = Gradient.init(.{
+                .type = .{
+                    .linear = .{ .x0 = 0, .y0 = 0, .x1 = 99, .y1 = 99 },
+                },
+                .stops = &stop_buffer,
+            });
+            g.addStopAssumeCapacity(0, .{ .rgb = .{ 0, 0, 0 } });
+            g.addStopAssumeCapacity(1, .{ .rgb = .{ 1, 1, 1 } });
             const d: Dither = .{
                 .type = tc.type,
                 .source = switch (tc.source) {
                     .pixel => |s| .{ .pixel = s },
                     .color => |s| .{ .color = s },
-                    .gradient => |s| switch (s) {
-                        .linear => .{ .gradient = .{ .linear = &tg.g.linear } },
-                        .radial => .{ .gradient = .{ .radial = &tg.g.radial } },
-                        .conic => .{ .gradient = .{ .conic = &tg.g.conic } },
-                    },
+                    .gradient => .{ .gradient = &g },
                 },
                 .scale = tc.scale,
             };
@@ -413,7 +384,7 @@ test "Dither.getRGBAVec" {
         source: union(enum) {
             pixel: Pixel,
             color: Color.InitArgs,
-            gradient: gradient.GradientType,
+            gradient: void,
         },
         scale: u4,
         x: i32,
@@ -444,33 +415,17 @@ test "Dither.getRGBAVec" {
             .y = 0,
         },
         .{
-            .name = "gradient (linear)",
+            .name = "gradient",
             .type = .bayer,
-            .source = .{ .gradient = .linear },
+            .source = .gradient,
             .scale = 8,
             .x = 49,
             .y = 20,
         },
         .{
-            .name = "gradient (radial)",
-            .type = .bayer,
-            .source = .{ .gradient = .radial },
-            .scale = 8,
-            .x = 75,
-            .y = 49,
-        },
-        .{
-            .name = "gradient (conic)",
-            .type = .bayer,
-            .source = .{ .gradient = .conic },
-            .scale = 8,
-            .x = 0,
-            .y = 49,
-        },
-        .{
             .name = "blue noise",
             .type = .blue_noise,
-            .source = .{ .gradient = .conic },
+            .source = .gradient,
             .scale = 8,
             .x = 0,
             .y = 49,
@@ -478,21 +433,19 @@ test "Dither.getRGBAVec" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var stop_buffer: [2]gradient.Stop = undefined;
-            var tg: TestGradient = switch (tc.source) {
-                .gradient => |g| TestGradient.init(g, &stop_buffer),
-                else => undefined,
-            };
+            var stop_buffer: [2]gradientpkg.Stop = undefined;
+            var g: Gradient = Gradient.init(.{
+                .type = .{
+                    .linear = .{ .x0 = 0, .y0 = 0, .x1 = 99, .y1 = 99 },
+                },
+                .stops = &stop_buffer,
+            });
             const d: Dither = .{
                 .type = tc.type,
                 .source = switch (tc.source) {
                     .pixel => |s| .{ .pixel = s },
                     .color => |s| .{ .color = s },
-                    .gradient => |s| switch (s) {
-                        .linear => .{ .gradient = .{ .linear = &tg.g.linear } },
-                        .radial => .{ .gradient = .{ .radial = &tg.g.radial } },
-                        .conic => .{ .gradient = .{ .conic = &tg.g.conic } },
-                    },
+                    .gradient => .{ .gradient = &g },
                 },
                 .scale = tc.scale,
             };
@@ -509,31 +462,3 @@ test "Dither.getRGBAVec" {
     };
     try runCases(name, cases, TestFn.f);
 }
-
-const TestGradient = struct {
-    const Self = @This();
-
-    g: union(gradient.GradientType) {
-        linear: gradient.Linear,
-        radial: gradient.Radial,
-        conic: gradient.Conic,
-    },
-
-    fn init(gradient_type: gradient.GradientType, stops: []gradient.Stop) Self {
-        var result: Self = .{
-            .g = switch (gradient_type) {
-                .linear => .{ .linear = gradient.Linear.initBuffer(0, 49, 99, 49, stops, .linear_rgb) },
-                .radial => .{ .radial = gradient.Radial.initBuffer(49, 49, 0, 49, 49, 50, stops, .linear_rgb) },
-                .conic => .{ .conic = gradient.Conic.initBuffer(49, 49, 0, stops, .linear_rgb) },
-            },
-        };
-        switch (result.g) {
-            inline else => |*g| {
-                g.stops.addAssumeCapacity(0, .{ .rgb = .{ 0, 0, 0 } });
-                g.stops.addAssumeCapacity(1, .{ .rgb = .{ 1, 1, 1 } });
-            },
-        }
-
-        return result;
-    }
-};

@@ -16,20 +16,21 @@ pub const filename = "069_gradient_dither_context";
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     var dst_sfc = try z2d.Surface.init(.image_surface_alpha4, alloc, 400, 150);
-    var gradient = z2d.gradient.Linear.init(
-        0,
-        25,
-        400,
-        25,
-        .linear_rgb,
-    );
+    var gradient = z2d.Gradient.init(.{
+        .type = .{ .linear = .{
+            .x0 = 0,
+            .y0 = 25,
+            .x1 = 400,
+            .y1 = 25,
+        } },
+    });
     defer gradient.deinit(alloc);
-    try gradient.stops.add(alloc, 0, .{ .rgba = .{ 0, 0, 0, 0 } });
-    try gradient.stops.add(alloc, 1, .{ .rgba = .{ 1, 1, 1, 1 } });
+    try gradient.addStop(alloc, 0, .{ .rgba = .{ 0, 0, 0, 0 } });
+    try gradient.addStop(alloc, 1, .{ .rgba = .{ 1, 1, 1, 1 } });
     var context = try z2d.Context.init(alloc, &dst_sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
-    context.setSource(gradient.asPatternInterface());
+    context.setSource(gradient.asPattern());
     try context.moveTo(0, 0);
     try context.lineTo(400, 0);
     try context.lineTo(400, 50);
@@ -39,7 +40,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
     context.resetPath();
     context.translate(0, 50);
-    context.setSource(gradient.asPatternInterface());
+    context.setSource(gradient.asPattern());
     context.setDither(.bayer);
     try context.moveTo(0, 0);
     try context.lineTo(400, 0);
@@ -51,7 +52,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     context.resetPath();
     context.setIdentity();
     context.translate(0, 100);
-    context.setSource(gradient.asPatternInterface());
+    context.setSource(gradient.asPattern());
     context.setDither(.blue_noise);
     try context.moveTo(0, 0);
     try context.lineTo(400, 0);

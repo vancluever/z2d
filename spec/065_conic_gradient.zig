@@ -43,18 +43,20 @@ fn draw(
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, 100, 100);
     defer scratch_sfc.deinit(alloc);
     var stop_buffer: [2]z2d.gradient.Stop = undefined;
-    var gradient = z2d.gradient.Conic.initBuffer(
-        center_x,
-        center_y,
-        angle,
-        &stop_buffer,
-        .{ .hsl = .increasing },
-    );
-    gradient.stops.addAssumeCapacity(0, .{ .hsl = .{ 0, 1, 0.5 } });
-    gradient.stops.addAssumeCapacity(1, .{ .hsl = .{ 360, 1, 0.5 } });
+    var gradient = z2d.Gradient.init(.{
+        .type = .{ .conic = .{
+            .x = center_x,
+            .y = center_y,
+            .angle = angle,
+        } },
+        .stops = &stop_buffer,
+        .method = .{ .hsl = .increasing },
+    });
+    gradient.addStopAssumeCapacity(0, .{ .hsl = .{ 0, 1, 0.5 } });
+    gradient.addStopAssumeCapacity(1, .{ .hsl = .{ 360, 1, 0.5 } });
     z2d.compositor.SurfaceCompositor.run(&scratch_sfc, 0, 0, 1, .{.{
         .operator = .over,
-        .src = .{ .gradient = .{ .conic = &gradient } },
+        .src = .{ .gradient = &gradient },
     }});
     dst_sfc.composite(&scratch_sfc, .over, sfc_x, sfc_y);
 }
