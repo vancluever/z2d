@@ -45,6 +45,9 @@ pub const FillOpts = struct {
     /// The fill rule to use during the fill operation.
     fill_rule: options.FillRule = .non_zero,
 
+    /// The operator to use for compositing.
+    operator: compositor.Operator = .src_over,
+
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
     /// The default tolerance should be sufficient for most cases.
@@ -96,10 +99,10 @@ pub fn fill(
 
     switch (aa_mode) {
         .none => {
-            try paintDirect(alloc, surface, pattern, polygons, opts.fill_rule);
+            try paintDirect(alloc, surface, pattern, polygons, opts.fill_rule, opts.operator);
         },
         .default => {
-            try paintComposite(alloc, surface, pattern, polygons, opts.fill_rule, scale);
+            try paintComposite(alloc, surface, pattern, polygons, opts.fill_rule, scale, opts.operator);
         },
     }
 }
@@ -128,6 +131,9 @@ pub const StrokeOpts = struct {
     /// The maximum allowed ratio for miter joins. See `Context` for a full
     /// explanation of this setting.
     miter_limit: f64 = 10.0,
+
+    /// The operator to use for compositing.
+    operator: compositor.Operator = .src_over,
 
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
@@ -216,10 +222,10 @@ pub fn stroke(
 
     switch (aa_mode) {
         .none => {
-            try paintDirect(alloc, surface, pattern, polygons, .non_zero);
+            try paintDirect(alloc, surface, pattern, polygons, .non_zero, opts.operator);
         },
         .default => {
-            try paintComposite(alloc, surface, pattern, polygons, .non_zero, scale);
+            try paintComposite(alloc, surface, pattern, polygons, .non_zero, scale, opts.operator);
         },
     }
 }
@@ -232,17 +238,25 @@ fn paintDirect(
     pattern: *const Pattern,
     polygons: PolygonList,
     fill_rule: FillRule,
+    operator: compositor.Operator,
 ) PaintError!void {
-    const poly_start_y: i32 = math.clamp(
-        @as(i32, @intFromFloat(@floor(polygons.start.y))),
-        0,
-        surface.getHeight() - 1,
-    );
-    const poly_end_y: i32 = math.clamp(
-        @as(i32, @intFromFloat(@ceil(polygons.end.y))),
-        0,
-        surface.getHeight() - 1,
-    );
+    const bounded = isBounded(operator);
+    const poly_start_y: i32 = if (bounded)
+        math.clamp(
+            @as(i32, @intFromFloat(@floor(polygons.start.y))),
+            0,
+            surface.getHeight() - 1,
+        )
+    else
+        0;
+    const poly_end_y: i32 = if (bounded)
+        math.clamp(
+            @as(i32, @intFromFloat(@ceil(polygons.end.y))),
+            0,
+            surface.getHeight() - 1,
+        )
+    else
+        surface.getHeight() - 1;
 
     var y = poly_start_y;
     while (y <= poly_end_y) : (y += 1) {
@@ -254,6 +268,17 @@ fn paintDirect(
         const edge_alloc = edge_stack_fallback.get();
         var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
+
+        if (!bounded and edge_list.edges.len == 0) {
+            // Empty line but we're not bounded, so we clear the whole line.
+            const clear_stride = surface.getStride(0, y, @intCast(surface.getWidth()));
+            compositor.StrideCompositor.run(clear_stride, &.{.{
+                .operator = .clear,
+                .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
+            }});
+
+            continue;
+        }
 
         while (edge_list.next()) |edge_pair| {
             const start_x = math.clamp(
@@ -267,9 +292,18 @@ fn paintDirect(
                 surface.getWidth(),
             );
 
+            if (!bounded) {
+                // Clear up to the start
+                const clear_stride = surface.getStride(0, y, @intCast(start_x));
+                compositor.StrideCompositor.run(clear_stride, &.{.{
+                    .operator = .clear,
+                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
+                }});
+            }
+
             const dst_stride = surface.getStride(start_x, y, @intCast(end_x - start_x));
             compositor.StrideCompositor.run(dst_stride, &.{.{
-                .operator = .over,
+                .operator = operator,
                 .src = switch (pattern.*) {
                     .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
                     .gradient => |g| .{ .gradient = .{
@@ -284,6 +318,15 @@ fn paintDirect(
                     } },
                 },
             }});
+
+            if (!bounded) {
+                // Clear to the end
+                const clear_stride = surface.getStride(end_x, y, @intCast(surface.getWidth() - end_x));
+                compositor.StrideCompositor.run(clear_stride, &.{.{
+                    .operator = .clear,
+                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
+                }});
+            }
         }
     }
 }
@@ -295,18 +338,29 @@ fn paintComposite(
     polygons: PolygonList,
     fill_rule: FillRule,
     scale: f64,
+    operator: compositor.Operator,
 ) PaintError!void {
     // This math expects integer scaling.
     debug.assert(@floor(scale) == scale);
     const i_scale: i32 = @intFromFloat(scale);
 
-    // This is the area on the original image which our polygons may touch.
+    // This is the area on the original image which our polygons may touch (in
+    // the event our operator is bounded, otherwise it's the whole of the
+    // surface).
+    //
     // This range is *exclusive* of the right (max) end, hence why we add 1
     // to the maximum coordinates.
-    const x0: i32 = @intFromFloat(@floor(polygons.start.x / scale));
-    const y0: i32 = @intFromFloat(@floor(polygons.start.y / scale));
-    const x1: i32 = @intFromFloat(@floor(polygons.end.x / scale) + 1);
-    const y1: i32 = @intFromFloat(@floor(polygons.end.y / scale) + 1);
+    const bounded = isBounded(operator);
+    const x0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.x / scale)) else 0;
+    const y0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y / scale)) else 0;
+    const x1: i32 = if (bounded)
+        @intFromFloat(@floor(polygons.end.x / scale) + 1)
+    else
+        surface.getWidth();
+    const y1: i32 = if (bounded)
+        @intFromFloat(@floor(polygons.end.y / scale) + 1)
+    else
+        surface.getHeight();
 
     var mask_sfc = sfc_m: {
         // We calculate a scaled up version of the
@@ -376,7 +430,7 @@ fn paintComposite(
     // many sources as possible.
     compositor.SurfaceCompositor.run(surface, x0, y0, 2, .{
         .{
-            .operator = .in,
+            .operator = .dst_in,
             .dst = switch (pattern.*) {
                 .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
                 .gradient => .{ .gradient = pattern.gradient },
@@ -385,9 +439,26 @@ fn paintComposite(
             .src = .{ .surface = &mask_sfc },
         },
         .{
-            .operator = .over,
+            .operator = operator,
         },
     });
+}
+
+/// Returns true if the operator is bounded, meaning that drawing is limited to
+/// the bounding box of the source polygon.
+///
+/// Most operators are bounded, or the result of the operator is defined as
+/// being equal for both bounded and unbounded sources, so this function rather
+/// lists operators that are explicitly unbounded.
+fn isBounded(op: compositor.Operator) bool {
+    return switch (op) {
+        .src_in,
+        .dst_in,
+        .src_out,
+        .dst_atop,
+        => false,
+        else => true,
+    };
 }
 
 test "stroke uninvertible matrix error" {

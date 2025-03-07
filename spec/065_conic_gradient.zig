@@ -55,8 +55,8 @@ fn draw(
     gradient.addStopAssumeCapacity(0, .{ .hsl = .{ 0, 1, 0.5 } });
     gradient.addStopAssumeCapacity(1, .{ .hsl = .{ 360, 1, 0.5 } });
     z2d.compositor.SurfaceCompositor.run(&scratch_sfc, 0, 0, 1, .{.{
-        .operator = .over,
+        .operator = .src_over,
         .src = .{ .gradient = &gradient },
     }});
-    dst_sfc.composite(&scratch_sfc, .over, sfc_x, sfc_y);
+    dst_sfc.composite(&scratch_sfc, .src_over, sfc_x, sfc_y);
 }
