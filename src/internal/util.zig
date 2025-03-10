@@ -35,7 +35,7 @@ pub fn vectorize(comptime T: type) type {
         new_fields[i] = .{
             .name = f.name,
             .type = @Vector(vector_length, f.type),
-            .default_value = null,
+            .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
