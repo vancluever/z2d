@@ -163,8 +163,8 @@ pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) 
 }
 
 fn apply_dither(value: anytype, m: anytype, scale: anytype) @TypeOf(value) {
-    const lower = if (@typeInfo(@TypeOf(value)) == .Vector) splat(f32, 0.0) else 0.0;
-    const upper = if (@typeInfo(@TypeOf(value)) == .Vector) splat(f32, 1.0) else 1.0;
+    const lower = if (@typeInfo(@TypeOf(value)) == .vector) splat(f32, 0.0) else 0.0;
+    const upper = if (@typeInfo(@TypeOf(value)) == .vector) splat(f32, 1.0) else 1.0;
     return math.clamp(value + m * scale, lower, upper);
 }
 
