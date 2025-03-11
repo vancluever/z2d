@@ -272,18 +272,13 @@ fn paintDirect(
                 .operator = .over,
                 .src = switch (pattern.*) {
                     .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                    .linear_gradient => .{ .gradient = .{
-                        .underlying = .{ .linear = pattern.linear_gradient },
+                    .gradient => |g| .{ .gradient = .{
+                        .underlying = g,
                         .x = start_x,
                         .y = y,
                     } },
-                    .radial_gradient => .{ .gradient = .{
-                        .underlying = .{ .radial = pattern.radial_gradient },
-                        .x = start_x,
-                        .y = y,
-                    } },
-                    .conic_gradient => .{ .gradient = .{
-                        .underlying = .{ .conic = pattern.conic_gradient },
+                    .dither => .{ .dither = .{
+                        .underlying = pattern.dither,
                         .x = start_x,
                         .y = y,
                     } },
@@ -384,9 +379,8 @@ fn paintComposite(
             .operator = .in,
             .dst = switch (pattern.*) {
                 .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                .linear_gradient => .{ .gradient = .{ .linear = pattern.linear_gradient } },
-                .radial_gradient => .{ .gradient = .{ .radial = pattern.radial_gradient } },
-                .conic_gradient => .{ .gradient = .{ .conic = pattern.conic_gradient } },
+                .gradient => .{ .gradient = pattern.gradient },
+                .dither => .{ .dither = pattern.dither },
             },
             .src = .{ .surface = &mask_sfc },
         },

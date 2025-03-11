@@ -226,12 +226,13 @@ pub const RGBA = packed struct(u32) {
         const gc = math.clamp(g, 0, 1);
         const bc = math.clamp(b, 0, 1);
         const ac = math.clamp(a, 0, 1);
-        return .{
-            .r = @intFromFloat(255 * rc * ac),
-            .g = @intFromFloat(255 * gc * ac),
-            .b = @intFromFloat(255 * bc * ac),
-            .a = @intFromFloat(255 * ac),
+        const result: RGBA = .{
+            .r = @intFromFloat(@round(255.0 * rc)),
+            .g = @intFromFloat(@round(255.0 * gc)),
+            .b = @intFromFloat(@round(255.0 * bc)),
+            .a = @intFromFloat(@round(255.0 * ac)),
         };
+        return result.multiply();
     }
 
     /// Returns the pixel translated to RGBA.
@@ -755,11 +756,11 @@ test "RGB, fromClamped" {
 
 test "RGBA, fromClamped" {
     try testing.expectEqual(
-        RGBA{ .r = 76, .g = 153, .b = 229, .a = 255 },
+        RGBA{ .r = 77, .g = 153, .b = 230, .a = 255 },
         RGBA.fromClamped(0.3, 0.6, 0.9, 1),
     );
     try testing.expectEqual(
-        RGBA{ .r = 38, .g = 76, .b = 114, .a = 127 },
+        RGBA{ .r = 38, .g = 76, .b = 115, .a = 128 },
         RGBA.fromClamped(0.3, 0.6, 0.9, 0.5),
     );
     try testing.expectEqual(
@@ -771,7 +772,7 @@ test "RGBA, fromClamped" {
         RGBA.fromClamped(2, 2, 2, 2),
     );
     try testing.expectEqual(
-        RGBA{ .r = 127, .g = 127, .b = 127, .a = 127 },
+        RGBA{ .r = 128, .g = 128, .b = 128, .a = 128 },
         RGBA.fromClamped(2, 2, 2, 0.5),
     );
 }
@@ -1071,12 +1072,12 @@ test "Pixel.fromColor" {
     }{
         .{
             .name = "rgb",
-            .expected = .{ .rgba = .{ .r = 63, .g = 127, .b = 191, .a = 255 } },
+            .expected = .{ .rgba = .{ .r = 64, .g = 128, .b = 191, .a = 255 } },
             .args = .{ .rgb = .{ 0.25, 0.5, 0.75 } },
         },
         .{
             .name = "rgba",
-            .expected = .{ .rgba = .{ .r = 57, .g = 114, .b = 172, .a = 229 } },
+            .expected = .{ .rgba = .{ .r = 57, .g = 115, .b = 172, .a = 230 } },
             .args = .{ .rgba = .{ 0.25, 0.5, 0.75, 0.9 } },
         },
         .{
@@ -1086,7 +1087,7 @@ test "Pixel.fromColor" {
         },
         .{
             .name = "srgba",
-            .expected = .{ .rgba = .{ .r = 10, .g = 49, .b = 121, .a = 229 } },
+            .expected = .{ .rgba = .{ .r = 10, .g = 49, .b = 121, .a = 230 } },
             .args = .{ .srgba = .{ 0.25, 0.5, 0.75, 0.9 } },
         },
         .{
@@ -1096,7 +1097,7 @@ test "Pixel.fromColor" {
         },
         .{
             .name = "hsla",
-            .expected = .{ .rgba = .{ .r = 0, .g = 229, .b = 229, .a = 229 } },
+            .expected = .{ .rgba = .{ .r = 0, .g = 230, .b = 230, .a = 230 } },
             .args = .{ .hsla = .{ 180, 1, 0.5, 0.9 } },
         },
     };

@@ -136,22 +136,23 @@ fn draw(
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, 100, 100);
     defer scratch_sfc.deinit(alloc);
     var stop_buffer: [3]z2d.gradient.Stop = undefined;
-    var gradient = z2d.gradient.Radial.initBuffer(
-        inner_x,
-        inner_y,
-        inner_radius,
-        outer_x,
-        outer_y,
-        outer_radius,
-        &stop_buffer,
-        .linear_rgb,
-    );
-    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
-    gradient.stops.addAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
-    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
+    var gradient = z2d.Gradient.init(.{
+        .type = .{ .radial = .{
+            .inner_x = inner_x,
+            .inner_y = inner_y,
+            .inner_radius = inner_radius,
+            .outer_x = outer_x,
+            .outer_y = outer_y,
+            .outer_radius = outer_radius,
+        } },
+        .stops = &stop_buffer,
+    });
+    gradient.addStopAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.addStopAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+    gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
     z2d.compositor.SurfaceCompositor.run(&scratch_sfc, 0, 0, 1, .{.{
         .operator = .over,
-        .src = .{ .gradient = .{ .radial = &gradient } },
+        .src = .{ .gradient = &gradient },
     }});
     dst_sfc.composite(&scratch_sfc, .over, sfc_x, sfc_y);
 }

@@ -25,23 +25,24 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const height = 300;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
     var stop_buffer: [6]z2d.gradient.Stop = undefined;
-    var gradient = z2d.gradient.Conic.initBuffer(
-        149,
-        149,
-        0,
-        &stop_buffer,
-        .linear_rgb,
-    );
-    gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
-    gradient.stops.addAssumeCapacity(1.0 / 3.0, .{ .rgb = .{ 1, 0, 0 } });
-    gradient.stops.addAssumeCapacity(1.0 / 3.0 + 0.005, .{ .rgb = .{ 0, 1, 0 } });
-    gradient.stops.addAssumeCapacity(2.0 / 3.0, .{ .rgb = .{ 0, 1, 0 } });
-    gradient.stops.addAssumeCapacity(2.0 / 3.0 + 0.005, .{ .rgb = .{ 0, 0, 1 } });
-    gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
+    var gradient = z2d.Gradient.init(.{
+        .type = .{ .conic = .{
+            .x = 149,
+            .y = 149,
+            .angle = 0,
+        } },
+        .stops = &stop_buffer,
+    });
+    gradient.addStopAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.addStopAssumeCapacity(1.0 / 3.0, .{ .rgb = .{ 1, 0, 0 } });
+    gradient.addStopAssumeCapacity(1.0 / 3.0 + 0.005, .{ .rgb = .{ 0, 1, 0 } });
+    gradient.addStopAssumeCapacity(2.0 / 3.0, .{ .rgb = .{ 0, 1, 0 } });
+    gradient.addStopAssumeCapacity(2.0 / 3.0 + 0.005, .{ .rgb = .{ 0, 0, 1 } });
+    gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
     var context = try z2d.Context.init(alloc, &sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
-    context.setSource(gradient.asPatternInterface());
+    context.setSource(gradient.asPattern());
     try context.arc(149, 149, 100, 0, math.pi * 2);
     try context.closePath();
     try context.fill();
