@@ -10,8 +10,6 @@ const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
 
 const z2d = @import("z2d");
-const tracy_enable = @import("spec_options").tracy_enable;
-const tracy = if (tracy_enable) @import("tracy") else null;
 
 const _001_smile_rgb = @import("001_smile_rgb.zig");
 const _002_smile_rgba = @import("002_smile_rgba.zig");
@@ -490,30 +488,11 @@ fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
         .{ subject.filename, ".png" },
     );
     defer alloc.free(filename);
-    var exported_file: testExportPNGDetails = undefined;
+    var surface = try subject.render(alloc);
+    defer surface.deinit(alloc);
 
-    if (tracy_enable) {
-        var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
-        const tracy_alloc = tracy_alloc_.allocator();
+    var exported_file = try testExportPNG(alloc, surface, filename);
 
-        var surface = surface: {
-            const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: render" });
-            defer zone.deinit();
-            break :surface try subject.render(tracy_alloc);
-        };
-        defer surface.deinit(tracy_alloc);
-
-        exported_file = exported_file: {
-            const zone = tracy.initZone(@src(), .{ .name = "compositorTestRun: export" });
-            defer zone.deinit();
-            break :exported_file try testExportPNG(tracy_alloc, surface, filename);
-        };
-    } else {
-        var surface = try subject.render(alloc);
-        defer surface.deinit(alloc);
-
-        exported_file = try testExportPNG(alloc, surface, filename);
-    }
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);
@@ -533,53 +512,14 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
     );
     defer alloc.free(filename_smooth);
 
-    var exported_file_pixelated: testExportPNGDetails = undefined;
-    var exported_file_smooth: testExportPNGDetails = undefined;
+    var surface_pixelated = try subject.render(alloc, .none);
+    defer surface_pixelated.deinit(alloc);
+    var surface_smooth = try subject.render(alloc, .default);
+    defer surface_smooth.deinit(alloc);
 
-    if (tracy_enable) {
-        var tracy_alloc_ = tracy.TracingAllocator.init(alloc);
-        const tracy_alloc = tracy_alloc_.allocator();
+    var exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
+    var exported_file_smooth = try testExportPNG(alloc, surface_smooth, filename_smooth);
 
-        var surface_pixelated = surface_pixelated: {
-            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .none)" });
-            defer zone.deinit();
-            break :surface_pixelated try subject.render(tracy_alloc, .none);
-        };
-        defer surface_pixelated.deinit(tracy_alloc);
-        var surface_smooth = surface_smooth: {
-            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: render (aa_mode = .default)" });
-            defer zone.deinit();
-            break :surface_smooth try subject.render(tracy_alloc, .default);
-        };
-        defer surface_smooth.deinit(tracy_alloc);
-
-        exported_file_pixelated = exported_file_pixelated: {
-            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .none)" });
-            defer zone.deinit();
-            break :exported_file_pixelated try testExportPNG(
-                tracy_alloc,
-                surface_pixelated,
-                filename_pixelated,
-            );
-        };
-        exported_file_smooth = exported_file_smooth: {
-            const zone = tracy.initZone(@src(), .{ .name = "pathTestRun: export (aa_mode = .default)" });
-            defer zone.deinit();
-            break :exported_file_smooth try testExportPNG(
-                tracy_alloc,
-                surface_smooth,
-                filename_smooth,
-            );
-        };
-    } else {
-        var surface_pixelated = try subject.render(alloc, .none);
-        defer surface_pixelated.deinit(alloc);
-        var surface_smooth = try subject.render(alloc, .default);
-        defer surface_smooth.deinit(alloc);
-
-        exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
-        exported_file_smooth = try testExportPNG(alloc, surface_smooth, filename_smooth);
-    }
     defer exported_file_pixelated.cleanup();
     defer exported_file_smooth.cleanup();
 
