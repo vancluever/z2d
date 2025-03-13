@@ -129,7 +129,8 @@ pub fn build(b: *std.Build) void {
     });
     const test_run = b.addRunArtifact(test_step);
     b.step("test", "Run unit tests").dependOn(&test_run.step);
-    b.step("check", "Build, but don't run, unit tests").dependOn(&test_step.step);
+    var check_step = b.step("check", "Build, but don't run, unit tests");
+    check_step.dependOn(&test_step.step);
 
     /////////////////////////////////////////////////////////////////////////
     // Spec tests
@@ -183,6 +184,7 @@ pub fn build(b: *std.Build) void {
     }
     const spec_run = b.addRunArtifact(spec_test);
     b.step("spec", "Run spec (E2E) tests").dependOn(&spec_run.step);
+    check_step.dependOn(&spec_test.step);
 
     /////////////////////////////////////////////////////////////////////////
     // Docs
