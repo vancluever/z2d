@@ -14,6 +14,7 @@ const Context = @This();
 
 const mem = @import("std").mem;
 
+const compositor = @import("compositor.zig");
 const options = @import("options.zig");
 const painter = @import("painter.zig");
 
@@ -42,6 +43,7 @@ line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
 line_width: f64 = 2.0,
 miter_limit: f64 = 10.0,
+operator: compositor.Operator = .src_over,
 tolerance: f64 = options.default_tolerance,
 transformation: Transformation = Transformation.identity,
 
@@ -232,6 +234,17 @@ pub fn getMiterLimit(self: *Context) f64 {
 /// ~90 degrees.
 pub fn setMiterLimit(self: *Context, miter_limit: f64) void {
     self.miter_limit = miter_limit;
+}
+
+/// Returns the current compositing operator for this context.
+pub fn getOperator(self: *Context) compositor.Operator {
+    return self.operator;
+}
+
+/// Sets the compositing operator to be used for drawing operations. The
+/// default operator is `.src_over`.
+pub fn setOperator(self: *Context, op: compositor.Operator) void {
+    self.operator = op;
 }
 
 /// Returns the current error tolerance for the context.
@@ -463,6 +476,7 @@ pub fn fill(self: *Context) painter.FillError!void {
         .{
             .anti_aliasing_mode = self.anti_aliasing_mode,
             .fill_rule = self.fill_rule,
+            .operator = self.operator,
             .tolerance = self.tolerance,
         },
     );
@@ -493,6 +507,7 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
             .line_join_mode = self.line_join_mode,
             .line_width = self.line_width,
             .miter_limit = self.miter_limit,
+            .operator = self.operator,
             .tolerance = self.tolerance,
             .transformation = self.transformation,
         },

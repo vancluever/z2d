@@ -78,7 +78,7 @@ fn draw(
         gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 38.0 / 255.0, 32.0 / 255.0, 16.0 / 255.0 } });
     }
     z2d.compositor.SurfaceCompositor.run(&scratch_sfc, 0, 0, 1, .{.{
-        .operator = .over,
+        .operator = .src_over,
         .src = .{
             .dither = .{
                 .type = dither,
@@ -87,5 +87,5 @@ fn draw(
             },
         },
     }});
-    dst_sfc.composite(&scratch_sfc, .over, sfc_x, sfc_y);
+    dst_sfc.composite(&scratch_sfc, .src_over, sfc_x, sfc_y);
 }

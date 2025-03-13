@@ -2,6 +2,8 @@
 //   Copyright © 2024 Chris Marchesi
 
 const debug = @import("std").debug;
+const math = @import("std").math;
+const mem = @import("std").mem;
 const simd = @import("std").simd;
 const testing = @import("std").testing;
 
@@ -11,6 +13,10 @@ const pixel = @import("pixel.zig");
 
 const Gradient = @import("gradient.zig").Gradient;
 const Surface = @import("surface.zig").Surface;
+
+const splat = @import("internal/util.zig").splat;
+const runCases = @import("internal/util.zig").runCases;
+const TestingError = @import("internal/util.zig").TestingError;
 
 /// The length of vector operations. This is CPU-dependent, with a minimum of 8
 /// to provide adequate scaling for CPU architectures that lack SIMD or
@@ -35,18 +41,123 @@ pub const Dither = @import("Dither.zig");
 /// Note that all supported operations require pre-multiplied alpha
 /// (`RGBA.multiply` can be used to multiply values before setting them as
 /// sources.)
+///
+/// Some operators (`.src_in`, `.dst_in`, `.src_out`, and `.dst_atop`) are
+/// _unbounded_, meaning that when they are used as the drawing operator in
+/// `Context.fill` and `Context.stroke`, or the un-managed `painter.fill` or
+/// `painter.stroke` functions, they will remove anything outside of their
+/// affected area. This operator bounding behavior only applies to fill/stroke;
+/// when using the compositor directly, all operators are bounded by the
+/// conditions of the source/destination parameters supplied (usually the
+/// source surface).
 pub const Operator = enum {
-    /// The part of the destination laying inside of the source replaces the
+    /// Ignores source and destination, returning a completely blank output.
+    clear,
+
+    /// Ignores the destination and copies the source only.
+    src,
+
+    /// Ignores source and leaves the destination (effectively a no-op).
+    dst,
+
+    /// The source is composited over the destination. This is the default
+    /// operator.
+    src_over,
+
+    /// The destination is composited over the source, replacing the destination.
+    dst_over,
+
+    /// The part of the source inside the destination replaces the destination.
+    /// This operation is unbounded.
+    src_in,
+
+    /// The part of the destination inside the source replaces the destination.
+    /// This operation is unbounded.
+    dst_in,
+
+    /// The part of the source outside the destination replaces the
+    /// destination. This operation is unbounded.
+    src_out,
+
+    /// The part of the destination outside the source replaces the
     /// destination.
-    in,
+    dst_out,
 
-    /// The source is composited on the destination.
-    over,
+    /// The part of the source inside the destination is composited onto the
+    /// destination.
+    src_atop,
 
-    fn run(op: Operator, dst: anytype, src: anytype, max: anytype) @TypeOf(dst, src) {
+    /// The part of the destination inside of the source is composited over the
+    /// source; the destination is replaced with the result. This operation is
+    /// unbounded.
+    dst_atop,
+
+    /// The part of the source outside of the destination is combined with the
+    /// part of the destination outside of the source.
+    xor,
+
+    /// The source is added to the destination and replaces the destination;
+    /// can be used to create a dissolve effect. Also known as "lighter" in
+    /// CSS/HTML Canvas.
+    plus,
+
+    /// The source color is multiplied by the destination color; the result
+    /// replaces the destination. The result is always at least as dark as the
+    /// source or destination. To preserve the original color, multiply with
+    /// white.
+    multiply,
+
+    /// Complements the source and destination colors. The result is always at
+    /// least as light as the source or destination. To preserve the original
+    /// color, screen with black; screening with white always produces white.
+    screen,
+
+    /// Multiplies or screens depending on the destination color, mixing to
+    /// reflect the lightness or blackness of the background.
+    overlay,
+
+    /// Returns the darker of the source or destination colors.
+    darken,
+
+    /// Returns the lighter of the source or destination colors.
+    lighten,
+
+    /// Multiplies or screens depending on the destination color, screening on
+    /// lighter sources and multiplying on darker ones. Produces a "spotlight"
+    /// effect on the background.
+    hard_light,
+
+    /// Returns the absolute different between the source and destination
+    /// colors; preserves the destination when the source is black.
+    difference,
+
+    /// Similar to difference, with a lower contrast on the result. Inverts on
+    /// white, preserves on black.
+    exclusion,
+
+    fn run(op: Operator, dst: anytype, src: anytype) @TypeOf(dst, src) {
         return switch (op) {
-            .in => in(dst, src, max),
-            .over => over(dst, src, max),
+            .clear => clear(dst, src),
+            .src => srcOp(dst, src),
+            .dst => dstOp(dst, src),
+            .src_over => srcOver(dst, src),
+            .dst_over => dstOver(dst, src),
+            .src_in => srcIn(dst, src),
+            .dst_in => dstIn(dst, src),
+            .src_out => srcOut(dst, src),
+            .dst_out => dstOut(dst, src),
+            .src_atop => srcAtop(dst, src),
+            .dst_atop => dstAtop(dst, src),
+            .xor => xor(dst, src),
+            .plus => plus(dst, src),
+            .multiply => multiply(dst, src),
+            .screen => screen(dst, src),
+            .overlay => overlay(dst, src),
+            .darken => darken(dst, src),
+            .lighten => lighten(dst, src),
+            .hard_light => hardLight(dst, src),
+            .difference => difference(dst, src),
+            .exclusion => exclusion(dst, src),
         };
     }
 };
@@ -331,7 +442,7 @@ pub const StrideCompositor = struct {
                     .dither => |d| RGBA16Vec.fromDither(d, j),
                     .none => RGBA16Vec.fromStride(dst, j),
                 };
-                _dst = op.operator.run(_dst, _src, max_u8_vec);
+                _dst = op.operator.run(_dst, _src);
             }
             // End of the batch for this vector, so we can write it out now.
             _dst.toStride(dst, j);
@@ -358,7 +469,7 @@ pub const StrideCompositor = struct {
                     .dither => |d| RGBA16.fromPixel(d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y)),
                     .none => RGBA16.fromPixel(getPixelFromStride(dst, i)),
                 };
-                _dst = op.operator.run(_dst, _src, max_u8_scalar);
+                _dst = op.operator.run(_dst, _src);
             }
 
             setPixelInStride(dst, i, _dst.toPixel());
@@ -373,7 +484,7 @@ pub fn runPixel(dst: pixel.Pixel, src: pixel.Pixel, operator: Operator) pixel.Pi
     const _src = RGBA16.fromPixel(src);
     return switch (dst) {
         inline else => |d| @TypeOf(d).fromPixel(
-            operator.run(_dst, _src, max_u8_scalar).toPixel(),
+            operator.run(_dst, _src).toPixel(),
         ).asPixel(),
     };
 }
@@ -565,25 +676,377 @@ fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
     };
 }
 
-fn in(dst: anytype, src: anytype, max: anytype) @TypeOf(dst, src) {
+fn clear(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    const zero = if (@TypeOf(dst, src) == RGBA16Vec)
+        zero_int_vec
+    else
+        0;
     return .{
-        .r = dst.r * src.a / max,
-        .g = dst.g * src.a / max,
-        .b = dst.b * src.a / max,
-        .a = dst.a * src.a / max,
+        .r = zero,
+        .g = zero,
+        .b = zero,
+        .a = zero,
     };
 }
 
-fn over(dst: anytype, src: anytype, max: anytype) @TypeOf(dst, src) {
+fn srcOp(dst: anytype, src: anytype) @TypeOf(dst, src) {
     return .{
-        .r = src.r + dst.r * (max - src.a) / max,
-        .g = src.g + dst.g * (max - src.a) / max,
-        .b = src.b + dst.b * (max - src.a) / max,
-        .a = src.a + dst.a - src.a * dst.a / max,
+        .r = src.r,
+        .g = src.g,
+        .b = src.b,
+        .a = src.a,
     };
 }
 
-test "over" {
+fn dstOp(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = dst.r,
+        .g = dst.g,
+        .b = dst.b,
+        .a = dst.a,
+    };
+}
+
+fn srcOver(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = src.r + invMul(dst.r, src.a),
+        .g = src.g + invMul(dst.g, src.a),
+        .b = src.b + invMul(dst.b, src.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn dstOver(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = dst.r + invMul(src.r, dst.a),
+        .g = dst.g + invMul(src.g, dst.a),
+        .b = dst.b + invMul(src.b, dst.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn srcIn(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = mul(src.r, dst.a),
+        .g = mul(src.g, dst.a),
+        .b = mul(src.b, dst.a),
+        .a = mul(src.a, dst.a),
+    };
+}
+
+fn dstIn(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = mul(dst.r, src.a),
+        .g = mul(dst.g, src.a),
+        .b = mul(dst.b, src.a),
+        .a = mul(dst.a, src.a),
+    };
+}
+
+fn srcOut(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = invMul(src.r, dst.a),
+        .g = invMul(src.g, dst.a),
+        .b = invMul(src.b, dst.a),
+        .a = invMul(src.a, dst.a),
+    };
+}
+
+fn dstOut(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = invMul(dst.r, src.a),
+        .g = invMul(dst.g, src.a),
+        .b = invMul(dst.b, src.a),
+        .a = invMul(dst.a, src.a),
+    };
+}
+
+fn srcAtop(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = mul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = mul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = mul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = dst.a,
+    };
+}
+
+fn dstAtop(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = mul(dst.r, src.a) + invMul(src.r, dst.a),
+        .g = mul(dst.g, src.a) + invMul(src.g, dst.a),
+        .b = mul(dst.b, src.a) + invMul(src.b, dst.a),
+        .a = src.a,
+    };
+}
+
+fn xor(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = invMul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = invMul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = invMul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = invMul(src.a, dst.a) + invMul(dst.a, src.a),
+    };
+}
+
+fn plus(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = limitU8(src.r + dst.r),
+        .g = limitU8(src.g + dst.g),
+        .b = limitU8(src.b + dst.b),
+        .a = limitU8(src.a + dst.a),
+    };
+}
+
+fn multiply(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = mul(src.r, dst.r) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = mul(src.g, dst.g) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = mul(src.b, dst.b) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn screen(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = src.r + dst.r - mul(src.r, dst.r),
+        .g = src.g + dst.g - mul(src.g, dst.g),
+        .b = src.b + dst.b - mul(src.b, dst.b),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn overlay(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    const Ops = struct {
+        fn runVec(
+            sca: anytype,
+            dca: anytype,
+            sa: anytype,
+            da: anytype,
+        ) @TypeOf(sca, dca, sa, da) {
+            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+            return @select(vec_elem_t, p0(dca, da), a(sca, dca, sa, da), b(sca, dca, sa, da));
+        }
+
+        fn runScalar(
+            sca: anytype,
+            dca: anytype,
+            sa: anytype,
+            da: anytype,
+        ) @TypeOf(sca, dca, sa, da) {
+            return if (p0(dca, da)) a(sca, dca, sa, da) else b(sca, dca, sa, da);
+        }
+
+        fn p0(dca: anytype, da: anytype) boolOrVec(@TypeOf(dca, da)) {
+            return mulScalar(dca, 2) <= da;
+        }
+
+        fn a(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
+            const wide_t = widenType(@TypeOf(sca, dca, sa, da));
+            const _sca: wide_t = sca;
+            const _dca: wide_t = dca;
+            const _sa: wide_t = sa;
+            const _da: wide_t = da;
+            return @intCast(
+                mul(mulScalar(_sca, 2), _dca) + invMul(_sca, _da) + invMul(_dca, _sa),
+            );
+        }
+
+        fn b(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
+            const wide_t = widenType(@TypeOf(sca, dca, sa, da));
+            const _sca: wide_t = sca;
+            const _dca: wide_t = dca;
+            const _sa: wide_t = sa;
+            const _da: wide_t = da;
+            return @intCast(
+                rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(mulScalar(_dca, 2), _sca) - mul(_da, _sa),
+            );
+        }
+    };
+
+    return switch (@TypeOf(dst, src)) {
+        RGBA16Vec => .{
+            .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
+            .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
+            .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
+            .a = src.a + dst.a - mul(src.a, dst.a),
+        },
+        else => .{
+            .r = Ops.runScalar(src.r, dst.r, src.a, dst.a),
+            .g = Ops.runScalar(src.g, dst.g, src.a, dst.a),
+            .b = Ops.runScalar(src.b, dst.b, src.a, dst.a),
+            .a = src.a + dst.a - mul(src.a, dst.a),
+        },
+    };
+}
+
+fn darken(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = @min(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = @min(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = @min(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn lighten(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = @max(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = @max(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = @max(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn hardLight(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    const Ops = struct {
+        fn runVec(
+            sca: anytype,
+            dca: anytype,
+            sa: anytype,
+            da: anytype,
+        ) @TypeOf(sca, dca, sa, da) {
+            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+            return @select(
+                vec_elem_t,
+                p0(sca, sa),
+                a(sca, dca, sa, da),
+                b(sca, dca, sa, da),
+            );
+        }
+
+        fn runScalar(
+            sca: anytype,
+            dca: anytype,
+            sa: anytype,
+            da: anytype,
+        ) @TypeOf(sca, dca, sa, da) {
+            return if (p0(sca, sa))
+                a(sca, dca, sa, da)
+            else
+                b(sca, dca, sa, da);
+        }
+
+        fn p0(sca: anytype, sa: anytype) boolOrVec(@TypeOf(sca, sa)) {
+            return mulScalar(sca, 2) <= sa;
+        }
+
+        fn a(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
+            const wide_t = widenType(@TypeOf(sca, dca, sa, da));
+            const _sca: wide_t = sca;
+            const _dca: wide_t = dca;
+            const _sa: wide_t = sa;
+            const _da: wide_t = da;
+            return @intCast(
+                mul(mulScalar(_sca, 2), _dca) + invMul(_sca, _da) + invMul(_dca, _sa),
+            );
+        }
+
+        fn b(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
+            const wide_t = widenType(@TypeOf(sca, dca, sa, da));
+            const _sca: wide_t = sca;
+            const _dca: wide_t = dca;
+            const _sa: wide_t = sa;
+            const _da: wide_t = da;
+            return @intCast(
+                rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(_sa, _da) - mul(mulScalar(_sca, 2), _dca),
+            );
+        }
+    };
+
+    return switch (@TypeOf(dst, src)) {
+        RGBA16Vec => .{
+            .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
+            .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
+            .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
+            .a = src.a + dst.a - mul(src.a, dst.a),
+        },
+        else => .{
+            .r = Ops.runScalar(src.r, dst.r, src.a, dst.a),
+            .g = Ops.runScalar(src.g, dst.g, src.a, dst.a),
+            .b = Ops.runScalar(src.b, dst.b, src.a, dst.a),
+            .a = src.a + dst.a - mul(src.a, dst.a),
+        },
+    };
+}
+
+fn difference(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = src.r + dst.r - mulScalar(@min(mul(src.r, dst.a), mul(dst.r, src.a)), 2),
+        .g = src.g + dst.g - mulScalar(@min(mul(src.g, dst.a), mul(dst.g, src.a)), 2),
+        .b = src.b + dst.b - mulScalar(@min(mul(src.b, dst.a), mul(dst.b, src.a)), 2),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+fn exclusion(dst: anytype, src: anytype) @TypeOf(dst, src) {
+    return .{
+        .r = (mul(src.r, dst.a) + mul(dst.r, src.a) - mulScalar(mul(src.r, dst.r), 2)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
+        .g = (mul(src.g, dst.a) + mul(dst.g, src.a) - mulScalar(mul(src.g, dst.g), 2)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
+        .b = (mul(src.b, dst.a) + mul(dst.b, src.a) - mulScalar(mul(src.b, dst.b), 2)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+        .a = src.a + dst.a - mul(src.a, dst.a),
+    };
+}
+
+// Clamps the value between the min and max u8 value.
+fn limitU8(x: anytype) @TypeOf(x) {
+    const max: @TypeOf(x) = if (@typeInfo(@TypeOf(x)) == .Vector)
+        max_u8_vec
+    else
+        max_u8_scalar;
+    return @min(max, x);
+}
+
+// Utility integer-equivalent multiplication function for colors, downscales by
+// the max u8 value after multiplication. Supports both vectors and scalars.
+fn mul(a: anytype, b: anytype) @TypeOf(a, b) {
+    return if (@typeInfo(@TypeOf(a, b)) == .Vector)
+        @divTrunc(a * b, max_u8_vec)
+    else
+        @divTrunc(a * b, max_u8_scalar);
+}
+
+// Utility integer-equivalent multiplication function for scalars, multiplies x
+// by the scalar value y.
+fn mulScalar(x: anytype, y: usize) @TypeOf(x) {
+    var z: @TypeOf(x) = mem.zeroes(@TypeOf(x));
+    for (0..y) |_| z += x;
+    return z;
+}
+
+// Utility integer-equivalent function for colors, equivalent to 1 - a when the
+// color is floating-point normalized (a 0-1 value). Aptly named "inv" as it as
+// the effect of `inverting` the color.
+fn inv(a: anytype) @TypeOf(a) {
+    return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec - a else max_u8_scalar - a;
+}
+
+// Utility integer-equivalent function for colors, equivalent to 1 + a when the
+// color is floating-point normalized (a 0-1 value). "Reverse" inversion.
+fn rInv(a: anytype) @TypeOf(a) {
+    return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec + a else max_u8_scalar + a;
+}
+
+// Utility integer-equivalent function for colors, equivalent to a * (1 - b)
+// when the values are floating-point normalized (0-1 values).
+fn invMul(a: anytype, b: anytype) @TypeOf(a, b) {
+    return mul(a, inv(b));
+}
+
+// Utility integer-equivalent function for colors, equivalent to a * (1 + b)
+// when the values are floating-point normalized (0-1 values).
+fn rInvMul(a: anytype, b: anytype) @TypeOf(a, b) {
+    return mul(a, rInv(b));
+}
+
+fn boolOrVec(comptime T: type) type {
+    return if (@typeInfo(T) == .Vector) @Vector(vector_length, bool) else bool;
+}
+
+fn widenType(comptime T: type) type {
+    return if (@typeInfo(T) == .Vector) @Vector(vector_length, i32) else i32;
+}
+
+test "src_over" {
     // Our colors, non-pre-multiplied.
     //
     // Note that some tests require the pre-multiplied alpha. For these, we do
@@ -598,27 +1061,27 @@ test "over" {
         const bg_rgb = pixel.RGB.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = fg_rgb },
-            runPixel(bg_rgb.asPixel(), fg_rgb.asPixel(), .over),
+            runPixel(bg_rgb.asPixel(), fg_rgb.asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 43, .g = 70, .b = 109 } },
-            runPixel(bg_rgb.asPixel(), fg.multiply().asPixel(), .over),
+            runPixel(bg_rgb.asPixel(), fg.multiply().asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 3, .g = 63, .b = 62 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 4, .g = 67, .b = 66 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 5, .g = 84, .b = 83 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 0, .g = 0, .b = 0 } },
-            runPixel(bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 
@@ -627,27 +1090,27 @@ test "over" {
         const bg_mul = bg.multiply();
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 54, .g = 10, .b = 63, .a = 255 } },
-            runPixel(bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 43, .g = 64, .b = 102, .a = 249 } },
-            runPixel(bg_mul.asPixel(), fg.multiply().asPixel(), .over),
+            runPixel(bg_mul.asPixel(), fg.multiply().asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 57, .b = 55, .a = 249 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 60, .b = 59, .a = 249 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 4, .g = 76, .b = 74, .a = 247 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
-            runPixel(bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 
@@ -656,27 +1119,27 @@ test "over" {
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
-            runPixel(bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
-            runPixel(bg_alpha8.asPixel(), fg.asPixel(), .over),
+            runPixel(bg_alpha8.asPixel(), fg.asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 247 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
-            runPixel(bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 
@@ -685,27 +1148,27 @@ test "over" {
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), fg.asPixel(), .over),
+            runPixel(bg_alpha4.asPixel(), fg.asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 
@@ -714,27 +1177,27 @@ test "over" {
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), fg.asPixel(), .over),
+            runPixel(bg_alpha2.asPixel(), fg.asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 
@@ -743,11 +1206,11 @@ test "over" {
         var bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), fg.asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), fg.asPixel(), .src_over),
         );
         // Jack down our alpha channel by 1 to just demonstrate the error
         // boundary when scaling down from u8 to u1.
@@ -755,34 +1218,34 @@ test "over" {
         fg_127.a = 127;
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } }, // Still 1 here due to our bg opacity being 90%
-            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .src_over),
         );
 
         bg_alpha1.a = 0; // Turn off bg alpha layer for rest of testing
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .over),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .over),
+            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
     }
 }
 
-test "in" {
+test "dst_in" {
     // Our colors, non-pre-multiplied.
     //
     // Note that some tests require the pre-multiplied alpha. For these, we do
@@ -797,27 +1260,27 @@ test "in" {
         const bg_rgb = pixel.RGB.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = bg_rgb },
-            runPixel(bg_rgb.asPixel(), fg_rgb.asPixel(), .in),
+            runPixel(bg_rgb.asPixel(), fg_rgb.asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 190, .b = 186 } },
-            runPixel(bg_rgb.asPixel(), fg.multiply().asPixel(), .in),
+            runPixel(bg_rgb.asPixel(), fg.multiply().asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 190, .b = 186 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 186, .b = 182 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 10, .g = 169, .b = 166 } },
-            runPixel(bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 15, .g = 254, .b = 249 } },
-            runPixel(bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
     }
 
@@ -826,27 +1289,27 @@ test "in" {
         const bg_mul = bg.multiply();
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
-            runPixel(bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
-            runPixel(bg_mul.asPixel(), fg.multiply().asPixel(), .in),
+            runPixel(bg_mul.asPixel(), fg.multiply().asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 167, .b = 163, .a = 167 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 8, .g = 152, .b = 148, .a = 152 } },
-            runPixel(bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
-            runPixel(bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
     }
 
@@ -855,27 +1318,27 @@ test "in" {
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
-            runPixel(bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
-            runPixel(bg_alpha8.asPixel(), fg.asPixel(), .in),
+            runPixel(bg_alpha8.asPixel(), fg.asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 167 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 152 } },
-            runPixel(bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
-            runPixel(bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
     }
 
@@ -884,27 +1347,27 @@ test "in" {
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
-            runPixel(bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
-            runPixel(bg_alpha4.asPixel(), fg.asPixel(), .in),
+            runPixel(bg_alpha4.asPixel(), fg.asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 10 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 9 } },
-            runPixel(bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
-            runPixel(bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
     }
 
@@ -913,27 +1376,27 @@ test "in" {
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(bg_alpha2.asPixel(), fg.asPixel(), .in),
+            runPixel(bg_alpha2.asPixel(), fg.asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
     }
 
@@ -942,11 +1405,11 @@ test "in" {
         const bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), fg.asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), fg.asPixel(), .dst_in),
         );
         // Jack down our alpha channel by 1 to just demonstrate the error
         // boundary when scaling down from u8 to u1.
@@ -954,27 +1417,324 @@ test "in" {
         fg_127.a = 127;
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), fg_127.asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .in),
+            runPixel(bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .in),
+            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 0 } }, .in),
+            runPixel(bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 0 } }, .dst_in),
         );
     }
+}
+
+test "composite, all operators" {
+    const Color = @import("color.zig").Color;
+    const name = "composite, all operators";
+    const cases = [_]struct {
+        name: []const u8,
+        operator: Operator,
+        expected: pixel.Pixel,
+        bg: Color.InitArgs,
+        fg: Color.InitArgs,
+    }{
+        // Simple operators
+        .{
+            .name = "clear",
+            .operator = .clear,
+            .expected = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src",
+            .operator = .src,
+            .expected = .{ .rgba = .{ .r = 143, .g = 128, .b = 227, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "dst",
+            .operator = .dst,
+            .expected = .{ .rgba = .{ .r = 176, .g = 59, .b = 54, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src_over (full alpha)",
+            .operator = .src_over,
+            .expected = .{ .rgba = .{ .r = 143, .g = 128, .b = 227, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src_over (partial alpha)",
+            .operator = .src_over,
+            .expected = .{ .rgba = .{ .r = 145, .g = 112, .b = 190, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "dst_over (full alpha)",
+            .operator = .dst_over,
+            .expected = .{ .rgba = .{ .r = 176, .g = 59, .b = 54, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "dst_over (partial alpha)",
+            .operator = .dst_over,
+            .expected = .{ .rgba = .{ .r = 169, .g = 63, .b = 65, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "src_in (full alpha)",
+            .operator = .src_in,
+            .expected = .{ .rgba = .{ .r = 143, .g = 128, .b = 227, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src_in (partial alpha)",
+            .operator = .src_in,
+            .expected = .{ .rgba = .{ .r = 102, .g = 92, .b = 163, .a = 184 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "dst_in (full alpha)",
+            .operator = .dst_in,
+            .expected = .{ .rgba = .{ .r = 176, .g = 59, .b = 54, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "dst_in (partial alpha)",
+            .operator = .dst_in,
+            .expected = .{ .rgba = .{ .r = 126, .g = 42, .b = 38, .a = 184 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "src_out (full alpha)",
+            .operator = .src_out,
+            .expected = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src_out (partial alpha)",
+            .operator = .src_out,
+            .expected = .{ .rgba = .{ .r = 11, .g = 10, .b = 17, .a = 20 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "dst_out (full alpha)",
+            .operator = .dst_out,
+            .expected = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "dst_out (partial alpha)",
+            .operator = .dst_out,
+            .expected = .{ .rgba = .{ .r = 31, .g = 10, .b = 9, .a = 46 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "src_atop (full alpha)",
+            .operator = .src_atop,
+            .expected = .{ .rgba = .{ .r = 143, .g = 128, .b = 227, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "src_atop (partial alpha)",
+            .operator = .src_atop,
+            .expected = .{ .rgba = .{ .r = 133, .g = 102, .b = 172, .a = 230 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "dst_atop (full alpha)",
+            .operator = .dst_atop,
+            .expected = .{ .rgba = .{ .r = 176, .g = 59, .b = 54, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "dst_atop (partial alpha)",
+            .operator = .dst_atop,
+            .expected = .{ .rgba = .{ .r = 137, .g = 52, .b = 55, .a = 204 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "xor (full alpha)",
+            .operator = .xor,
+            .expected = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "xor (partial alpha)",
+            .operator = .xor,
+            .expected = .{ .rgba = .{ .r = 42, .g = 20, .b = 26, .a = 66 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "plus (full alpha)",
+            .operator = .plus,
+            .expected = .{ .rgba = .{ .r = 255, .g = 187, .b = 255, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "plus (partial alpha)",
+            .operator = .plus,
+            .expected = .{ .rgba = .{ .r = 255, .g = 155, .b = 229, .a = 255 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "multiply (full alpha)",
+            .operator = .multiply,
+            .expected = .{ .rgba = .{ .r = 98, .g = 29, .b = 48, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "multiply (partial alpha)",
+            .operator = .multiply,
+            .expected = .{ .rgba = .{ .r = 112, .g = 41, .b = 60, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "screen (full alpha)",
+            .operator = .screen,
+            .expected = .{ .rgba = .{ .r = 221, .g = 158, .b = 233, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "screen (partial alpha)",
+            .operator = .screen,
+            .expected = .{ .rgba = .{ .r = 202, .g = 134, .b = 195, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "overlay (full alpha)",
+            .operator = .overlay,
+            .expected = .{ .rgba = .{ .r = 186, .g = 59, .b = 96, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "overlay (partial alpha)",
+            .operator = .overlay,
+            .expected = .{ .rgba = .{ .r = 175, .g = 62, .b = 94, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "darken (full alpha)",
+            .operator = .darken,
+            .expected = .{ .rgba = .{ .r = 143, .g = 59, .b = 54, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "darken (partial alpha)",
+            .operator = .darken,
+            .expected = .{ .rgba = .{ .r = 144, .g = 62, .b = 64, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "lighten (full alpha)",
+            .operator = .lighten,
+            .expected = .{ .rgba = .{ .r = 176, .g = 128, .b = 227, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "lighten (partial alpha)",
+            .operator = .lighten,
+            .expected = .{ .rgba = .{ .r = 168, .g = 112, .b = 189, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "hard_light (full alpha)",
+            .operator = .hard_light,
+            .expected = .{ .rgba = .{ .r = 186, .g = 60, .b = 211, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "hard_light (partial alpha)",
+            .operator = .hard_light,
+            .expected = .{ .rgba = .{ .r = 175, .g = 62, .b = 178, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "difference (full alpha)",
+            .operator = .difference,
+            .expected = .{ .rgba = .{ .r = 33, .g = 69, .b = 173, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "difference (partial alpha)",
+            .operator = .difference,
+            .expected = .{ .rgba = .{ .r = 68, .g = 71, .b = 153, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+        .{
+            .name = "exclusion (full alpha)",
+            .operator = .exclusion,
+            .expected = .{ .rgba = .{ .r = 123, .g = 129, .b = 185, .a = 255 } },
+            .bg = .{ .rgb = .{ 0.69, 0.23, 0.21 } },
+            .fg = .{ .rgb = .{ 0.56, 0.50, 0.89 } },
+        },
+        .{
+            .name = "exclusion (partial alpha)",
+            .operator = .exclusion,
+            .expected = .{ .rgba = .{ .r = 130, .g = 112, .b = 159, .a = 250 } },
+            .bg = .{ .rgba = .{ 0.69, 0.23, 0.21, 0.9 } },
+            .fg = .{ .rgba = .{ 0.56, 0.50, 0.89, 0.8 } },
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqualDeep(tc.expected, runPixel(
+                pixel.Pixel.fromColor(tc.bg),
+                pixel.Pixel.fromColor(tc.fg),
+                tc.operator,
+            ));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
 }

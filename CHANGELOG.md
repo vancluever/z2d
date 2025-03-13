@@ -40,14 +40,22 @@ This release also brings some major compositor changes to accommodate the
 addition of gradients and additional blend modes.
 
 `Surface` and `Pixel` now have a general `composite` function that applies any
-particular compositor operator (e.g., `in` or `over`) to surfaces and pixels.
-The respective individual `dstIn` and `srcOver` functions available on surfaces
-and all pixel types have been removed in favor of this.
+particular compositor operator (e.g., `.dst_in` or `.src_over`) to surfaces and
+pixels. The respective individual `dstIn` and `srcOver` functions available on
+surfaces and all pixel types have been removed in favor of this.
 
 The `composite` functions are aliased to a batch function in the `compositor`
 package, which allows access to a multi-step compositor that you can use to
 apply multiple steps to a set of surfaces and pixels without needing to be
 written back to memory first (more on how we currently use this below).
+
+21 compositor operators are now available for use. They can be set for fill and
+stroke by using `Context.setOperator`, or by using respective fields in
+`painter.fill` and `painter.stroke`. Some operators are unbounded when being
+used in fill and stroke, which means they will remove the unaffected
+destination when drawing; these are noted in the description for each operator.
+Note that when using the lower level compositor functions, all operators are
+bounded.
 
 PIXEL STRIDES
 
