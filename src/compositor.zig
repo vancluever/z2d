@@ -823,7 +823,7 @@ fn overlay(dst: anytype, src: anytype) @TypeOf(dst, src) {
             sa: anytype,
             da: anytype,
         ) @TypeOf(sca, dca, sa, da) {
-            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
             return @select(vec_elem_t, p0(dca, da), a(sca, dca, sa, da), b(sca, dca, sa, da));
         }
 
@@ -905,7 +905,7 @@ fn hardLight(dst: anytype, src: anytype) @TypeOf(dst, src) {
             sa: anytype,
             da: anytype,
         ) @TypeOf(sca, dca, sa, da) {
-            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+            const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
             return @select(
                 vec_elem_t,
                 p0(sca, sa),
@@ -989,7 +989,7 @@ fn exclusion(dst: anytype, src: anytype) @TypeOf(dst, src) {
 
 // Clamps the value between the min and max u8 value.
 fn limitU8(x: anytype) @TypeOf(x) {
-    const max: @TypeOf(x) = if (@typeInfo(@TypeOf(x)) == .Vector)
+    const max: @TypeOf(x) = if (@typeInfo(@TypeOf(x)) == .vector)
         max_u8_vec
     else
         max_u8_scalar;
@@ -999,7 +999,7 @@ fn limitU8(x: anytype) @TypeOf(x) {
 // Utility integer-equivalent multiplication function for colors, downscales by
 // the max u8 value after multiplication. Supports both vectors and scalars.
 fn mul(a: anytype, b: anytype) @TypeOf(a, b) {
-    return if (@typeInfo(@TypeOf(a, b)) == .Vector)
+    return if (@typeInfo(@TypeOf(a, b)) == .vector)
         @divTrunc(a * b, max_u8_vec)
     else
         @divTrunc(a * b, max_u8_scalar);
@@ -1017,13 +1017,13 @@ fn mulScalar(x: anytype, y: usize) @TypeOf(x) {
 // color is floating-point normalized (a 0-1 value). Aptly named "inv" as it as
 // the effect of `inverting` the color.
 fn inv(a: anytype) @TypeOf(a) {
-    return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec - a else max_u8_scalar - a;
+    return if (@typeInfo(@TypeOf(a)) == .vector) max_u8_vec - a else max_u8_scalar - a;
 }
 
 // Utility integer-equivalent function for colors, equivalent to 1 + a when the
 // color is floating-point normalized (a 0-1 value). "Reverse" inversion.
 fn rInv(a: anytype) @TypeOf(a) {
-    return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec + a else max_u8_scalar + a;
+    return if (@typeInfo(@TypeOf(a)) == .vector) max_u8_vec + a else max_u8_scalar + a;
 }
 
 // Utility integer-equivalent function for colors, equivalent to a * (1 - b)
@@ -1039,11 +1039,11 @@ fn rInvMul(a: anytype, b: anytype) @TypeOf(a, b) {
 }
 
 fn boolOrVec(comptime T: type) type {
-    return if (@typeInfo(T) == .Vector) @Vector(vector_length, bool) else bool;
+    return if (@typeInfo(T) == .vector) @Vector(vector_length, bool) else bool;
 }
 
 fn widenType(comptime T: type) type {
-    return if (@typeInfo(T) == .Vector) @Vector(vector_length, i32) else i32;
+    return if (@typeInfo(T) == .vector) @Vector(vector_length, i32) else i32;
 }
 
 test "src_over" {
