@@ -86,6 +86,6 @@ fn draw(
                 .scale = bits,
             },
         },
-    }});
-    dst_sfc.composite(&scratch_sfc, .src_over, sfc_x, sfc_y);
+    }}, .{});
+    dst_sfc.composite(&scratch_sfc, .src_over, sfc_x, sfc_y, .{});
 }

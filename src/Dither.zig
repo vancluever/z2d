@@ -106,6 +106,12 @@ pub fn getPixel(self: *const Dither, x: i32, y: i32) Pixel {
 /// Vectorized version of `getPixel`. Designed for internal use by the
 /// compositor; YMMV when using externally.
 pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) {
+    return colorpkg.LinearRGB.encodeRGBAVec(self.getColorVec(x, y));
+}
+
+/// Vectorized color dithering. Designed for internal use by the compositor;
+/// YMMV when using externally.
+pub fn getColorVec(self: *const Dither, x: i32, y: i32) colorpkg.LinearRGB.Vector {
     const rgba: vectorize(colorpkg.LinearRGB) = switch (self.source) {
         .pixel => |src| c: {
             const c = colorpkg.LinearRGB.decodeRGBA(pixelpkg.RGBA.fromPixel(src));
@@ -146,7 +152,7 @@ pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) 
         },
     };
     const m: @Vector(vector_length, f32) = switch (self.type) {
-        .none => return colorpkg.LinearRGB.encodeRGBAVec(rgba),
+        .none => return rgba,
         .bayer => mBayer8x8Vec(x, y),
         .blue_noise => mBlueNoise64x64Vec(x, y),
     };
@@ -154,12 +160,12 @@ pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) 
         f32,
         @floatFromInt((@as(usize, 1) << self.scale) - 1),
     ));
-    return colorpkg.LinearRGB.encodeRGBAVec(.{
+    return .{
         .r = apply_dither(rgba.r, m, scale),
         .g = apply_dither(rgba.g, m, scale),
         .b = apply_dither(rgba.b, m, scale),
         .a = apply_dither(rgba.a, m, scale),
-    });
+    };
 }
 
 fn apply_dither(value: anytype, m: anytype, scale: anytype) @TypeOf(value) {
