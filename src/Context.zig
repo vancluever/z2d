@@ -44,6 +44,7 @@ line_join_mode: options.JoinMode = .miter,
 line_width: f64 = 2.0,
 miter_limit: f64 = 10.0,
 operator: compositor.Operator = .src_over,
+precision: compositor.Precision = .integer,
 tolerance: f64 = options.default_tolerance,
 transformation: Transformation = Transformation.identity,
 
@@ -245,6 +246,19 @@ pub fn getOperator(self: *Context) compositor.Operator {
 /// default operator is `.src_over`.
 pub fn setOperator(self: *Context, op: compositor.Operator) void {
     self.operator = op;
+}
+
+/// Returns the current compositing precision for this context.
+pub fn getPrecision(self: *Context) compositor.Precision {
+    return self.precision;
+}
+
+/// Sets the compositing precision to be used for fill and stroke, which
+/// controls the accuracy of color operations. The default precision is
+/// `.integer`. Some operators require `.float`; if an operator is detected
+/// that requires it, the precision will be changed.
+pub fn setPrecision(self: *Context, precision: compositor.Precision) void {
+    self.precision = precision;
 }
 
 /// Returns the current error tolerance for the context.
@@ -477,6 +491,7 @@ pub fn fill(self: *Context) painter.FillError!void {
             .anti_aliasing_mode = self.anti_aliasing_mode,
             .fill_rule = self.fill_rule,
             .operator = self.operator,
+            .precision = self.precision,
             .tolerance = self.tolerance,
         },
     );
@@ -508,6 +523,7 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
             .line_width = self.line_width,
             .miter_limit = self.miter_limit,
             .operator = self.operator,
+            .precision = self.precision,
             .tolerance = self.tolerance,
             .transformation = self.transformation,
         },

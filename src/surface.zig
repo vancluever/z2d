@@ -210,6 +210,7 @@ pub const Surface = union(SurfaceType) {
         operator: compositor.Operator,
         dst_x: i32,
         dst_y: i32,
+        opts: compositor.SurfaceCompositor.RunOptions,
     ) void {
         compositor.SurfaceCompositor.run(
             dst,
@@ -217,6 +218,7 @@ pub const Surface = union(SurfaceType) {
             dst_y,
             1,
             .{.{ .operator = operator, .src = .{ .surface = src } }},
+            opts,
         );
     }
 

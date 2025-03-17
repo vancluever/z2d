@@ -28,6 +28,12 @@
 //!
 //! Note that all color values are stored de-multiplied, and are expected to be
 //! supplied as such (unless otherwise specified).
+//!
+//! Additionally, note that this package exports vectorized functionality to
+//! support the compositor. This functionality should be considered unstable
+//! internal API. Keep this in mind if you use said functionality; it may
+//! experience a high degree of change, be inconsistently exported and/or later
+//! removed.
 
 const builtin = @import("std").builtin;
 const debug = @import("std").debug;
@@ -262,7 +268,7 @@ fn RGB(profile: RGBProfile) type {
         };
 
         /// Represents this color space with vectorized fields.
-        const Vector = vectorize(Self);
+        pub const Vector = vectorize(Self);
 
         r: f32,
         g: f32,
@@ -279,7 +285,7 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
-        /// Returns the color translated to sRGB with this color profile.
+        /// Returns the color translated to RGB with this color profile.
         pub fn fromColor(src: Color) Self {
             return switch (src) {
                 inline .linear_rgb, .srgb => |c| color: {
@@ -304,7 +310,7 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
-        /// Vectorizes a vector-sized array of colors translated to sRGB,
+        /// Vectorizes a vector-sized array of colors translated to RGB,
         /// gamma-corrected.
         fn fromColorVec(src: [vector_length]Color) Self.Vector {
             var result: Self.Vector = undefined;
@@ -396,6 +402,17 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
+        /// Like decodeRGBARaw, but converts vectorized RGBA pixel values to
+        /// vectorized colors. Used internally.
+        pub fn decodeRGBAVecRaw(src: vectorize(pixel.RGBA)) Self.Vector {
+            return .{
+                .r = @as(@Vector(vector_length, f32), @floatFromInt(src.r)) / splat(f32, 255.0),
+                .g = @as(@Vector(vector_length, f32), @floatFromInt(src.g)) / splat(f32, 255.0),
+                .b = @as(@Vector(vector_length, f32), @floatFromInt(src.b)) / splat(f32, 255.0),
+                .a = @as(@Vector(vector_length, f32), @floatFromInt(src.a)) / splat(f32, 255.0),
+            };
+        }
+
         /// Converts to a RGBA pixel with no transformation (does not
         /// pre-multiply, does not remove gamma).
         pub fn encodeRGBARaw(src: Self) pixel.RGBA {
@@ -409,7 +426,7 @@ fn RGB(profile: RGBProfile) type {
 
         /// Like encodeRGBARaw, but converts vectorized colors to vectorized RGBA
         /// values. Used internally.
-        fn encodeRGBAVecRaw(src: Self.Vector) vectorize(pixel.RGBA) {
+        pub fn encodeRGBAVecRaw(src: Self.Vector) vectorize(pixel.RGBA) {
             return .{
                 .r = @intFromFloat(@round(splat(f32, 255.0) * src.r)),
                 .g = @intFromFloat(@round(splat(f32, 255.0) * src.g)),
@@ -1002,7 +1019,7 @@ test "LinearRGB.fromColorVec" {
     try testing.expectEqualDeep(expected, got);
 }
 
-test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
+test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw, LinearRGB.decodeRGBAVecRaw" {
     // TODO: using pixel.RGBA's clamping for now (applies pre-multiplication
     // for us). I don't necessarily have plans to remove the direct
     // functionality in pixel just yet, and it helps assert behavior across
@@ -1011,8 +1028,16 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
     // testing in multiply particularly asserts that round-tripping works just
     // fine.
     const px_rgba = pixel.RGBA.fromClamped(0.25, 0.5, 0.75, 0.9);
+    var px_rgba_vec: vectorize(pixel.RGBA) = undefined;
+    for (0..vector_length) |i| {
+        px_rgba_vec.r[i] = px_rgba.r;
+        px_rgba_vec.g[i] = px_rgba.g;
+        px_rgba_vec.b[i] = px_rgba.b;
+        px_rgba_vec.a[i] = px_rgba.a;
+    }
     const got = LinearRGB.decodeRGBA(px_rgba);
     const got_raw = LinearRGB.decodeRGBARaw(px_rgba);
+    const got_raw_vec = LinearRGB.decodeRGBAVecRaw(px_rgba_vec);
     const expected: LinearRGB = .{
         .r = 0.25,
         .g = 0.5,
@@ -1020,6 +1045,15 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
         .a = 0.9,
     };
     const expected_raw = expected.multiply();
+
+    var expected_raw_vec: LinearRGB.Vector = undefined;
+    for (0..vector_length) |i| {
+        expected_raw_vec.r[i] = got_raw.r;
+        expected_raw_vec.g[i] = got_raw.g;
+        expected_raw_vec.b[i] = got_raw.b;
+        expected_raw_vec.a[i] = got_raw.a;
+    }
+
     // Set our epsilon to help accommodate integer mul/demul error
     const epsilon: f32 = 1.0 / 128.0;
     try testing.expectApproxEqAbs(expected.r, got.r, epsilon);
@@ -1030,6 +1064,7 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
     try testing.expectApproxEqAbs(expected_raw.g, got_raw.g, epsilon);
     try testing.expectApproxEqAbs(expected_raw.b, got_raw.b, epsilon);
     try testing.expectApproxEqAbs(expected_raw.a, got_raw.a, epsilon);
+    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "LinearRGB.encodeRGBA, LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBARaw, LinearRGB.encodeRGBAVecRaw" {
