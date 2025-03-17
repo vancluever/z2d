@@ -49,13 +49,17 @@ package, which allows access to a multi-step compositor that you can use to
 apply multiple steps to a set of surfaces and pixels without needing to be
 written back to memory first (more on how we currently use this below).
 
-21 compositor operators are now available for use. They can be set for fill and
+28 compositor operators are now available for use. They can be set for fill and
 stroke by using `Context.setOperator`, or by using respective fields in
 `painter.fill` and `painter.stroke`. Some operators are unbounded when being
 used in fill and stroke, which means they will remove the unaffected
 destination when drawing; these are noted in the description for each operator.
 Note that when using the lower level compositor functions, all operators are
-bounded.
+bounded. Additionally, some operators require floating-point precision and
+hence will be slower; in most situations this is automatically managed, but it
+can be changed with `Context.setPrecision` if need be. Note that this is only
+really useful for forcing floating-point precision, versus the other way
+around, due to possible overriding.
 
 PIXEL STRIDES
 

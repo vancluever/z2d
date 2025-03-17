@@ -48,6 +48,9 @@ pub const FillOpts = struct {
     /// The operator to use for compositing.
     operator: compositor.Operator = .src_over,
 
+    /// The precision to use when compositing.
+    precision: compositor.Precision = .integer,
+
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
     /// The default tolerance should be sufficient for most cases.
@@ -99,10 +102,27 @@ pub fn fill(
 
     switch (aa_mode) {
         .none => {
-            try paintDirect(alloc, surface, pattern, polygons, opts.fill_rule, opts.operator);
+            try paintDirect(
+                alloc,
+                surface,
+                pattern,
+                polygons,
+                opts.fill_rule,
+                opts.operator,
+                opts.precision,
+            );
         },
         .default => {
-            try paintComposite(alloc, surface, pattern, polygons, opts.fill_rule, scale, opts.operator);
+            try paintComposite(
+                alloc,
+                surface,
+                pattern,
+                polygons,
+                opts.fill_rule,
+                scale,
+                opts.operator,
+                opts.precision,
+            );
         },
     }
 }
@@ -134,6 +154,9 @@ pub const StrokeOpts = struct {
 
     /// The operator to use for compositing.
     operator: compositor.Operator = .src_over,
+
+    /// The precision to use when compositing.
+    precision: compositor.Precision = .integer,
 
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
@@ -222,10 +245,27 @@ pub fn stroke(
 
     switch (aa_mode) {
         .none => {
-            try paintDirect(alloc, surface, pattern, polygons, .non_zero, opts.operator);
+            try paintDirect(
+                alloc,
+                surface,
+                pattern,
+                polygons,
+                .non_zero,
+                opts.operator,
+                opts.precision,
+            );
         },
         .default => {
-            try paintComposite(alloc, surface, pattern, polygons, .non_zero, scale, opts.operator);
+            try paintComposite(
+                alloc,
+                surface,
+                pattern,
+                polygons,
+                .non_zero,
+                scale,
+                opts.operator,
+                opts.precision,
+            );
         },
     }
 }
@@ -239,8 +279,12 @@ fn paintDirect(
     polygons: PolygonList,
     fill_rule: FillRule,
     operator: compositor.Operator,
+    precision: compositor.Precision,
 ) PaintError!void {
-    const bounded = isBounded(operator);
+    const bounded = operator.isBounded();
+    // We need to check to see if we need to override the precision as we don't
+    // use the surface compositor here
+    const _precision = if (operator.requiresFloat()) .float else precision;
     const poly_start_y: i32 = if (bounded)
         math.clamp(
             @as(i32, @intFromFloat(@floor(polygons.start.y))),
@@ -275,7 +319,7 @@ fn paintDirect(
             compositor.StrideCompositor.run(clear_stride, &.{.{
                 .operator = .clear,
                 .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-            }});
+            }}, .{ .precision = .integer });
 
             continue;
         }
@@ -298,7 +342,7 @@ fn paintDirect(
                 compositor.StrideCompositor.run(clear_stride, &.{.{
                     .operator = .clear,
                     .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }});
+                }}, .{ .precision = .integer });
             }
 
             const dst_stride = surface.getStride(start_x, y, @intCast(end_x - start_x));
@@ -317,7 +361,7 @@ fn paintDirect(
                         .y = y,
                     } },
                 },
-            }});
+            }}, .{ .precision = _precision });
 
             if (!bounded) {
                 // Clear to the end
@@ -325,7 +369,7 @@ fn paintDirect(
                 compositor.StrideCompositor.run(clear_stride, &.{.{
                     .operator = .clear,
                     .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }});
+                }}, .{ .precision = .integer });
             }
         }
     }
@@ -339,6 +383,7 @@ fn paintComposite(
     fill_rule: FillRule,
     scale: f64,
     operator: compositor.Operator,
+    precision: compositor.Precision,
 ) PaintError!void {
     // This math expects integer scaling.
     debug.assert(@floor(scale) == scale);
@@ -350,7 +395,7 @@ fn paintComposite(
     //
     // This range is *exclusive* of the right (max) end, hence why we add 1
     // to the maximum coordinates.
-    const bounded = isBounded(operator);
+    const bounded = operator.isBounded();
     const x0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.x / scale)) else 0;
     const y0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y / scale)) else 0;
     const x1: i32 = if (bounded)
@@ -441,24 +486,7 @@ fn paintComposite(
         .{
             .operator = operator,
         },
-    });
-}
-
-/// Returns true if the operator is bounded, meaning that drawing is limited to
-/// the bounding box of the source polygon.
-///
-/// Most operators are bounded, or the result of the operator is defined as
-/// being equal for both bounded and unbounded sources, so this function rather
-/// lists operators that are explicitly unbounded.
-fn isBounded(op: compositor.Operator) bool {
-    return switch (op) {
-        .src_in,
-        .dst_in,
-        .src_out,
-        .dst_atop,
-        => false,
-        else => true,
-    };
+    }, .{ .precision = precision });
 }
 
 test "stroke uninvertible matrix error" {
