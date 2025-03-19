@@ -105,13 +105,34 @@ pub fn getPixel(self: *const Dither, x: i32, y: i32) Pixel {
 
 /// Vectorized version of `getPixel`. Designed for internal use by the
 /// compositor; YMMV when using externally.
-pub fn getRGBAVec(self: *const Dither, x: i32, y: i32) vectorize(pixelpkg.RGBA) {
-    return colorpkg.LinearRGB.encodeRGBAVec(self.getColorVec(x, y));
+pub fn getRGBAVec(
+    self: *const Dither,
+    x: i32,
+    y: i32,
+    comptime limit: bool,
+    limit_len: usize,
+) vectorize(pixelpkg.RGBA) {
+    return colorpkg.LinearRGB.encodeRGBAVec(self.getColorVec(
+        x,
+        y,
+        limit,
+        limit_len,
+    ));
 }
+
+const zero_float_vec = @import("internal/util.zig").zero_float_vec;
+const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 
 /// Vectorized color dithering. Designed for internal use by the compositor;
 /// YMMV when using externally.
-pub fn getColorVec(self: *const Dither, x: i32, y: i32) colorpkg.LinearRGB.Vector {
+pub fn getColorVec(
+    self: *const Dither,
+    x: i32,
+    y: i32,
+    comptime limit: bool,
+    limit_len: usize,
+) colorpkg.LinearRGB.Vector {
+    if (limit) debug.assert(limit_len < vector_length);
     const rgba: vectorize(colorpkg.LinearRGB) = switch (self.source) {
         .pixel => |src| c: {
             const c = colorpkg.LinearRGB.decodeRGBA(pixelpkg.RGBA.fromPixel(src));
@@ -132,9 +153,9 @@ pub fn getColorVec(self: *const Dither, x: i32, y: i32) colorpkg.LinearRGB.Vecto
             };
         },
         .gradient => |src| c: {
-            var c0_vec: [vector_length]colorpkg.Color = undefined;
-            var c1_vec: [vector_length]colorpkg.Color = undefined;
-            var offsets_vec: [vector_length]f32 = undefined;
+            var c0_vec: [vector_length]colorpkg.Color = zero_color_vec;
+            var c1_vec: [vector_length]colorpkg.Color = zero_color_vec;
+            var offsets_vec: [vector_length]f32 = zero_float_vec;
             for (0..vector_length) |i| {
                 const search_result = src.searchInStops(src.getOffset(
                     x + @as(i32, @intCast(i)),
@@ -143,6 +164,9 @@ pub fn getColorVec(self: *const Dither, x: i32, y: i32) colorpkg.LinearRGB.Vecto
                 c0_vec[i] = search_result.c0;
                 c1_vec[i] = search_result.c1;
                 offsets_vec[i] = search_result.offset;
+                if (limit) {
+                    if (i + 1 == limit_len) break;
+                }
             }
             break :c src.getInterpolationMethod().interpolateVec(
                 c0_vec,
@@ -463,7 +487,7 @@ test "Dither.getRGBAVec" {
                 expected.b[i] = expected_scalar.b;
                 expected.a[i] = expected_scalar.a;
             }
-            try testing.expectEqualDeep(expected, d.getRGBAVec(tc.x, tc.y));
+            try testing.expectEqualDeep(expected, d.getRGBAVec(tc.x, tc.y, false, 0));
         }
     };
     try runCases(name, cases, TestFn.f);
