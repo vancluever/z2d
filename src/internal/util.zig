@@ -3,6 +3,8 @@
 const builtin = @import("std").builtin;
 const debug = @import("std").debug;
 
+const colorpkg = @import("../color.zig");
+
 const vector_length = @import("../compositor.zig").vector_length;
 
 /// Internal table test helper. Passes in an array of structs representing test
@@ -73,3 +75,15 @@ pub fn gather(slice: anytype, index: anytype) @Vector(
     }
     return result;
 }
+
+/// Short-hand splatted f32 zero values, used in multiple places.
+pub const zero_float_vec: @Vector(vector_length, f32) = @splat(0.0);
+
+/// Short-hand splatted color zero values, used in multiple places.
+pub const zero_color_vec: [vector_length]colorpkg.Color = zero_color_vec: {
+    var result: [vector_length]colorpkg.Color = undefined;
+    for (0..vector_length) |i| {
+        result[i] = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor();
+    }
+    break :zero_color_vec result;
+};

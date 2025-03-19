@@ -531,9 +531,9 @@ pub const StrideCompositor = struct {
             for (operations, 0..) |op, op_idx| {
                 _src = switch (op.src) {
                     .pixel => |px| vec_storage_T.fromPixel(px),
-                    .stride => |stride| vec_storage_T.fromStride(stride, j),
-                    .gradient => |gr| vec_storage_T.fromGradient(gr, j),
-                    .dither => |d| vec_storage_T.fromDither(d, j),
+                    .stride => |stride| vec_storage_T.fromStride(stride, j, false, 0),
+                    .gradient => |gr| vec_storage_T.fromGradient(gr, j, false, 0),
+                    .dither => |d| vec_storage_T.fromDither(d, j, false, 0),
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
@@ -541,60 +541,45 @@ pub const StrideCompositor = struct {
                 };
                 _dst = switch (op.dst) {
                     .pixel => |px| vec_storage_T.fromPixel(px),
-                    .stride => |stride| vec_storage_T.fromStride(stride, j),
-                    .gradient => |gr| vec_storage_T.fromGradient(gr, j),
-                    .dither => |d| vec_storage_T.fromDither(d, j),
-                    .none => vec_storage_T.fromStride(dst, j),
+                    .stride => |stride| vec_storage_T.fromStride(stride, j, false, 0),
+                    .gradient => |gr| vec_storage_T.fromGradient(gr, j, false, 0),
+                    .dither => |d| vec_storage_T.fromDither(d, j, false, 0),
+                    .none => vec_storage_T.fromStride(dst, j, false, 0),
                 };
                 _dst = vec_storage_T.runOperator(_dst, _src, op.operator);
             }
             // End of the batch for this vector, so we can write it out now.
-            _dst.toStride(dst, j);
+            _dst.toStride(dst, j, false, 0);
         }
-        for (len - len % vector_length..len) |i| {
-            // Scalar section, we step on this element-by-element.
-            const px_storage_T = switch (precision) {
-                .integer => RGBA16,
-                .float => RGBAFloat,
-            };
-            var _dst: px_storage_T = undefined;
-            var _src: px_storage_T = undefined;
+        const rem_len = len % vector_length;
+        if (rem_len > 0) {
+            // Partial vector operations (the remainder of the stride that does
+            // not evenly fit in the vector).
+            const rem_idx = len - rem_len;
+            var _dst: vec_storage_T = undefined;
+            var _src: vec_storage_T = undefined;
             for (operations, 0..) |op, op_idx| {
                 _src = switch (op.src) {
-                    .pixel => |px| px_storage_T.fromPixel(px),
-                    .stride => |stride| px_storage_T.fromPixel(
-                        getPixelFromStride(stride, i),
-                    ),
-                    .gradient => |gr| px_storage_T.fromPixel(
-                        gr.underlying.getPixel(gr.x + @as(i32, @intCast(i)), gr.y),
-                    ),
-                    .dither => |d| px_storage_T.fromPixel(
-                        d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y),
-                    ),
+                    .pixel => |px| vec_storage_T.fromPixel(px),
+                    .stride => |stride| vec_storage_T.fromStride(stride, rem_idx, true, rem_len),
+                    .gradient => |gr| vec_storage_T.fromGradient(gr, rem_idx, true, rem_len),
+                    .dither => |d| vec_storage_T.fromDither(d, rem_idx, true, rem_len),
                     .none => none: {
                         debug.assert(op_idx != 0);
                         break :none _dst;
                     },
                 };
                 _dst = switch (op.dst) {
-                    .pixel => |px| px_storage_T.fromPixel(px),
-                    .stride => |stride| px_storage_T.fromPixel(
-                        getPixelFromStride(stride, i),
-                    ),
-                    .gradient => |gr| px_storage_T.fromPixel(
-                        gr.underlying.getPixel(gr.x + @as(i32, @intCast(i)), gr.y),
-                    ),
-                    .dither => |d| px_storage_T.fromPixel(
-                        d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y),
-                    ),
-                    .none => px_storage_T.fromPixel(
-                        getPixelFromStride(dst, i),
-                    ),
+                    .pixel => |px| vec_storage_T.fromPixel(px),
+                    .stride => |stride| vec_storage_T.fromStride(stride, rem_idx, true, rem_len),
+                    .gradient => |gr| vec_storage_T.fromGradient(gr, rem_idx, true, rem_len),
+                    .dither => |d| vec_storage_T.fromDither(d, rem_idx, true, rem_len),
+                    .none => vec_storage_T.fromStride(dst, rem_idx, true, rem_len),
                 };
-                _dst = px_storage_T.runOperator(_dst, _src, op.operator);
+                _dst = vec_storage_T.runOperator(_dst, _src, op.operator);
             }
-
-            setPixelInStride(dst, i, _dst.toPixel());
+            // End of the batch for this vector, so we can write it out now.
+            _dst.toStride(dst, rem_idx, true, rem_len);
         }
     }
 };
@@ -623,6 +608,8 @@ pub fn runPixel(
 const max_u8_scalar: u16 = 255;
 const max_u8_vec: @Vector(vector_length, u16) = @splat(255);
 const zero_int_vec: @Vector(vector_length, u16) = @splat(0);
+const zero_float_vec = @import("internal/util.zig").zero_float_vec;
+const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 
 /// Represents an RGBA value as 16bpc. Note that this is only for intermediary
 /// calculations, no channel should be bigger than an u8 after any particular
@@ -676,21 +663,40 @@ const RGBA16Vec = struct {
         };
     }
 
-    fn fromStride(src: pixel.Stride, idx: usize) RGBA16Vec {
+    fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
+        if (limit) debug.assert(limit_len < vector_length);
         switch (src) {
             inline .rgb, .rgba, .alpha8 => |_src| {
                 const src_t = @typeInfo(@TypeOf(_src)).pointer.child;
                 const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
                 const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
+                const end = if (limit) idx + limit_len else idx + vector_length;
                 return .{
-                    .r = if (has_color) transposeToVec(_src[idx .. idx + vector_length], .r) else zero_int_vec,
-                    .g = if (has_color) transposeToVec(_src[idx .. idx + vector_length], .g) else zero_int_vec,
-                    .b = if (has_color) transposeToVec(_src[idx .. idx + vector_length], .b) else zero_int_vec,
-                    .a = if (has_alpha) transposeToVec(_src[idx .. idx + vector_length], .a) else max_u8_vec,
+                    .r = if (has_color)
+                        transposeToVec(_src[idx..end], .r, limit, limit_len)
+                    else
+                        zero_int_vec,
+                    .g = if (has_color)
+                        transposeToVec(_src[idx..end], .g, limit, limit_len)
+                    else
+                        zero_int_vec,
+                    .b = if (has_color)
+                        transposeToVec(_src[idx..end], .b, limit, limit_len)
+                    else
+                        zero_int_vec,
+                    .a = if (has_alpha)
+                        transposeToVec(_src[idx..end], .a, limit, limit_len)
+                    else
+                        max_u8_vec,
                 };
             },
             inline .alpha4, .alpha2, .alpha1 => |_src| {
-                var result: RGBA16Vec = undefined;
+                var result: RGBA16Vec = .{
+                    .r = zero_int_vec,
+                    .g = zero_int_vec,
+                    .b = zero_int_vec,
+                    .a = zero_int_vec,
+                };
                 for (0..vector_length) |i| {
                     const px = pixel.Alpha8.fromPixel(
                         @TypeOf(_src).T.getFromPacked(_src.buf, _src.px_offset + idx + i).asPixel(),
@@ -699,16 +705,25 @@ const RGBA16Vec = struct {
                     result.g[i] = 0;
                     result.b[i] = 0;
                     result.a[i] = px.a;
+                    if (limit) {
+                        if (i + 1 == limit_len) break;
+                    }
                 }
                 return result;
             },
         }
     }
 
-    fn fromGradient(src: StrideCompositor.Operation.Param.GradientParam, idx: usize) RGBA16Vec {
-        var c0_vec: [vector_length]colorpkg.Color = undefined;
-        var c1_vec: [vector_length]colorpkg.Color = undefined;
-        var offsets_vec: [vector_length]f32 = undefined;
+    fn fromGradient(
+        src: StrideCompositor.Operation.Param.GradientParam,
+        idx: usize,
+        comptime limit: bool,
+        limit_len: usize,
+    ) RGBA16Vec {
+        if (limit) debug.assert(limit_len < vector_length);
+        var c0_vec: [vector_length]colorpkg.Color = zero_color_vec;
+        var c1_vec: [vector_length]colorpkg.Color = zero_color_vec;
+        var offsets_vec: [vector_length]f32 = zero_float_vec;
         for (0..vector_length) |i| {
             const search_result = src.underlying.searchInStops(src.underlying.getOffset(
                 src.x + @as(i32, @intCast(idx)) + @as(i32, @intCast(i)),
@@ -717,6 +732,9 @@ const RGBA16Vec = struct {
             c0_vec[i] = search_result.c0;
             c1_vec[i] = search_result.c1;
             offsets_vec[i] = search_result.offset;
+            if (limit) {
+                if (i + 1 == limit_len) break;
+            }
         }
         const result_rgba8 = src.underlying.getInterpolationMethod().interpolateEncodeVec(
             c0_vec,
@@ -731,8 +749,13 @@ const RGBA16Vec = struct {
         };
     }
 
-    fn fromDither(src: StrideCompositor.Operation.Param.DitherParam, idx: usize) RGBA16Vec {
-        const result = src.underlying.getRGBAVec(src.x + @as(i32, @intCast(idx)), src.y);
+    fn fromDither(
+        src: StrideCompositor.Operation.Param.DitherParam,
+        idx: usize,
+        comptime limit: bool,
+        limit_len: usize,
+    ) RGBA16Vec {
+        const result = src.underlying.getRGBAVec(src.x + @as(i32, @intCast(idx)), src.y, limit, limit_len);
         return .{
             .r = result.r,
             .g = result.g,
@@ -741,16 +764,24 @@ const RGBA16Vec = struct {
         };
     }
 
-    fn toStride(self: RGBA16Vec, dst: pixel.Stride, idx: usize) void {
+    fn toStride(
+        self: RGBA16Vec,
+        dst: pixel.Stride,
+        idx: usize,
+        comptime limit: bool,
+        limit_len: usize,
+    ) void {
+        if (limit) debug.assert(limit_len < vector_length);
         switch (dst) {
             inline .rgb, .rgba, .alpha8 => |_dst| {
                 const dst_t = @typeInfo(@TypeOf(_dst)).pointer.child;
                 const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
                 const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
-                if (has_color) transposeFromVec(_dst[idx .. idx + vector_length], self.r, .r);
-                if (has_color) transposeFromVec(_dst[idx .. idx + vector_length], self.g, .g);
-                if (has_color) transposeFromVec(_dst[idx .. idx + vector_length], self.b, .b);
-                if (has_alpha) transposeFromVec(_dst[idx .. idx + vector_length], self.a, .a);
+                const end = if (limit) idx + limit_len else idx + vector_length;
+                if (has_color) transposeFromVec(_dst[idx..end], self.r, .r, limit, limit_len);
+                if (has_color) transposeFromVec(_dst[idx..end], self.g, .g, limit, limit_len);
+                if (has_color) transposeFromVec(_dst[idx..end], self.b, .b, limit, limit_len);
+                if (has_alpha) transposeFromVec(_dst[idx..end], self.a, .a, limit, limit_len);
             },
             inline .alpha4, .alpha2, .alpha1 => |_dst| {
                 for (0..vector_length) |i| {
@@ -760,6 +791,9 @@ const RGBA16Vec = struct {
                         _dst.px_offset + idx + i,
                         dst_t.fromPixel(.{ .alpha8 = .{ .a = @intCast(self.a[i]) } }),
                     );
+                    if (limit) {
+                        if (i + 1 == limit_len) break;
+                    }
                 }
             },
         }
@@ -779,14 +813,38 @@ const VecField = enum {
     a,
 };
 
-fn transposeToVec(arr: anytype, comptime field: VecField) @Vector(vector_length, u16) {
-    var result: @Vector(vector_length, u16) = undefined;
-    for (0..vector_length) |idx| result[idx] = @field(arr[idx], @tagName(field));
+// NOTE: anything that uses the transpose functions should assert
+// limit_len < vector_length upstream
+
+fn transposeToVec(
+    arr: anytype,
+    comptime field: VecField,
+    comptime limit: bool,
+    limit_len: usize,
+) @Vector(vector_length, u16) {
+    var result: @Vector(vector_length, u16) = zero_int_vec;
+    for (0..vector_length) |idx| {
+        result[idx] = @field(arr[idx], @tagName(field));
+        if (limit) {
+            if (idx + 1 == limit_len) break;
+        }
+    }
     return result;
 }
 
-fn transposeFromVec(arr: anytype, src: @Vector(vector_length, u16), comptime field: VecField) void {
-    for (0..vector_length) |idx| @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
+fn transposeFromVec(
+    arr: anytype,
+    src: @Vector(vector_length, u16),
+    comptime field: VecField,
+    comptime limit: bool,
+    limit_len: usize,
+) void {
+    for (0..vector_length) |idx| {
+        @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
+        if (limit) {
+            if (idx + 1 == limit_len) break;
+        }
+    }
 }
 
 fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
@@ -845,7 +903,12 @@ const RGBAFloat = struct {
             } };
         }
 
-        fn fromStride(src: pixel.Stride, idx: usize) Vector {
+        fn fromStride(
+            src: pixel.Stride,
+            idx: usize,
+            comptime limit: bool,
+            limit_len: usize,
+        ) Vector {
             // TODO: Clean this up once API stabilizes (it'd be nice
             // not to have to intCast).
             //
@@ -856,7 +919,7 @@ const RGBAFloat = struct {
             // LinearRGB, but this should be fine for now; the
             // expectation is that you'd be using ReleaseFast if you
             // truly want performance.
-            const _src = RGBA16Vec.fromStride(src, idx);
+            const _src = RGBA16Vec.fromStride(src, idx, limit, limit_len);
             return .{ .underlying = colorpkg.LinearRGB.decodeRGBAVecRaw(.{
                 .r = @intCast(_src.r),
                 .g = @intCast(_src.g),
@@ -868,10 +931,13 @@ const RGBAFloat = struct {
         fn fromGradient(
             src: StrideCompositor.Operation.Param.GradientParam,
             idx: usize,
+            comptime limit: bool,
+            limit_len: usize,
         ) Vector {
-            var c0_vec: [vector_length]colorpkg.Color = undefined;
-            var c1_vec: [vector_length]colorpkg.Color = undefined;
-            var offsets_vec: [vector_length]f32 = undefined;
+            if (limit) debug.assert(limit_len < vector_length);
+            var c0_vec: [vector_length]colorpkg.Color = zero_color_vec;
+            var c1_vec: [vector_length]colorpkg.Color = zero_color_vec;
+            var offsets_vec: [vector_length]f32 = zero_float_vec;
             for (0..vector_length) |i| {
                 const search_result = src.underlying.searchInStops(src.underlying.getOffset(
                     src.x + @as(i32, @intCast(idx)) + @as(i32, @intCast(i)),
@@ -880,6 +946,9 @@ const RGBAFloat = struct {
                 c0_vec[i] = search_result.c0;
                 c1_vec[i] = search_result.c1;
                 offsets_vec[i] = search_result.offset;
+                if (limit) {
+                    if (i + 1 == limit_len) break;
+                }
             }
             return .{ .underlying = src.underlying.getInterpolationMethod().interpolateVec(
                 c0_vec,
@@ -891,16 +960,26 @@ const RGBAFloat = struct {
         fn fromDither(
             src: StrideCompositor.Operation.Param.DitherParam,
             idx: usize,
+            comptime limit: bool,
+            limit_len: usize,
         ) Vector {
             return .{
                 .underlying = src.underlying.getColorVec(
                     src.x + @as(i32, @intCast(idx)),
                     src.y,
+                    limit,
+                    limit_len,
                 ),
             };
         }
 
-        fn toStride(self: Vector, dst: pixel.Stride, idx: usize) void {
+        fn toStride(
+            self: Vector,
+            dst: pixel.Stride,
+            idx: usize,
+            comptime limit: bool,
+            limit_len: usize,
+        ) void {
             const _src = colorpkg.LinearRGB.encodeRGBAVecRaw(self.underlying);
             RGBA16Vec.toStride(
                 .{
@@ -911,6 +990,8 @@ const RGBAFloat = struct {
                 },
                 dst,
                 idx,
+                limit,
+                limit_len,
             );
         }
 

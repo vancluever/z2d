@@ -473,9 +473,9 @@ fn RGB(profile: RGBProfile) type {
         /// Internally-used vectorized version of demultiply.
         fn demultiplyVec(src: Self.Vector) Self.Vector {
             return .{
-                .r = src.r / src.a,
-                .g = src.g / src.a,
-                .b = src.b / src.a,
+                .r = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.r / src.a),
+                .g = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.g / src.a),
+                .b = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.b / src.a),
                 .a = src.a,
             };
         }
@@ -1133,6 +1133,25 @@ test "LinearRGB.demultiply" {
     try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+}
+
+test "LinearRGB.demultiplyVec, divide by zero" {
+    // Note that we use this as a divide-by-zero check for all other generated
+    // RGB profiles.
+    const in: LinearRGB.Vector = .{
+        .r = @splat(1),
+        .g = @splat(0.75),
+        .b = @splat(0.25),
+        .a = @splat(0.0),
+    };
+    const got = LinearRGB.demultiplyVec(in);
+    const expected: LinearRGB.Vector = .{
+        .r = @splat(0.0),
+        .g = @splat(0.0),
+        .b = @splat(0.0),
+        .a = @splat(0.0),
+    };
+    try testing.expectEqualDeep(expected, got);
 }
 
 test "LinearRGB.removeGamma, LinearRGB.removeGammaVec" {
@@ -1928,6 +1947,23 @@ test "HSL.demultiply" {
     try testing.expectApproxEqAbs(expected.s, got.s, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.l, got.l, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+}
+
+test "HSL.demultiplyVec, divide by zero" {
+    const in: HSL.Vector = .{
+        .h = @splat(240),
+        .s = @splat(0.5),
+        .l = @splat(0.25),
+        .a = @splat(0.0),
+    };
+    const got = HSL.demultiplyVec(in);
+    const expected: HSL.Vector = .{
+        .h = @splat(240),
+        .s = @splat(0.0),
+        .l = @splat(0.0),
+        .a = @splat(0.0),
+    };
+    try testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.interpolate, HSL.interpolateEncode" {
