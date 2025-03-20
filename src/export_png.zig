@@ -10,7 +10,11 @@ const io = @import("std").io;
 const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
+const pixel = @import("pixel.zig");
 const surface = @import("surface.zig");
+
+const vector_length = @import("compositor.zig").vector_length;
+const splat = @import("internal/util.zig").splat;
 
 const native_endian = builtin.cpu.arch.endian();
 
@@ -39,18 +43,6 @@ pub fn writeToPNGFile(
     sfc: surface.Surface,
     filename: []const u8,
 ) WriteToPNGFileError!void {
-    // TODO: There are currently no unsupported surface formats, and there
-    // might likely not be going forward (we had alpha as an unsupported format
-    // but now we just convert it to greyscale). Keeping this here for a bit
-    // just in case, but we likely can remove it.
-    //
-    // switch (sfc.getFormat()) {
-    //     .rgba, .rgb, .alpha8 => {},
-    //     else => {
-    //         return error.UnsupportedSurfaceFormat;
-    //     },
-    // }
-
     // Open and create the file.
     const file = try fs.cwd().createFile(filename, .{});
     defer file.close();
@@ -120,24 +112,21 @@ fn writePNGIDATStream(
     // Set a minimum remaining buffer size here that is reasonably
     // sized. This may not be 100% scientific, but should account for
     // the 248 byte deflate buffer (see buffer sizes in the stdlib at
-    // deflate/huffman_bit_writer.zig). Coincidentally, 256 here then
-    // means that we have 8 bytes of space to write, which should be
-    // enough for now (we currently stream up to 5 bytes at a time to
-    // the zlib stream).
+    // deflate/huffman_bit_writer.zig) plus 1 full write.
     //
     // This may change when we start supporting filter algorithms, and
     // have to start writing whole scanlines at once (multiple
     // scanlines, in fact).
-    const min_remaining: usize = 256;
+    const min_remaining: usize = 248 + (4 * vector_length + 1);
 
-    // Our zlib buffer is 8K, but we may add the ability to tune this
+    // Our zlib buffer is 16K, but we may add the ability to tune this
     // in the future.
     //
     // NOTE: When allowing for modifications to this value, there
     // likely will need to be a minimum buffer size of ~512 bytes or
     // something else reasonable. This is due to the minimum size we
     // need for headers (see above).
-    var zlib_buffer_underlying = [_]u8{0} ** 8192;
+    var zlib_buffer_underlying = [_]u8{0} ** 16384;
     var zlib_buffer = io.fixedBufferStream(&zlib_buffer_underlying);
     var zlib_stream = try zlib.compressor(zlib_buffer.writer(), .{});
 
@@ -155,92 +144,70 @@ fn writePNGIDATStream(
         // increase/change when/if we add additional pixel filtering
         // algorithms.
         //
-        // Buffer is 5 bytes to accommodate both scanline header and
-        // current maximum bpp (which is a u32).
-        var pixel_buffer = [_]u8{0} ** 5;
+        // Buffer is 4 * vector_length + 1 bytes to accommodate both scanline
+        // header and current maximum bpp (which is a u32).
+        var pixel_buffer = [_]u8{0} ** (4 * vector_length + 1);
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
         var x: usize = 0;
-        while (x < sfc.getWidth()) : (x += 1) {
+        const stride = sfc.getStride(0, @intCast(y), @intCast(sfc.getWidth()));
+        while (x < sfc.getWidth()) : (x += vector_length) {
             nbytes += written: {
-                switch (sfc.getPixel(@intCast(x), @intCast(y)) orelse unreachable) {
-                    // PNG writes out numbers big-endian, but *only numbers larger
-                    // than a byte*. This means we need to handle each pixel format
-                    // slightly differently with how we swap around bytes, etc.
-                    // Note that we currently don't support any pixel with a bit
-                    // depth larger than 8 bits, so this means we currently take
-                    // all formats little-endian completely.
-                    .rgb => |px| {
-                        mem.copyForwards(
-                            u8,
-                            pixel_buffer[nbytes..pixel_buffer.len],
-                            u32PixelToBytesLittle(@bitCast(px))[0..3],
-                        );
-                        break :written 3; // 3 bytes
-                    },
-                    .rgba => |px| {
-                        mem.copyForwards(
-                            u8,
-                            pixel_buffer[nbytes..pixel_buffer.len],
-                            &u32PixelToBytesLittle(@bitCast(px.demultiply())),
-                        );
-                        break :written 4; // 4 bytes
-                    },
-                    .alpha8 => |px| {
-                        mem.copyForwards(
-                            u8,
-                            pixel_buffer[nbytes..pixel_buffer.len],
-                            &@as([1]u8, @bitCast(px)),
-                        );
-                        break :written 1; // 1 byte
-                    },
-                    .alpha4 => |px| {
-                        // Pack 2 pixels in a single byte, starting with the
-                        // one we have right now in the MSB range.
-                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
-                        const px_u8: u8 = @intCast(@as(u4, @bitCast(px)));
-                        pixel_buffer[nbytes] |= px_u8 << 4;
-                        x += 1;
-                        if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
-                            pixel_buffer[nbytes] |= @as(u8, @intCast(@as(u4, @bitCast(other_px.alpha4))));
+                const stride_len = stride_len: {
+                    const remaining = @as(usize, @intCast(sfc.getWidth())) - x;
+                    break :stride_len if (remaining < vector_length)
+                        remaining
+                    else
+                        vector_length;
+                };
+                switch (stride) {
+                    .rgb => |s| {
+                        var stride_vec = [_]u32{0} ** vector_length;
+                        @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
+                        const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
+                        for (0..stride_len) |i| {
+                            const j = i * 3;
+                            const k = i * 4;
+                            @memcpy(pixel_buffer[nbytes + j .. nbytes + j + 3], stride_bytes[k .. k + 3]);
                         }
-                        break :written 1; // 1 byte
+                        break :written stride_len * 3;
                     },
-                    .alpha2 => |px| {
-                        // Pack 4 pixels in a single byte, starting with the
-                        // one we have right now in the MSB range.
-                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
-                        var px_u8: u8 = @intCast(@as(u2, @bitCast(px)));
-                        pixel_buffer[nbytes] |= px_u8 << 6;
-                        for (1..4) |i| {
-                            x += 1;
-                            if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
-                                const shl: u3 = @intCast(6 - i * 2);
-                                px_u8 = @intCast(@as(u2, @bitCast(other_px.alpha2)));
-                                pixel_buffer[nbytes] |= px_u8 << shl;
-                            } else {
-                                break;
-                            }
+                    .rgba => |s| {
+                        var stride_vec = [_]u32{0} ** vector_length;
+                        @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
+                        stride_vec = demultiplyRGBAVec(stride_vec);
+                        const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
+                        for (0..stride_len) |i| {
+                            const j = i * 4;
+                            @memcpy(pixel_buffer[nbytes + j .. nbytes + j + 4], stride_bytes[j .. j + 4]);
                         }
-                        break :written 1; // 1 byte
+                        break :written stride_len * 4;
                     },
-                    .alpha1 => |px| {
-                        // Pack 8 pixels in a single byte, starting with the
-                        // one we have right now in the MSB.
-                        pixel_buffer[nbytes] = 0; // zero dirty buffer first
-                        var px_u8: u8 = @intCast(@as(u1, @bitCast(px)));
-                        pixel_buffer[nbytes] |= px_u8 << 7;
-                        for (1..8) |i| {
-                            x += 1;
-                            if (sfc.getPixel(@intCast(x), @intCast(y))) |other_px| {
-                                const shl: u3 = @intCast(7 - i);
-                                px_u8 = @intCast(@as(u1, @bitCast(other_px.alpha1)));
-                                pixel_buffer[nbytes] |= px_u8 << shl;
-                            } else {
-                                break;
-                            }
+                    .alpha8 => |s| {
+                        @memcpy(
+                            pixel_buffer[nbytes .. nbytes + stride_len],
+                            @as([]u8, @ptrCast(s[x .. x + stride_len])),
+                        );
+                        break :written stride_len;
+                    },
+                    inline .alpha4, .alpha2, .alpha1 => |s| {
+                        // We pack manually here as
+                        // readPackedInt/writePackedInt semantics aren't
+                        // necessarily what we want, due to how byte order
+                        // works in PNG.
+                        for (nbytes..pixel_buffer.len) |i| pixel_buffer[i] = 0; // zero buffer first
+                        for (0..stride_len) |i| {
+                            const px_int = @as(
+                                u8,
+                                @TypeOf(s).T.getFromPacked(s.buf, s.px_offset + x + i).a,
+                            );
+                            const n_bits = @bitSizeOf(@TypeOf(s).T.IntType);
+                            const scale = 8 / n_bits;
+                            const buf_idx = nbytes + i / scale;
+                            const sh_bits = 8 - n_bits - i % scale * n_bits;
+                            pixel_buffer[buf_idx] = pixel_buffer[buf_idx] | px_int << @intCast(sh_bits);
                         }
-                        break :written 1; // 1 byte
+                        break :written (stride_len * @bitSizeOf(@TypeOf(s).T.IntType) + 7) / 8;
                     },
                 }
             };
@@ -281,9 +248,58 @@ fn writePNGIDATStream(
     try writePNGIDATSingle(file, zlib_buffer.getWritten());
 }
 
-/// Returns a cast of u32 to u8 (little endian).
-fn u32PixelToBytesLittle(value: u32) [4]u8 {
+/// Returns a cast of u32 vectors to u8 (little endian).
+fn u32PixelToBytesLittleVec(value: [vector_length]u32) [vector_length * 4]u8 {
     return @bitCast(if (native_endian == .little) value else @byteSwap(value));
+}
+
+/// Local de-multiplciation of an RGBA vector.
+fn demultiplyRGBAVec(value: [vector_length]u32) [vector_length]u32 {
+    var rgba_vector: struct {
+        r: @Vector(vector_length, u16),
+        g: @Vector(vector_length, u16),
+        b: @Vector(vector_length, u16),
+        a: @Vector(vector_length, u16),
+    } = undefined;
+    for (0..vector_length) |i| {
+        const rgba_scalar: pixel.RGBA = @bitCast(value[i]);
+        rgba_vector.r[i] = rgba_scalar.r;
+        rgba_vector.g[i] = rgba_scalar.g;
+        rgba_vector.b[i] = rgba_scalar.b;
+        rgba_vector.a[i] = rgba_scalar.a;
+    }
+
+    rgba_vector.r = @select(
+        u16,
+        rgba_vector.a == splat(u16, 0),
+        splat(u16, 0),
+        rgba_vector.r * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+    );
+    rgba_vector.g = @select(
+        u16,
+        rgba_vector.a == splat(u16, 0),
+        splat(u16, 0),
+        rgba_vector.g * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+    );
+    rgba_vector.b = @select(
+        u16,
+        rgba_vector.a == splat(u16, 0),
+        splat(u16, 0),
+        rgba_vector.b * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+    );
+
+    var result: @Vector(vector_length, u32) = undefined;
+    for (0..vector_length) |i| {
+        const rgba_scalar: pixel.RGBA = .{
+            .r = @intCast(rgba_vector.r[i]),
+            .g = @intCast(rgba_vector.g[i]),
+            .b = @intCast(rgba_vector.b[i]),
+            .a = @intCast(rgba_vector.a[i]),
+        };
+        result[i] = @bitCast(rgba_scalar);
+    }
+
+    return result;
 }
 
 /// Writes a single IDAT chunk. The data should be part of the zlib

@@ -101,6 +101,9 @@ OTHER CHANGES
   conversion function. If you need to unwrap a `Pixel` from now on, the
   recommended method is just via accessing the appropriate field within the
   union (e.g., `px.rgba`).
+* PNG exporting has been updated to stream data in larger chunks. This has
+  improved performance of the exporting process (faster export, smaller file
+  sizes).
 
 ## 0.5.1 (January 19, 2025)
 
