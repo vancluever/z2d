@@ -81,6 +81,8 @@ const _067_gradient_transforms = @import("067_gradient_transforms.zig");
 const _068_gradient_deband = @import("068_gradient_deband.zig");
 const _069_gradient_dither_context = @import("069_gradient_dither_context.zig");
 const _070_compositor_ops = @import("070_compositor_ops.zig");
+const _071_gamma_linear = @import("071_gamma_linear.zig");
+const _072_gamma_srgb = @import("072_gamma_srgb.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +160,8 @@ pub fn main() !void {
     try compositorExportRun(alloc, _068_gradient_deband);
     try pathExportRun(alloc, _069_gradient_dither_context);
     try pathExportRun(alloc, _070_compositor_ops);
+    try compositorExportRun(alloc, _071_gamma_linear);
+    try compositorExportRun(alloc, _072_gamma_srgb);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -442,6 +446,14 @@ test "070_compositor_ops" {
     try pathTestRun(testing.allocator, _070_compositor_ops);
 }
 
+test "071_gamma_linear" {
+    try compositorTestRun(testing.allocator, _071_gamma_linear);
+}
+
+test "072_gamma_srgb" {
+    try compositorTestRun(testing.allocator, _072_gamma_srgb);
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 fn compositorExportRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -455,7 +467,12 @@ fn compositorExportRun(alloc: mem.Allocator, subject: anytype) !void {
     var surface = try subject.render(alloc);
     defer surface.deinit(alloc);
 
-    try specExportPNG(alloc, surface, filename);
+    try specExportPNG(
+        alloc,
+        surface,
+        filename,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
 }
 
 fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -477,14 +494,33 @@ fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
     var surface_smooth = try subject.render(alloc, .default);
     defer surface_smooth.deinit(alloc);
 
-    try specExportPNG(alloc, surface_pixelated, filename_pixelated);
-    try specExportPNG(alloc, surface_smooth, filename_smooth);
+    try specExportPNG(
+        alloc,
+        surface_pixelated,
+        filename_pixelated,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
+    try specExportPNG(
+        alloc,
+        surface_smooth,
+        filename_smooth,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
 }
 
-fn specExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u8) !void {
+fn specExportPNG(
+    alloc: mem.Allocator,
+    surface: z2d.Surface,
+    filename: []const u8,
+    profile: ?z2d.color.RGBProfile,
+) !void {
     const target_path = try fs.path.join(alloc, &.{ "spec/files", filename });
     defer alloc.free(target_path);
-    try z2d.png_exporter.writeToPNGFile(surface, target_path);
+    try z2d.png_exporter.writeToPNGFile(
+        surface,
+        target_path,
+        .{ .color_profile = profile },
+    );
 }
 
 fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -497,8 +533,12 @@ fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
     var surface = try subject.render(alloc);
     defer surface.deinit(alloc);
 
-    var exported_file = try testExportPNG(alloc, surface, filename);
-
+    var exported_file = try testExportPNG(
+        alloc,
+        surface,
+        filename,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
     defer exported_file.cleanup();
 
     try compareFiles(testing.allocator, exported_file.target_path);
@@ -523,9 +563,18 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
     var surface_smooth = try subject.render(alloc, .default);
     defer surface_smooth.deinit(alloc);
 
-    var exported_file_pixelated = try testExportPNG(alloc, surface_pixelated, filename_pixelated);
-    var exported_file_smooth = try testExportPNG(alloc, surface_smooth, filename_smooth);
-
+    var exported_file_pixelated = try testExportPNG(
+        alloc,
+        surface_pixelated,
+        filename_pixelated,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
+    var exported_file_smooth = try testExportPNG(
+        alloc,
+        surface_smooth,
+        filename_smooth,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
     defer exported_file_pixelated.cleanup();
     defer exported_file_smooth.cleanup();
 
@@ -544,7 +593,12 @@ const testExportPNGDetails = struct {
     }
 };
 
-fn testExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u8) !testExportPNGDetails {
+fn testExportPNG(
+    alloc: mem.Allocator,
+    surface: z2d.Surface,
+    filename: []const u8,
+    profile: ?z2d.color.RGBProfile,
+) !testExportPNGDetails {
     var tmp_dir = testing.tmpDir(.{});
     errdefer tmp_dir.cleanup();
     const parent_path = try tmp_dir.dir.realpathAlloc(alloc, ".");
@@ -552,7 +606,11 @@ fn testExportPNG(alloc: mem.Allocator, surface: z2d.Surface, filename: []const u
     const target_path = try fs.path.join(alloc, &.{ parent_path, filename });
     errdefer alloc.free(target_path);
 
-    try z2d.png_exporter.writeToPNGFile(surface, target_path);
+    try z2d.png_exporter.writeToPNGFile(
+        surface,
+        target_path,
+        .{ .color_profile = profile },
+    );
 
     return .{
         .tmp_dir = tmp_dir,

@@ -10,6 +10,7 @@ const io = @import("std").io;
 const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
+const color = @import("color.zig");
 const pixel = @import("pixel.zig");
 const surface = @import("surface.zig");
 
@@ -35,13 +36,26 @@ pub const WriteToPNGFileError = Error ||
     zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
     fs.File.WriteError;
 
+pub const WriteToPNGFileOptions = struct {
+    // The RGB/color profile to use for exporting.
+    //
+    // When set, the gAMA header is set appropriately for the gamma transfer
+    // number, and the image data is re-encoded with the gamma if necessary.
+    //
+    // The default is to not add the gAMA header or encode the gamma.
+    color_profile: ?color.RGBProfile = null,
+};
+
 /// Exports the surface to a PNG file supplied by filename.
 ///
-/// This is currently a very rudimentary export with default zlib
-/// compression and no pixel filtering.
+/// This is currently a very rudimentary export with default zlib compression
+/// and no pixel filtering.
+///
+/// Additional options to control the export can be supplied in opts.
 pub fn writeToPNGFile(
     sfc: surface.Surface,
     filename: []const u8,
+    opts: WriteToPNGFileOptions,
 ) WriteToPNGFileError!void {
     // Open and create the file.
     const file = try fs.cwd().createFile(filename, .{});
@@ -50,7 +64,8 @@ pub fn writeToPNGFile(
     // Write out magic header, and various chunks.
     try writePNGMagic(file);
     try writePNGIHDR(file, sfc);
-    try writePNGIDATStream(file, sfc);
+    if (opts.color_profile) |profile| try writePNGgAMA(file, profile);
+    try writePNGIDATStream(file, sfc, opts.color_profile);
     try writePNGIEND(file);
 }
 
@@ -97,6 +112,20 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteErro
     );
 }
 
+fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) (Error || fs.File.WriteError)!void {
+    const gamma: u32 = @intFromFloat((switch (profile) {
+        .linear => 1 / color.LinearRGB.gamma,
+        .srgb => 1 / color.SRGB.gamma,
+    }) * 100000);
+    var gamma_bytes = [_]u8{0} ** 4;
+    mem.writeInt(u32, &gamma_bytes, gamma, .big);
+    try writePNGWriteChunk(
+        file,
+        "gAMA".*,
+        &gamma_bytes,
+    );
+}
+
 const WritePNGIDATStreamError = Error ||
     zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
     fs.File.WriteError;
@@ -108,6 +137,7 @@ const WritePNGIDATStreamError = Error ||
 fn writePNGIDATStream(
     file: fs.File,
     sfc: surface.Surface,
+    profile: ?color.RGBProfile,
 ) WritePNGIDATStreamError!void {
     // Set a minimum remaining buffer size here that is reasonably
     // sized. This may not be 100% scientific, but should account for
@@ -164,6 +194,7 @@ fn writePNGIDATStream(
                     .rgb => |s| {
                         var stride_vec = [_]u32{0} ** vector_length;
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
+                        stride_vec = encodeRGBAVec(stride_vec, profile, false);
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
                         for (0..stride_len) |i| {
                             const j = i * 3;
@@ -175,7 +206,7 @@ fn writePNGIDATStream(
                     .rgba => |s| {
                         var stride_vec = [_]u32{0} ** vector_length;
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
-                        stride_vec = demultiplyRGBAVec(stride_vec);
+                        stride_vec = encodeRGBAVec(stride_vec, profile, true);
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
                         for (0..stride_len) |i| {
                             const j = i * 4;
@@ -253,8 +284,13 @@ fn u32PixelToBytesLittleVec(value: [vector_length]u32) [vector_length * 4]u8 {
     return @bitCast(if (native_endian == .little) value else @byteSwap(value));
 }
 
-/// Local de-multiplciation of an RGBA vector.
-fn demultiplyRGBAVec(value: [vector_length]u32) [vector_length]u32 {
+/// Demultiplies and encodes a vector-length RGBA array using a supplied color
+/// profile.
+fn encodeRGBAVec(
+    value: [vector_length]u32,
+    profile: ?color.RGBProfile,
+    comptime use_alpha: bool,
+) [vector_length]u32 {
     var rgba_vector: struct {
         r: @Vector(vector_length, u16),
         g: @Vector(vector_length, u16),
@@ -266,28 +302,52 @@ fn demultiplyRGBAVec(value: [vector_length]u32) [vector_length]u32 {
         rgba_vector.r[i] = rgba_scalar.r;
         rgba_vector.g[i] = rgba_scalar.g;
         rgba_vector.b[i] = rgba_scalar.b;
-        rgba_vector.a[i] = rgba_scalar.a;
+        rgba_vector.a[i] = if (use_alpha) rgba_scalar.a else 255;
     }
 
-    rgba_vector.r = @select(
-        u16,
-        rgba_vector.a == splat(u16, 0),
-        splat(u16, 0),
-        rgba_vector.r * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-    );
-    rgba_vector.g = @select(
-        u16,
-        rgba_vector.a == splat(u16, 0),
-        splat(u16, 0),
-        rgba_vector.g * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-    );
-    rgba_vector.b = @select(
-        u16,
-        rgba_vector.a == splat(u16, 0),
-        splat(u16, 0),
-        rgba_vector.b * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-    );
+    // Our default space is linear. Even in our floating-point color spaces, we
+    // de-multiply first in integer space when using the higher-level decoding
+    // methods, so it's OK to always de-multiply in integer space here.
+    if (use_alpha) {
+        rgba_vector.r = @select(
+            u16,
+            rgba_vector.a == splat(u16, 0),
+            splat(u16, 0),
+            rgba_vector.r * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+        );
+        rgba_vector.g = @select(
+            u16,
+            rgba_vector.a == splat(u16, 0),
+            splat(u16, 0),
+            rgba_vector.g * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+        );
+        rgba_vector.b = @select(
+            u16,
+            rgba_vector.a == splat(u16, 0),
+            splat(u16, 0),
+            rgba_vector.b * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
+        );
+    }
 
+    // We only have sRGB currently, outside of linear space, so just check to
+    // see if we need to decode and apply the gamma for that. More formats may
+    // come later.
+    if (profile orelse .linear == .srgb) {
+        var decoded = color.SRGB.decodeRGBAVecRaw(.{
+            .r = @intCast(rgba_vector.r),
+            .g = @intCast(rgba_vector.g),
+            .b = @intCast(rgba_vector.b),
+            .a = @intCast(rgba_vector.a),
+        });
+        decoded = color.SRGB.applyGammaVec(decoded);
+        const encoded = color.SRGB.encodeRGBAVecRaw(decoded);
+        rgba_vector.r = encoded.r;
+        rgba_vector.g = encoded.g;
+        rgba_vector.b = encoded.b;
+        rgba_vector.a = encoded.a;
+    }
+
+    // Encode the value to return
     var result: @Vector(vector_length, u32) = undefined;
     for (0..vector_length) |i| {
         const rgba_scalar: pixel.RGBA = .{

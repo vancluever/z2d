@@ -101,6 +101,11 @@ OTHER CHANGES
   conversion function. If you need to unwrap a `Pixel` from now on, the
   recommended method is just via accessing the appropriate field within the
   union (e.g., `px.rgba`).
+* PNG exporting now has options for setting the gamma value during the export
+  process by selecting the RGB profile. When set, the correct gamma chunk will
+  be added to the encoded PNG file, in addition to applying gamma correction to
+  the PNG datastream when applicable. The default will continue to be no gamma
+  handling, that is, no gamma chunk or correction added.
 * PNG exporting has been updated to stream data in larger chunks. This has
   improved performance of the exporting process (faster export, smaller file
   sizes).
