@@ -147,16 +147,19 @@ Currently:
  * Composition:
    - Single pixel sources and linear, radial, and conic gradients supported.
      Access to lower-level compositor primitives is supplied to allow for
-     manipulation of surfaces outside of higher-level drawing operations.
+     manipulation of surfaces outside of higher-level drawing operations. 28
+     compositor operators supported across the set of Porter-Duff and PDF blend
+     modes.
  * Pixel formats:
    - RGBA, RGB, and alpha-only in 8, 4, 2, and 1-bit formats.
  * Color spaces:
    - Linear, sRGB, and HSL currently supported for specifying high-level color.
-     Interpolation supported in certain color spaces (conversion and
-     interpolation always done in linear space). More color spaces are planed.
+     Interpolation supported in all color spaces. More color spaces are planed.
  * Exporting:
    - Rudimentary PNG export supported; alpha-channel formats export to
      greyscale.
+   - Support for explicitly specifying output RGB profile to assist with proper
+     color management.
 
 The current plan is to work towards writing a reasonably feature-complete SVG
 renderer, with the ability to utilize the same primitives to perform other
