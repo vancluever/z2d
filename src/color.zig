@@ -142,6 +142,7 @@ pub const InterpolationMethod = union(enum) {
     };
 
     linear_rgb: void,
+    srgb: void,
     hsl: Polar,
 
     /// Runs interpolation using the supplied method, returning the color in
@@ -151,6 +152,11 @@ pub const InterpolationMethod = union(enum) {
             .linear_rgb => LinearRGB.interpolate(
                 LinearRGB.fromColor(a),
                 LinearRGB.fromColor(b),
+                t,
+            ).asColor(),
+            .srgb => SRGB.interpolate(
+                SRGB.fromColor(a),
+                SRGB.fromColor(b),
                 t,
             ).asColor(),
             .hsl => |polar_method| color: {
@@ -173,6 +179,18 @@ pub const InterpolationMethod = union(enum) {
                 LinearRGB.fromColor(b),
                 t,
             ),
+            // For sRGB and any other non-linear RGB spaces, we must encode
+            // from the full de-multiplied form to ensure that the proper order
+            // is carried out - convert colors to interpolation space,
+            // multiply, do interpolation, then undo multiply. The final encode
+            // then encodes to our at-rest pre-multiplied linear RGBA format.
+            //
+            // TODO: The semantics here could probably be cleaned up.
+            .srgb => SRGB.encodeRGBA(SRGB.interpolate(
+                SRGB.fromColor(a),
+                SRGB.fromColor(b),
+                t,
+            )),
             .hsl => |polar_method| color: {
                 break :color HSL.interpolateEncode(
                     HSL.fromColor(a),
@@ -198,6 +216,17 @@ pub const InterpolationMethod = union(enum) {
                 LinearRGB.fromColorVec(b),
                 t,
             ),
+            // The main reason that interpolateVec exists is for dithering,
+            // which expects linear space. For sRGB and any other non-linear
+            // spaces, removing the gamma is all that should be needed after
+            // interpolation (and the values will be coerced coming out).
+            //
+            // TODO: The semantics here could probably be cleaned up.
+            .srgb => SRGB.removeGammaVec(SRGB.interpolateVec(
+                SRGB.fromColorVec(a),
+                SRGB.fromColorVec(b),
+                t,
+            )),
             .hsl => |polar_method| color: {
                 break :color HSL.toRGBVec(HSL.interpolateVec(
                     HSL.fromColorVec(a),
@@ -223,6 +252,18 @@ pub const InterpolationMethod = union(enum) {
                 LinearRGB.fromColorVec(b),
                 t,
             ),
+            // For sRGB and any other non-linear RGB spaces, we must encode
+            // from the full de-multiplied form to ensure that the proper order
+            // is carried out - convert colors to interpolation space,
+            // multiply, do interpolation, then undo multiply. The final encode
+            // then encodes to our at-rest pre-multiplied linear RGBA format.
+            //
+            // TODO: The semantics here could probably be cleaned up.
+            .srgb => SRGB.encodeRGBAVec(SRGB.interpolateVec(
+                SRGB.fromColorVec(a),
+                SRGB.fromColorVec(b),
+                t,
+            )),
             .hsl => |polar_method| color: {
                 break :color HSL.interpolateEncodeVec(
                     HSL.fromColorVec(a),
@@ -242,7 +283,7 @@ pub const LinearRGB = RGB(.linear);
 pub const SRGB = RGB(.srgb);
 
 /// Tags for RGB color profiles.
-const RGBProfile = enum {
+pub const RGBProfile = enum {
     linear,
     srgb,
 };
@@ -489,6 +530,23 @@ fn RGB(profile: RGBProfile) type {
                 .b = math.pow(f32, src.b, 1 / gamma),
                 .a = src.a,
             };
+        }
+
+        /// Vectorized version of applyGamma.
+        pub fn applyGammaVec(src: Self.Vector) Self.Vector {
+            if (profile == .linear) {
+                return src;
+            }
+            // math.pow is not implemented for vectors, so we need to do this
+            // element-by-element.
+            var result: Self.Vector = undefined;
+            for (0..vector_length) |i| {
+                result.r[i] = math.pow(f32, src.r[i], 1 / gamma);
+                result.g[i] = math.pow(f32, src.g[i], 1 / gamma);
+                result.b[i] = math.pow(f32, src.b[i], 1 / gamma);
+                result.a[i] = src.a[i];
+            }
+            return result;
         }
 
         /// Removes the profile's fast-gamma value from the color, converting
@@ -1182,15 +1240,33 @@ test "LinearRGB.removeGamma, LinearRGB.removeGammaVec" {
     try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
-test "LinearRGB.applyGamma" {
-    const got = LinearRGB.init(0.25, 0.5, 0.75, 0.9).applyGamma();
+test "LinearRGB.applyGamma, LinearRGB.applyGammaVec" {
+    const in = LinearRGB.init(0.25, 0.5, 0.75, 0.9);
+    var in_vec: LinearRGB.Vector = undefined;
+    for (0..vector_length) |i| {
+        in_vec.r[i] = in.r;
+        in_vec.g[i] = in.g;
+        in_vec.b[i] = in.b;
+        in_vec.a[i] = in.a;
+    }
+
+    const got = in.applyGamma();
+    const got_vec = LinearRGB.applyGammaVec(in_vec);
     const expected: LinearRGB = .{
         .r = 0.25,
         .g = 0.5,
         .b = 0.75,
         .a = 0.9,
     };
+    var expected_vec: LinearRGB.Vector = undefined;
+    for (0..vector_length) |i| {
+        expected_vec.r[i] = expected.r;
+        expected_vec.g[i] = expected.g;
+        expected_vec.b[i] = expected.b;
+        expected_vec.a[i] = expected.a;
+    }
     try testing.expectEqualDeep(expected, got);
+    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "LinearRGB.interpolate, LinearRGB.interpolateEncode" {
@@ -1559,18 +1635,32 @@ test "SRGB.removeGamma, SRGB.removeGammaVec" {
     try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
-test "SRGB.applyGamma" {
-    const got = SRGB.init(0.25, 0.5, 0.75, 0.9).applyGamma();
+test "SRGB.applyGamma, SRGB.applyGammaVec" {
+    const in = SRGB.init(0.25, 0.5, 0.75, 0.9);
+    var in_vec: SRGB.Vector = undefined;
+    for (0..vector_length) |i| {
+        in_vec.r[i] = in.r;
+        in_vec.g[i] = in.g;
+        in_vec.b[i] = in.b;
+        in_vec.a[i] = in.a;
+    }
+    const got = in.applyGamma();
+    const got_vec = SRGB.applyGammaVec(in_vec);
     const expected: SRGB = .{
-        .r = 0.5325205,
+        .r = 0.53252053,
         .g = 0.7297400,
         .b = 0.8774243,
         .a = 0.9,
     };
-    try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    var expected_vec: SRGB.Vector = undefined;
+    for (0..vector_length) |i| {
+        expected_vec.r[i] = expected.r;
+        expected_vec.g[i] = expected.g;
+        expected_vec.b[i] = expected.b;
+        expected_vec.a[i] = expected.a;
+    }
+    try testing.expectEqualDeep(expected, got);
+    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "SRGB.interpolate, SRGB.interpolateEncode" {
@@ -2258,6 +2348,46 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .t = 0.5,
         },
         .{
+            .name = ".srgb, linear + linear",
+            .method = .{ .srgb = {} },
+            .expected = SRGB.init(0.5, 0.5, 0, 1).asColor(),
+            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
+            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, HSL + linear",
+            .method = .{ .srgb = {} },
+            .expected = SRGB.init(0.5, 0.5, 0, 1).asColor(),
+            .a = HSL.init(0, 1, 0.5, 1).asColor(),
+            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, linear + HSL",
+            .method = .{ .srgb = {} },
+            .expected = SRGB.init(0.5, 0.5, 0, 1).asColor(),
+            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
+            .b = HSL.init(120, 1, 0.5, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, HSL + HSL",
+            .method = .{ .srgb = {} },
+            .expected = SRGB.init(0.5, 0.5, 0, 1).asColor(),
+            .a = HSL.init(0, 1, 0.5, 1).asColor(),
+            .b = HSL.init(120, 1, 0.5, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, gamma + gamma",
+            .method = .{ .srgb = {} },
+            .expected = SRGB.init(0.25, 0.25, 0, 1).asColor(),
+            .a = SRGB.init(0.5, 0, 0, 1).asColor(),
+            .b = SRGB.init(0, 0.5, 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
             .name = ".hsl, shorter, linear + linear",
             .method = .{ .hsl = .shorter },
             .expected = HSL.init(60, 1, 0.5, 1).asColor(),
@@ -2474,6 +2604,41 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".linear_rgb, gamma + gamma",
             .method = .{ .linear_rgb = {} },
+            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, linear + linear",
+            .method = .{ .srgb = {} },
+            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
+            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, HSL + linear",
+            .method = .{ .srgb = {} },
+            .a = HSL.init(0, 1, 0.5, 1).asColor(),
+            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, linear + HSL",
+            .method = .{ .srgb = {} },
+            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
+            .b = HSL.init(120, 1, 0.5, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, HSL + HSL",
+            .method = .{ .srgb = {} },
+            .a = HSL.init(0, 1, 0.5, 1).asColor(),
+            .b = HSL.init(120, 1, 0.5, 1).asColor(),
+            .t = 0.5,
+        },
+        .{
+            .name = ".srgb, gamma + gamma",
+            .method = .{ .srgb = {} },
             .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
             .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
