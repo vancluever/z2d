@@ -10,6 +10,7 @@ const testing = @import("std").testing;
 const color = @import("../color.zig");
 const gradient = @import("../gradient.zig");
 const pixel = @import("../pixel.zig");
+const pixel_vector = @import("pixel_vector.zig");
 
 const Dither = @import("../Dither.zig");
 
@@ -63,7 +64,7 @@ pub fn interpolateEncodeVec(
     a: [vector_length]color.Color,
     b: [vector_length]color.Color,
     t: [vector_length]f32,
-) vectorize(pixel.RGBA) {
+) pixel_vector.RGBA16 {
     return switch (method) {
         .linear_rgb => LinearRGB.interpolateEncodeVec(
             LinearRGB.fromColorVec(a),
@@ -92,7 +93,7 @@ pub fn fromDitherVecEncode(
     y: i32,
     comptime limit: bool,
     limit_len: usize,
-) vectorize(pixel.RGBA) {
+) pixel_vector.RGBA16 {
     return LinearRGB.encodeRGBAVec(fromDitherVec(
         dither,
         x,
@@ -238,7 +239,7 @@ fn RGBVec(comptime underlying_T: type) type {
         }
 
         /// Vectorized version of encodeRGBA, used internally.
-        fn encodeRGBAVec(src: T) vectorize(pixel.RGBA) {
+        fn encodeRGBAVec(src: T) pixel_vector.RGBA16 {
             // NOTE: we have other implementations of a 16-bit vectorized RGBA
             // value in the compositor package. I'm refraining from making that
             // public for the time being as this is currently the only case
@@ -249,28 +250,18 @@ fn RGBVec(comptime underlying_T: type) type {
             else
                 src;
 
-            const result: struct {
-                r: @Vector(vector_length, u16),
-                g: @Vector(vector_length, u16),
-                b: @Vector(vector_length, u16),
-                a: @Vector(vector_length, u16),
-            } = .{
+            const result: pixel_vector.RGBA16 = .{
                 .r = @intFromFloat(@round(splat(f32, 255.0) * _src.r)),
                 .g = @intFromFloat(@round(splat(f32, 255.0) * _src.g)),
                 .b = @intFromFloat(@round(splat(f32, 255.0) * _src.b)),
                 .a = @intFromFloat(@round(splat(f32, 255.0) * _src.a)),
             };
-            return .{
-                .r = @intCast(result.r * result.a / splat(u16, 255)),
-                .g = @intCast(result.g * result.a / splat(u16, 255)),
-                .b = @intCast(result.b * result.a / splat(u16, 255)),
-                .a = @intCast(result.a),
-            };
+            return result.premultiply();
         }
 
         /// Like decodeRGBARaw, but converts vectorized RGBA pixel values to
         /// vectorized colors. Used internally.
-        pub fn decodeRGBAVecRaw(src: vectorize(pixel.RGBA)) T {
+        pub fn decodeRGBAVecRaw(src: pixel_vector.RGBA16) T {
             return .{
                 .r = @as(@Vector(vector_length, f32), @floatFromInt(src.r)) / splat(f32, 255.0),
                 .g = @as(@Vector(vector_length, f32), @floatFromInt(src.g)) / splat(f32, 255.0),
@@ -281,7 +272,7 @@ fn RGBVec(comptime underlying_T: type) type {
 
         /// Like encodeRGBARaw, but converts vectorized colors to vectorized RGBA
         /// values. Used internally.
-        pub fn encodeRGBAVecRaw(src: T) vectorize(pixel.RGBA) {
+        pub fn encodeRGBAVecRaw(src: T) pixel_vector.RGBA16 {
             return .{
                 .r = @intFromFloat(@round(splat(f32, 255.0) * src.r)),
                 .g = @intFromFloat(@round(splat(f32, 255.0) * src.g)),
@@ -332,7 +323,7 @@ fn RGBVec(comptime underlying_T: type) type {
             a: T,
             b: T,
             t: @Vector(vector_length, f32),
-        ) vectorize(pixel.RGBA) {
+        ) pixel_vector.RGBA16 {
             const a_mul = multiplyVec(a);
             const b_mul = multiplyVec(b);
             const interpolated: T = .{
@@ -460,7 +451,7 @@ pub const HSL = struct {
         b: T,
         t: @Vector(vector_length, f32),
         method: color.InterpolationMethod.Polar,
-    ) vectorize(pixel.RGBA) {
+    ) pixel_vector.RGBA16 {
         return LinearRGB.encodeRGBAVec(toRGBVec(HSL.interpolateVec(a, b, t, method)));
     }
 };
@@ -556,7 +547,7 @@ test "LinearRGB.decodeRGBAVecRaw" {
     // testing in multiply particularly asserts that round-tripping works just
     // fine.
     const px_rgba = pixel.RGBA.fromClamped(0.25, 0.5, 0.75, 0.9);
-    var px_rgba_vec: vectorize(pixel.RGBA) = undefined;
+    var px_rgba_vec: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         px_rgba_vec.r[i] = px_rgba.r;
         px_rgba_vec.g[i] = px_rgba.g;
@@ -590,14 +581,14 @@ test "LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBAVecRaw" {
     const got_vec = LinearRGB.encodeRGBAVec(in_vec);
     const got_raw = color.LinearRGB.encodeRGBARaw(in);
     const got_raw_vec = LinearRGB.encodeRGBAVecRaw(in_vec);
-    var expected_vec: vectorize(pixel.RGBA) = undefined;
+    var expected_vec: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    var expected_raw_vec: vectorize(pixel.RGBA) = undefined;
+    var expected_raw_vec: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         expected_raw_vec.r[i] = got_raw.r;
         expected_raw_vec.g[i] = got_raw.g;
@@ -695,7 +686,7 @@ test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
 
     // Build other params and expected RGBA set from interpolating individually
     var expected: LinearRGB.T = undefined;
-    var expected_encoded: vectorize(pixel.RGBA) = undefined;
+    var expected_encoded: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         const expected_scalar = color.LinearRGB.interpolate(red, green, t_vec[i]);
         const expected_encoded_scalar = color.LinearRGB.interpolateEncode(red, green, t_vec[i]);
@@ -752,14 +743,14 @@ test "SRGB.encodeRGBAVec, SRGB.encodeRGBAVecRaw" {
     const got_vec = SRGB.encodeRGBAVec(in_vec);
     const got_raw = color.SRGB.encodeRGBARaw(in);
     const got_raw_vec = SRGB.encodeRGBAVecRaw(in_vec);
-    var expected_vec: vectorize(pixel.RGBA) = undefined;
+    var expected_vec: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    var expected_raw_vec: vectorize(pixel.RGBA) = undefined;
+    var expected_raw_vec: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         expected_raw_vec.r[i] = got_raw.r;
         expected_raw_vec.g[i] = got_raw.g;
@@ -837,7 +828,7 @@ test "SRGB.interpolateEncodeVec" {
 
     // Build other params and expected RGBA set from interpolating individually
     var expected: SRGB.T = undefined;
-    var expected_encoded: vectorize(pixel.RGBA) = undefined;
+    var expected_encoded: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         const expected_scalar = color.SRGB.interpolate(red, green, t_vec[i]);
         const expected_encoded_scalar = color.SRGB.interpolateEncode(red, green, t_vec[i]);
@@ -941,10 +932,10 @@ test "HSL.interpolateEncodeVec" {
     }
 
     // Build other params and expected RGBA set from interpolating individually
-    var expected_short: vectorize(pixel.RGBA) = undefined;
-    var expected_long: vectorize(pixel.RGBA) = undefined;
-    var expected_cw: vectorize(pixel.RGBA) = undefined;
-    var expected_ccw: vectorize(pixel.RGBA) = undefined;
+    var expected_short: pixel_vector.RGBA16 = undefined;
+    var expected_long: pixel_vector.RGBA16 = undefined;
+    var expected_cw: pixel_vector.RGBA16 = undefined;
+    var expected_ccw: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         const expected_scalar_short = color.HSL.interpolateEncode(red, blue, t_vec[i], .shorter);
         const expected_scalar_long = color.HSL.interpolateEncode(red, blue, t_vec[i], .longer);
@@ -1204,7 +1195,7 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
             var b_vec: [vector_length]color.Color = undefined;
             var t_vec: [vector_length]f32 = undefined;
             var expected: LinearRGB.T = undefined;
-            var expected_encoded: vectorize(pixel.RGBA) = undefined;
+            var expected_encoded: pixel_vector.RGBA16 = undefined;
             for (0..vector_length) |i| {
                 a_vec[i] = tc.a;
                 b_vec[i] = tc.b;
@@ -1304,7 +1295,7 @@ test "Dither.getRGBAVec" {
                 },
                 .scale = tc.scale,
             };
-            var expected: vectorize(pixel.RGBA) = undefined;
+            var expected: pixel_vector.RGBA16 = undefined;
             for (0..vector_length) |i| {
                 const expected_scalar = pixel.RGBA.fromPixel(d.getPixel(tc.x + @as(i32, @intCast(i)), tc.y));
                 expected.r[i] = expected_scalar.r;

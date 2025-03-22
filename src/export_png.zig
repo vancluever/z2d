@@ -13,6 +13,7 @@ const zlib = @import("std").compress.zlib;
 const color = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
 const pixel = @import("pixel.zig");
+const pixel_vector = @import("internal/pixel_vector.zig");
 const surface = @import("surface.zig");
 
 const vector_length = @import("compositor.zig").vector_length;
@@ -292,12 +293,7 @@ fn encodeRGBAVec(
     profile: ?color.RGBProfile,
     comptime use_alpha: bool,
 ) [vector_length]u32 {
-    var rgba_vector: struct {
-        r: @Vector(vector_length, u16),
-        g: @Vector(vector_length, u16),
-        b: @Vector(vector_length, u16),
-        a: @Vector(vector_length, u16),
-    } = undefined;
+    var rgba_vector: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
         const rgba_scalar: pixel.RGBA = @bitCast(value[i]);
         rgba_vector.r[i] = rgba_scalar.r;
@@ -309,26 +305,7 @@ fn encodeRGBAVec(
     // Our default space is linear. Even in our floating-point color spaces, we
     // de-multiply first in integer space when using the higher-level decoding
     // methods, so it's OK to always de-multiply in integer space here.
-    if (use_alpha) {
-        rgba_vector.r = @select(
-            u16,
-            rgba_vector.a == splat(u16, 0),
-            splat(u16, 0),
-            rgba_vector.r * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-        );
-        rgba_vector.g = @select(
-            u16,
-            rgba_vector.a == splat(u16, 0),
-            splat(u16, 0),
-            rgba_vector.g * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-        );
-        rgba_vector.b = @select(
-            u16,
-            rgba_vector.a == splat(u16, 0),
-            splat(u16, 0),
-            rgba_vector.b * splat(u16, 255) / @max(splat(u16, 1), rgba_vector.a),
-        );
-    }
+    if (use_alpha) rgba_vector = rgba_vector.demultiply();
 
     // We only have sRGB currently, outside of linear space, so just check to
     // see if we need to decode and apply the gamma for that. More formats may
