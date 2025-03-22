@@ -8,6 +8,7 @@ const simd = @import("std").simd;
 const testing = @import("std").testing;
 
 const colorpkg = @import("color.zig");
+const color_vector = @import("internal/color_vector.zig");
 const gradient = @import("gradient.zig");
 const pixel = @import("pixel.zig");
 
@@ -605,12 +606,6 @@ pub fn runPixel(
     };
 }
 
-const max_u8_scalar: u16 = 255;
-const max_u8_vec: @Vector(vector_length, u16) = @splat(255);
-const zero_int_vec: @Vector(vector_length, u16) = @splat(0);
-const zero_float_vec = @import("internal/util.zig").zero_float_vec;
-const zero_color_vec = @import("internal/util.zig").zero_color_vec;
-
 /// Represents an RGBA value as 16bpc. Note that this is only for intermediary
 /// calculations, no channel should be bigger than an u8 after any particular
 /// compositor step.
@@ -736,7 +731,8 @@ const RGBA16Vec = struct {
                 if (i + 1 == limit_len) break;
             }
         }
-        const result_rgba8 = src.underlying.getInterpolationMethod().interpolateEncodeVec(
+        const result_rgba8 = color_vector.interpolateEncodeVec(
+            src.underlying.getInterpolationMethod(),
             c0_vec,
             c1_vec,
             offsets_vec,
@@ -755,7 +751,13 @@ const RGBA16Vec = struct {
         comptime limit: bool,
         limit_len: usize,
     ) RGBA16Vec {
-        const result = src.underlying.getRGBAVec(src.x + @as(i32, @intCast(idx)), src.y, limit, limit_len);
+        const result = color_vector.fromDitherVecEncode(
+            &src.underlying,
+            src.x + @as(i32, @intCast(idx)),
+            src.y,
+            limit,
+            limit_len,
+        );
         return .{
             .r = result.r,
             .g = result.g,
@@ -802,76 +804,45 @@ const RGBA16Vec = struct {
     fn runOperator(dst: RGBA16Vec, src: RGBA16Vec, op: Operator) RGBA16Vec {
         return IntegerOps.run(op, dst, src);
     }
-};
 
-/// Short-hand helpers so that we do not need to print raw strings in code.
-/// Should line up with the fields of RGBA16Vec.
-const VecField = enum {
-    r,
-    g,
-    b,
-    a,
-};
+    fn transposeToVec(
+        arr: anytype,
+        comptime field: VecField,
+        comptime limit: bool,
+        limit_len: usize,
+    ) @Vector(vector_length, u16) {
+        var result: @Vector(vector_length, u16) = zero_int_vec;
+        for (0..vector_length) |idx| {
+            result[idx] = @field(arr[idx], @tagName(field));
+            if (limit) {
+                if (idx + 1 == limit_len) break;
+            }
+        }
+        return result;
+    }
 
-// NOTE: anything that uses the transpose functions should assert
-// limit_len < vector_length upstream
-
-fn transposeToVec(
-    arr: anytype,
-    comptime field: VecField,
-    comptime limit: bool,
-    limit_len: usize,
-) @Vector(vector_length, u16) {
-    var result: @Vector(vector_length, u16) = zero_int_vec;
-    for (0..vector_length) |idx| {
-        result[idx] = @field(arr[idx], @tagName(field));
-        if (limit) {
-            if (idx + 1 == limit_len) break;
+    fn transposeFromVec(
+        arr: anytype,
+        src: @Vector(vector_length, u16),
+        comptime field: VecField,
+        comptime limit: bool,
+        limit_len: usize,
+    ) void {
+        for (0..vector_length) |idx| {
+            @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
+            if (limit) {
+                if (idx + 1 == limit_len) break;
+            }
         }
     }
-    return result;
-}
 
-fn transposeFromVec(
-    arr: anytype,
-    src: @Vector(vector_length, u16),
-    comptime field: VecField,
-    comptime limit: bool,
-    limit_len: usize,
-) void {
-    for (0..vector_length) |idx| {
-        @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
-        if (limit) {
-            if (idx + 1 == limit_len) break;
-        }
-    }
-}
-
-fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
-    return switch (src) {
-        inline .rgb, .rgba, .alpha8 => |_src| _src[idx].asPixel(),
-        inline .alpha4, .alpha2, .alpha1 => |_src| @TypeOf(_src).T.getFromPacked(
-            _src.buf,
-            _src.px_offset + idx,
-        ).asPixel(),
+    const VecField = enum {
+        r,
+        g,
+        b,
+        a,
     };
-}
-
-fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
-    return switch (dst) {
-        inline .rgb, .rgba, .alpha8 => |_dst| {
-            _dst[idx] = @typeInfo(@TypeOf(_dst)).Pointer.child.fromPixel(px);
-        },
-        inline .alpha4, .alpha2, .alpha1 => |_dst| {
-            const dst_t = @TypeOf(_dst).T;
-            dst_t.setInPacked(
-                _dst.buf,
-                _dst.px_offset + idx,
-                dst_t.fromPixel(px),
-            );
-        },
-    };
-}
+};
 
 const RGBAFloat = struct {
     underlying: colorpkg.LinearRGB,
@@ -891,7 +862,7 @@ const RGBAFloat = struct {
     }
 
     const Vector = struct {
-        underlying: colorpkg.LinearRGB.Vector,
+        underlying: color_vector.LinearRGB.T,
 
         fn fromPixel(src: pixel.Pixel) Vector {
             const _src = colorpkg.LinearRGB.decodeRGBARaw(pixel.RGBA.fromPixel(src));
@@ -920,7 +891,7 @@ const RGBAFloat = struct {
             // expectation is that you'd be using ReleaseFast if you
             // truly want performance.
             const _src = RGBA16Vec.fromStride(src, idx, limit, limit_len);
-            return .{ .underlying = colorpkg.LinearRGB.decodeRGBAVecRaw(.{
+            return .{ .underlying = color_vector.LinearRGB.decodeRGBAVecRaw(.{
                 .r = @intCast(_src.r),
                 .g = @intCast(_src.g),
                 .b = @intCast(_src.b),
@@ -950,7 +921,8 @@ const RGBAFloat = struct {
                     if (i + 1 == limit_len) break;
                 }
             }
-            return .{ .underlying = src.underlying.getInterpolationMethod().interpolateVec(
+            return .{ .underlying = color_vector.interpolateVec(
+                src.underlying.getInterpolationMethod(),
                 c0_vec,
                 c1_vec,
                 offsets_vec,
@@ -964,7 +936,8 @@ const RGBAFloat = struct {
             limit_len: usize,
         ) Vector {
             return .{
-                .underlying = src.underlying.getColorVec(
+                .underlying = color_vector.fromDitherVec(
+                    &src.underlying,
                     src.x + @as(i32, @intCast(idx)),
                     src.y,
                     limit,
@@ -980,7 +953,7 @@ const RGBAFloat = struct {
             comptime limit: bool,
             limit_len: usize,
         ) void {
-            const _src = colorpkg.LinearRGB.encodeRGBAVecRaw(self.underlying);
+            const _src = color_vector.LinearRGB.encodeRGBAVecRaw(self.underlying);
             RGBA16Vec.toStride(
                 .{
                     .r = _src.r,
@@ -1624,7 +1597,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1721,7 +1694,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1799,7 +1772,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1862,7 +1835,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1968,7 +1941,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -2043,7 +2016,7 @@ const FloatOps = struct {
         const Vector = vectorize(NonSeparable);
         fn fromRGBT(T: type) type {
             return switch (T) {
-                colorpkg.LinearRGB.Vector => Vector,
+                color_vector.LinearRGB.T => Vector,
                 colorpkg.LinearRGB => NonSeparable,
                 else => @compileError("unsupported type"),
             };
@@ -2051,7 +2024,7 @@ const FloatOps = struct {
 
         fn toRGBT(T: type) type {
             return switch (T) {
-                Vector => colorpkg.LinearRGB.Vector,
+                Vector => color_vector.LinearRGB.T,
                 NonSeparable => colorpkg.LinearRGB,
                 else => @compileError("unsupported type"),
             };
@@ -2243,7 +2216,7 @@ const FloatOps = struct {
 
     fn vecOrScalar(comptime T: type, value: anytype) vecOrScalarT(T) {
         return if (@typeInfo(T) == .Vector or
-            T == colorpkg.LinearRGB.Vector or
+            T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             splat(f32, value)
         else
@@ -2252,13 +2225,19 @@ const FloatOps = struct {
 
     fn vecOrScalarT(comptime T: type) type {
         return if (@typeInfo(T) == .Vector or
-            T == colorpkg.LinearRGB.Vector or
+            T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             @Vector(vector_length, f32)
         else
             f32;
     }
 };
+
+const max_u8_scalar: u16 = 255;
+const max_u8_vec: @Vector(vector_length, u16) = @splat(255);
+const zero_int_vec: @Vector(vector_length, u16) = @splat(0);
+const zero_float_vec = @import("internal/util.zig").zero_float_vec;
+const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 
 fn boolOrVec(comptime T: type) type {
     return if (@typeInfo(T) == .Vector) @Vector(vector_length, bool) else bool;

@@ -11,6 +11,7 @@ const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
 const color = @import("color.zig");
+const color_vector = @import("internal/color_vector.zig");
 const pixel = @import("pixel.zig");
 const surface = @import("surface.zig");
 
@@ -37,12 +38,12 @@ pub const WriteToPNGFileError = Error ||
     fs.File.WriteError;
 
 pub const WriteToPNGFileOptions = struct {
-    // The RGB/color profile to use for exporting.
-    //
-    // When set, the gAMA header is set appropriately for the gamma transfer
-    // number, and the image data is re-encoded with the gamma if necessary.
-    //
-    // The default is to not add the gAMA header or encode the gamma.
+    /// The RGB/color profile to use for exporting.
+    ///
+    /// When set, the gAMA header is set appropriately for the gamma transfer
+    /// number, and the image data is re-encoded with the gamma if necessary.
+    ///
+    /// The default is to not add the gAMA header or encode the gamma.
     color_profile: ?color.RGBProfile = null,
 };
 
@@ -333,14 +334,14 @@ fn encodeRGBAVec(
     // see if we need to decode and apply the gamma for that. More formats may
     // come later.
     if (profile orelse .linear == .srgb) {
-        var decoded = color.SRGB.decodeRGBAVecRaw(.{
+        var decoded = color_vector.SRGB.decodeRGBAVecRaw(.{
             .r = @intCast(rgba_vector.r),
             .g = @intCast(rgba_vector.g),
             .b = @intCast(rgba_vector.b),
             .a = @intCast(rgba_vector.a),
         });
-        decoded = color.SRGB.applyGammaVec(decoded);
-        const encoded = color.SRGB.encodeRGBAVecRaw(decoded);
+        decoded = color_vector.SRGB.applyGammaVec(decoded);
+        const encoded = color_vector.SRGB.encodeRGBAVecRaw(decoded);
         rgba_vector.r = encoded.r;
         rgba_vector.g = encoded.g;
         rgba_vector.b = encoded.b;

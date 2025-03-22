@@ -21,8 +21,6 @@ const Transformation = @import("Transformation.zig");
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
-const vector_length = @import("compositor.zig").vector_length;
-
 /// Interface tags for gradient types.
 pub const GradientType = enum {
     linear,

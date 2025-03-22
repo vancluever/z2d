@@ -35,18 +35,11 @@
 //! experience a high degree of change, be inconsistently exported and/or later
 //! removed.
 
-const builtin = @import("std").builtin;
-const debug = @import("std").debug;
 const math = @import("std").math;
-const mem = @import("std").mem;
 const testing = @import("std").testing;
 
 const pixel = @import("pixel.zig");
 
-const vector_length = @import("compositor.zig").vector_length;
-
-const splat = @import("internal/util.zig").splat;
-const vectorize = @import("internal/util.zig").vectorize;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
@@ -159,14 +152,12 @@ pub const InterpolationMethod = union(enum) {
                 SRGB.fromColor(b),
                 t,
             ).asColor(),
-            .hsl => |polar_method| color: {
-                break :color HSL.interpolate(
-                    HSL.fromColor(a),
-                    HSL.fromColor(b),
-                    t,
-                    polar_method,
-                ).asColor();
-            },
+            .hsl => |polar_method| HSL.interpolate(
+                HSL.fromColor(a),
+                HSL.fromColor(b),
+                t,
+                polar_method,
+            ).asColor(),
         };
     }
 
@@ -179,99 +170,17 @@ pub const InterpolationMethod = union(enum) {
                 LinearRGB.fromColor(b),
                 t,
             ),
-            // For sRGB and any other non-linear RGB spaces, we must encode
-            // from the full de-multiplied form to ensure that the proper order
-            // is carried out - convert colors to interpolation space,
-            // multiply, do interpolation, then undo multiply. The final encode
-            // then encodes to our at-rest pre-multiplied linear RGBA format.
-            //
-            // TODO: The semantics here could probably be cleaned up.
-            .srgb => SRGB.encodeRGBA(SRGB.interpolate(
+            .srgb => SRGB.interpolateEncode(
                 SRGB.fromColor(a),
                 SRGB.fromColor(b),
                 t,
-            )),
-            .hsl => |polar_method| color: {
-                break :color HSL.interpolateEncode(
-                    HSL.fromColor(a),
-                    HSL.fromColor(b),
-                    t,
-                    polar_method,
-                );
-            },
-        };
-    }
-
-    /// Vectorized version of `interpolate`. Designed for internal use by
-    /// the compositor; YMMV when using externally.
-    pub fn interpolateVec(
-        method: InterpolationMethod,
-        a: [vector_length]Color,
-        b: [vector_length]Color,
-        t: [vector_length]f32,
-    ) LinearRGB.Vector {
-        return switch (method) {
-            .linear_rgb => LinearRGB.interpolateVec(
-                LinearRGB.fromColorVec(a),
-                LinearRGB.fromColorVec(b),
-                t,
             ),
-            // The main reason that interpolateVec exists is for dithering,
-            // which expects linear space. For sRGB and any other non-linear
-            // spaces, removing the gamma is all that should be needed after
-            // interpolation (and the values will be coerced coming out).
-            //
-            // TODO: The semantics here could probably be cleaned up.
-            .srgb => SRGB.removeGammaVec(SRGB.interpolateVec(
-                SRGB.fromColorVec(a),
-                SRGB.fromColorVec(b),
+            .hsl => |polar_method| HSL.interpolateEncode(
+                HSL.fromColor(a),
+                HSL.fromColor(b),
                 t,
-            )),
-            .hsl => |polar_method| color: {
-                break :color HSL.toRGBVec(HSL.interpolateVec(
-                    HSL.fromColorVec(a),
-                    HSL.fromColorVec(b),
-                    t,
-                    polar_method,
-                ));
-            },
-        };
-    }
-
-    /// Vectorized version of `interpolateEncode`. Designed for internal use by
-    /// the compositor; YMMV when using externally.
-    pub fn interpolateEncodeVec(
-        method: InterpolationMethod,
-        a: [vector_length]Color,
-        b: [vector_length]Color,
-        t: [vector_length]f32,
-    ) vectorize(pixel.RGBA) {
-        return switch (method) {
-            .linear_rgb => LinearRGB.interpolateEncodeVec(
-                LinearRGB.fromColorVec(a),
-                LinearRGB.fromColorVec(b),
-                t,
+                polar_method,
             ),
-            // For sRGB and any other non-linear RGB spaces, we must encode
-            // from the full de-multiplied form to ensure that the proper order
-            // is carried out - convert colors to interpolation space,
-            // multiply, do interpolation, then undo multiply. The final encode
-            // then encodes to our at-rest pre-multiplied linear RGBA format.
-            //
-            // TODO: The semantics here could probably be cleaned up.
-            .srgb => SRGB.encodeRGBAVec(SRGB.interpolateVec(
-                SRGB.fromColorVec(a),
-                SRGB.fromColorVec(b),
-                t,
-            )),
-            .hsl => |polar_method| color: {
-                break :color HSL.interpolateEncodeVec(
-                    HSL.fromColorVec(a),
-                    HSL.fromColorVec(b),
-                    t,
-                    polar_method,
-                );
-            },
         };
     }
 };
@@ -300,16 +209,13 @@ fn RGB(profile: RGBProfile) type {
         const Self = @This();
 
         /// The color profile for this sRGB type.
-        pub const Profile = profile;
+        pub const color_profile = profile;
 
         /// The fast-gamma correction value.
         pub const gamma: f32 = switch (profile) {
             .linear => 1.0,
             .srgb => 2.2,
         };
-
-        /// Represents this color space with vectorized fields.
-        pub const Vector = vectorize(Self);
 
         r: f32,
         g: f32,
@@ -349,20 +255,6 @@ fn RGB(profile: RGBProfile) type {
                     }).applyGamma();
                 },
             };
-        }
-
-        /// Vectorizes a vector-sized array of colors translated to RGB,
-        /// gamma-corrected.
-        fn fromColorVec(src: [vector_length]Color) Self.Vector {
-            var result: Self.Vector = undefined;
-            for (src, 0..) |c, i| {
-                const s = Self.fromColor(c);
-                result.r[i] = s.r;
-                result.g[i] = s.g;
-                result.b[i] = s.b;
-                result.a[i] = s.a;
-            }
-            return result;
         }
 
         /// Returns the color wrapped in the `Color` union.
@@ -405,33 +297,6 @@ fn RGB(profile: RGBProfile) type {
             }).multiply();
         }
 
-        /// Vectorized version of encodeRGBA, used internally.
-        pub fn encodeRGBAVec(src: Self.Vector) vectorize(pixel.RGBA) {
-            // NOTE: we have other implementations of a 16-bit vectorized RGBA
-            // value in the compositor package. I'm refraining from making that
-            // public for the time being as this is currently the only case
-            // where we need it outside of that package, but it's a possibility
-            // if its use grows.
-            const _src = removeGammaVec(src);
-            const result: struct {
-                r: @Vector(vector_length, u16),
-                g: @Vector(vector_length, u16),
-                b: @Vector(vector_length, u16),
-                a: @Vector(vector_length, u16),
-            } = .{
-                .r = @intFromFloat(@round(splat(f32, 255.0) * _src.r)),
-                .g = @intFromFloat(@round(splat(f32, 255.0) * _src.g)),
-                .b = @intFromFloat(@round(splat(f32, 255.0) * _src.b)),
-                .a = @intFromFloat(@round(splat(f32, 255.0) * _src.a)),
-            };
-            return .{
-                .r = @intCast(result.r * result.a / splat(u16, 255)),
-                .g = @intCast(result.g * result.a / splat(u16, 255)),
-                .b = @intCast(result.b * result.a / splat(u16, 255)),
-                .a = @intCast(result.a),
-            };
-        }
-
         /// Converts from a RGBA pixel with no transformation (does not
         /// de-multiply, does not apply gamma).
         pub fn decodeRGBARaw(src: pixel.RGBA) Self {
@@ -440,17 +305,6 @@ fn RGB(profile: RGBProfile) type {
                 .g = @as(f32, @floatFromInt(src.g)) / 255.0,
                 .b = @as(f32, @floatFromInt(src.b)) / 255.0,
                 .a = @as(f32, @floatFromInt(src.a)) / 255.0,
-            };
-        }
-
-        /// Like decodeRGBARaw, but converts vectorized RGBA pixel values to
-        /// vectorized colors. Used internally.
-        pub fn decodeRGBAVecRaw(src: vectorize(pixel.RGBA)) Self.Vector {
-            return .{
-                .r = @as(@Vector(vector_length, f32), @floatFromInt(src.r)) / splat(f32, 255.0),
-                .g = @as(@Vector(vector_length, f32), @floatFromInt(src.g)) / splat(f32, 255.0),
-                .b = @as(@Vector(vector_length, f32), @floatFromInt(src.b)) / splat(f32, 255.0),
-                .a = @as(@Vector(vector_length, f32), @floatFromInt(src.a)) / splat(f32, 255.0),
             };
         }
 
@@ -465,33 +319,8 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
-        /// Like encodeRGBARaw, but converts vectorized colors to vectorized RGBA
-        /// values. Used internally.
-        pub fn encodeRGBAVecRaw(src: Self.Vector) vectorize(pixel.RGBA) {
-            return .{
-                .r = @intFromFloat(@round(splat(f32, 255.0) * src.r)),
-                .g = @intFromFloat(@round(splat(f32, 255.0) * src.g)),
-                .b = @intFromFloat(@round(splat(f32, 255.0) * src.b)),
-                .a = @intFromFloat(@round(splat(f32, 255.0) * src.a)),
-            };
-        }
-
-        // Multiplication functions
-        // TODO: We will likely move multiply/de-multiply over here, as we do
-        // all of our interpolation operations in pre-multiplied alpha.
-
         /// Returns the value with the colors multiplied by the alpha.
         pub fn multiply(src: Self) Self {
-            return .{
-                .r = src.r * src.a,
-                .g = src.g * src.a,
-                .b = src.b * src.a,
-                .a = src.a,
-            };
-        }
-
-        /// Internally-used vectorized version of multiply.
-        fn multiplyVec(src: Self.Vector) Self.Vector {
             return .{
                 .r = src.r * src.a,
                 .g = src.g * src.a,
@@ -511,16 +340,6 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
-        /// Internally-used vectorized version of demultiply.
-        fn demultiplyVec(src: Self.Vector) Self.Vector {
-            return .{
-                .r = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.r / src.a),
-                .g = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.g / src.a),
-                .b = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.b / src.a),
-                .a = src.a,
-            };
-        }
-
         /// Applies the profile's fast-gamma value to the color, converting the
         /// color to a gamma-corrected value.
         pub fn applyGamma(src: Self) Self {
@@ -532,23 +351,6 @@ fn RGB(profile: RGBProfile) type {
             };
         }
 
-        /// Vectorized version of applyGamma.
-        pub fn applyGammaVec(src: Self.Vector) Self.Vector {
-            if (profile == .linear) {
-                return src;
-            }
-            // math.pow is not implemented for vectors, so we need to do this
-            // element-by-element.
-            var result: Self.Vector = undefined;
-            for (0..vector_length) |i| {
-                result.r[i] = math.pow(f32, src.r[i], 1 / gamma);
-                result.g[i] = math.pow(f32, src.g[i], 1 / gamma);
-                result.b[i] = math.pow(f32, src.b[i], 1 / gamma);
-                result.a[i] = src.a[i];
-            }
-            return result;
-        }
-
         /// Removes the profile's fast-gamma value from the color, converting
         /// the color to a linear value.
         pub fn removeGamma(src: Self) Self {
@@ -558,23 +360,6 @@ fn RGB(profile: RGBProfile) type {
                 .b = math.pow(f32, src.b, gamma),
                 .a = src.a,
             };
-        }
-
-        /// Vectorized version of removeGamma.
-        fn removeGammaVec(src: Self.Vector) Self.Vector {
-            if (profile == .linear) {
-                return src;
-            }
-            // math.pow is not implemented for vectors, so we need to do this
-            // element-by-element.
-            var result: Self.Vector = undefined;
-            for (0..vector_length) |i| {
-                result.r[i] = math.pow(f32, src.r[i], gamma);
-                result.g[i] = math.pow(f32, src.g[i], gamma);
-                result.b[i] = math.pow(f32, src.b[i], gamma);
-                result.a[i] = src.a[i];
-            }
-            return result;
         }
 
         /// Does standard linear interpolation of the color, returning the
@@ -591,26 +376,6 @@ fn RGB(profile: RGBProfile) type {
             return interpolated.demultiply();
         }
 
-        /// Internal interpolation function for vectors.
-        fn interpolateVec(
-            a: Self.Vector,
-            b: Self.Vector,
-            t: @Vector(vector_length, f32),
-        ) Self.Vector {
-            const a_mul = multiplyVec(a);
-            const b_mul = multiplyVec(b);
-            const interpolated: Self.Vector = .{
-                .r = lerp(a_mul.r, b_mul.r, t),
-                .g = lerp(a_mul.g, b_mul.g, t),
-                .b = lerp(a_mul.b, b_mul.b, t),
-                .a = lerp(a_mul.a, b_mul.a, t),
-            };
-            // Note that unlinke our vectorized interpolation, we need to
-            // demultiply here as we expect these values to be at rest and be
-            // processed more before they are encoded.
-            return demultiplyVec(interpolated);
-        }
-
         /// Performs standard linear interpolation and returns the value as a
         /// pre-multiplied RGBA value.
         pub fn interpolateEncode(a: Self, b: Self, t: f32) pixel.RGBA {
@@ -622,24 +387,10 @@ fn RGB(profile: RGBProfile) type {
                 .b = lerp(a_mul.b, b_mul.b, t),
                 .a = lerp(a_mul.a, b_mul.a, t),
             };
-            return interpolated.encodeRGBARaw();
-        }
-
-        /// Like interpolateEncode, but runs on vectors.
-        fn interpolateEncodeVec(
-            a: Self.Vector,
-            b: Self.Vector,
-            t: @Vector(vector_length, f32),
-        ) vectorize(pixel.RGBA) {
-            const a_mul = multiplyVec(a);
-            const b_mul = multiplyVec(b);
-            const interpolated: Self.Vector = .{
-                .r = lerp(a_mul.r, b_mul.r, t),
-                .g = lerp(a_mul.g, b_mul.g, t),
-                .b = lerp(a_mul.b, b_mul.b, t),
-                .a = lerp(a_mul.a, b_mul.a, t),
-            };
-            return encodeRGBAVecRaw(interpolated);
+            if (profile == .linear) {
+                return interpolated.encodeRGBARaw();
+            }
+            return interpolated.demultiply().encodeRGBA();
         }
     };
 }
@@ -651,9 +402,6 @@ fn RGB(profile: RGBProfile) type {
 
 /// Represents an HSL (Hue, Saturation, Lightness) color value with alpha channel.
 pub const HSL = struct {
-    /// Represents this color space with vectorized fields.
-    const Vector = vectorize(HSL);
-
     h: f32,
     s: f32,
     l: f32,
@@ -685,19 +433,6 @@ pub const HSL = struct {
             inline .linear_rgb, .srgb => fromRGB(LinearRGB.fromColor(src)),
             .hsl => |h| h,
         };
-    }
-
-    /// Vectorizes a slice of colors translated to HSL.
-    fn fromColorVec(src: [vector_length]Color) HSL.Vector {
-        var result: HSL.Vector = undefined;
-        for (src, 0..) |c, i| {
-            const s = HSL.fromColor(c);
-            result.h[i] = s.h;
-            result.s[i] = s.s;
-            result.l[i] = s.l;
-            result.a[i] = s.a;
-        }
-        return result;
     }
 
     /// Returns the color wrapped in the `Color` union.
@@ -766,40 +501,8 @@ pub const HSL = struct {
         return light - a * @max(-1, @min(k - 3, 9 - k, 1));
     }
 
-    fn toRGBVec(src: HSL.Vector) LinearRGB.Vector {
-        var hue = @rem(src.h, splat(f32, 360));
-        hue = @select(f32, hue < splat(f32, 0), hue + splat(f32, 360), hue);
-
-        return .{
-            .r = toSRGBChannelVec(splat(f32, 0), hue, src.s, src.l),
-            .g = toSRGBChannelVec(splat(f32, 8), hue, src.s, src.l),
-            .b = toSRGBChannelVec(splat(f32, 4), hue, src.s, src.l),
-            .a = src.a,
-        };
-    }
-
-    fn toSRGBChannelVec(
-        n: @Vector(vector_length, f32),
-        hue: @Vector(vector_length, f32),
-        sat: @Vector(vector_length, f32),
-        light: @Vector(vector_length, f32),
-    ) @Vector(vector_length, f32) {
-        const k = @rem((n + hue / splat(f32, 30)), splat(f32, 12));
-        const a = sat * @min(light, splat(f32, 1) - light);
-        return light - a * @max(splat(f32, -1), @min(k - splat(f32, 3), splat(f32, 9) - k, splat(f32, 1)));
-    }
-
     /// Returns the value with the colors multiplied by the alpha.
     pub fn multiply(src: HSL) HSL {
-        return .{
-            .h = src.h,
-            .s = src.s * src.a,
-            .l = src.l * src.a,
-            .a = src.a,
-        };
-    }
-
-    fn multiplyVec(src: HSL.Vector) HSL.Vector {
         return .{
             .h = src.h,
             .s = src.s * src.a,
@@ -815,15 +518,6 @@ pub const HSL = struct {
             .h = src.h,
             .s = src.s / src.a,
             .l = src.l / src.a,
-            .a = src.a,
-        };
-    }
-
-    fn demultiplyVec(src: HSL.Vector) HSL.Vector {
-        return .{
-            .h = src.h,
-            .s = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.s / src.a),
-            .l = @select(f32, src.a == splat(f32, 0), splat(f32, 0), src.l / src.a),
             .a = src.a,
         };
     }
@@ -869,67 +563,10 @@ pub const HSL = struct {
         }).demultiply();
     }
 
-    /// Internal interpolation function for vectors.
-    fn interpolateVec(
-        a: HSL.Vector,
-        b: HSL.Vector,
-        t: @Vector(vector_length, f32),
-        method: InterpolationMethod.Polar,
-    ) HSL.Vector {
-        const a_mul = multiplyVec(a);
-        const b_mul = multiplyVec(b);
-        var a_mul_h = a_mul.h;
-        var b_mul_h = b_mul.h;
-
-        switch (method) {
-            .shorter => {
-                const gt_cond = b_mul_h - a_mul_h > splat(f32, 180);
-                const lt_cond = b_mul_h - a_mul_h < splat(f32, -180);
-                a_mul_h = @select(f32, gt_cond, a_mul_h + splat(f32, 360), a_mul_h);
-                b_mul_h = @select(f32, lt_cond, b_mul_h + splat(f32, 360), b_mul_h);
-            },
-            .longer => {
-                const delta = b_mul_h - a_mul_h;
-                const zero_180_cond = (@intFromBool(splat(f32, 0) < delta) &
-                    @intFromBool(delta < splat(f32, 180))) != splat(u1, 0);
-                const neg_180_zero_cond = (@intFromBool(splat(f32, -180) < delta) &
-                    @intFromBool(delta <= splat(f32, 0))) != splat(u1, 0);
-                a_mul_h = @select(f32, zero_180_cond, a_mul_h + splat(f32, 360), a_mul_h);
-                b_mul_h = @select(f32, neg_180_zero_cond, b_mul_h + splat(f32, 360), b_mul_h);
-            },
-            .increasing => {
-                const lt_cond = b_mul_h < a_mul_h;
-                b_mul_h = @select(f32, lt_cond, b_mul_h + splat(f32, 360), b_mul_h);
-            },
-            .decreasing => {
-                const lt_cond = a_mul_h < b_mul_h;
-                a_mul_h = @select(f32, lt_cond, a_mul_h + splat(f32, 360), a_mul_h);
-            },
-        }
-
-        const h_result = lerpPolar(a_mul.h, a_mul_h, b_mul_h, t);
-        return demultiplyVec(HSL.Vector{
-            .h = @mod(h_result, splat(f32, 360)),
-            .s = lerp(a_mul.s, b_mul.s, t),
-            .l = lerp(a_mul.l, b_mul.l, t),
-            .a = lerp(a_mul.a, b_mul.a, t),
-        });
-    }
-
     /// Performs standard linear interpolation and returns the value as an
     /// encoded, pre-multiplied RGBA value.
     pub fn interpolateEncode(a: HSL, b: HSL, t: f32, method: InterpolationMethod.Polar) pixel.RGBA {
         return LinearRGB.encodeRGBARaw(interpolate(a, b, t, method).toRGB()).multiply();
-    }
-
-    /// Like interpolateEncode, but runs on vectors.
-    fn interpolateEncodeVec(
-        a: HSL.Vector,
-        b: HSL.Vector,
-        t: @Vector(vector_length, f32),
-        method: InterpolationMethod.Polar,
-    ) vectorize(pixel.RGBA) {
-        return LinearRGB.encodeRGBAVec(toRGBVec(interpolateVec(a, b, t, method)));
     }
 };
 
@@ -1058,26 +695,7 @@ test "LinearRGB.fromColor" {
     }
 }
 
-test "LinearRGB.fromColorVec" {
-    // Simple test here designed to scale with vector_length, basically we do
-    // Red in HSL, scaling on lightness from 0 - 0.5 in 1 / vector_length
-    // intervals.
-    var colors: [vector_length]Color = undefined;
-    var expected: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        colors[i] = HSL.init(0, 1, 0.5 * (1 / k * j), 1).asColor();
-        expected.r[i] = 1 * (1 / k * j);
-        expected.g[i] = 0;
-        expected.b[i] = 0;
-        expected.a[i] = 1;
-    }
-    const got = LinearRGB.fromColorVec(colors);
-    try testing.expectEqualDeep(expected, got);
-}
-
-test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw, LinearRGB.decodeRGBAVecRaw" {
+test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
     // TODO: using pixel.RGBA's clamping for now (applies pre-multiplication
     // for us). I don't necessarily have plans to remove the direct
     // functionality in pixel just yet, and it helps assert behavior across
@@ -1086,16 +704,8 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw, LinearRGB.decodeRGBAVecRaw"
     // testing in multiply particularly asserts that round-tripping works just
     // fine.
     const px_rgba = pixel.RGBA.fromClamped(0.25, 0.5, 0.75, 0.9);
-    var px_rgba_vec: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        px_rgba_vec.r[i] = px_rgba.r;
-        px_rgba_vec.g[i] = px_rgba.g;
-        px_rgba_vec.b[i] = px_rgba.b;
-        px_rgba_vec.a[i] = px_rgba.a;
-    }
     const got = LinearRGB.decodeRGBA(px_rgba);
     const got_raw = LinearRGB.decodeRGBARaw(px_rgba);
-    const got_raw_vec = LinearRGB.decodeRGBAVecRaw(px_rgba_vec);
     const expected: LinearRGB = .{
         .r = 0.25,
         .g = 0.5,
@@ -1103,14 +713,6 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw, LinearRGB.decodeRGBAVecRaw"
         .a = 0.9,
     };
     const expected_raw = expected.multiply();
-
-    var expected_raw_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        expected_raw_vec.r[i] = got_raw.r;
-        expected_raw_vec.g[i] = got_raw.g;
-        expected_raw_vec.b[i] = got_raw.b;
-        expected_raw_vec.a[i] = got_raw.a;
-    }
 
     // Set our epsilon to help accommodate integer mul/demul error
     const epsilon: f32 = 1.0 / 128.0;
@@ -1122,47 +724,21 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw, LinearRGB.decodeRGBAVecRaw"
     try testing.expectApproxEqAbs(expected_raw.g, got_raw.g, epsilon);
     try testing.expectApproxEqAbs(expected_raw.b, got_raw.b, epsilon);
     try testing.expectApproxEqAbs(expected_raw.a, got_raw.a, epsilon);
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
-test "LinearRGB.encodeRGBA, LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBARaw, LinearRGB.encodeRGBAVecRaw" {
+test "LinearRGB.encodeRGBA LinearRGB.encodeRGBARaw" {
     const in = LinearRGB.init(0.25, 0.5, 0.75, 0.9);
-    var in_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
     const got = LinearRGB.encodeRGBA(in);
-    const got_vec = LinearRGB.encodeRGBAVec(in_vec);
     const got_raw = LinearRGB.encodeRGBARaw(in);
-    const got_raw_vec = LinearRGB.encodeRGBAVecRaw(in_vec);
     const expected = pixel.RGBA.fromClamped(0.25, 0.5, 0.75, 0.9);
-    var expected_vec: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     const expected_raw: pixel.RGBA = .{
         .r = 64,
         .g = 128,
         .b = 191,
         .a = 230,
     };
-    var expected_raw_vec: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        expected_raw_vec.r[i] = expected_raw.r;
-        expected_raw_vec.g[i] = expected_raw.g;
-        expected_raw_vec.b[i] = expected_raw.b;
-        expected_raw_vec.a[i] = expected_raw.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
     try testing.expectEqualDeep(expected_raw, got_raw);
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "LinearRGB.multiply" {
@@ -1193,80 +769,29 @@ test "LinearRGB.demultiply" {
     try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
 }
 
-test "LinearRGB.demultiplyVec, divide by zero" {
-    // Note that we use this as a divide-by-zero check for all other generated
-    // RGB profiles.
-    const in: LinearRGB.Vector = .{
-        .r = @splat(1),
-        .g = @splat(0.75),
-        .b = @splat(0.25),
-        .a = @splat(0.0),
-    };
-    const got = LinearRGB.demultiplyVec(in);
-    const expected: LinearRGB.Vector = .{
-        .r = @splat(0.0),
-        .g = @splat(0.0),
-        .b = @splat(0.0),
-        .a = @splat(0.0),
-    };
-    try testing.expectEqualDeep(expected, got);
-}
-
-test "LinearRGB.removeGamma, LinearRGB.removeGammaVec" {
+test "LinearRGB.removeGamma" {
     const in = LinearRGB.init(0.25, 0.5, 0.75, 0.9);
-    var in_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
     const got = in.removeGamma();
-    const got_vec = LinearRGB.removeGammaVec(in_vec);
     const expected: LinearRGB = .{
         .r = 0.25,
         .g = 0.5,
         .b = 0.75,
         .a = 0.9,
     };
-    var expected_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
-test "LinearRGB.applyGamma, LinearRGB.applyGammaVec" {
+test "LinearRGB.applyGamma" {
     const in = LinearRGB.init(0.25, 0.5, 0.75, 0.9);
-    var in_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
 
     const got = in.applyGamma();
-    const got_vec = LinearRGB.applyGammaVec(in_vec);
     const expected: LinearRGB = .{
         .r = 0.25,
         .g = 0.5,
         .b = 0.75,
         .a = 0.9,
     };
-    var expected_vec: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "LinearRGB.interpolate, LinearRGB.interpolateEncode" {
@@ -1368,51 +893,6 @@ test "LinearRGB.interpolate, LinearRGB.interpolateEncode" {
     try runCases(name, cases, TestFn.f);
 }
 
-test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
-    // Interpolation from red to green over the vector length.
-    const red = LinearRGB.init(1, 0, 0, 0.9);
-    const green = LinearRGB.init(0, 1, 0, 0.9);
-
-    // Build params
-    var red_vec: LinearRGB.Vector = undefined;
-    var green_vec: LinearRGB.Vector = undefined;
-    var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
-        red_vec.r[i] = red.r;
-        red_vec.g[i] = red.g;
-        red_vec.b[i] = red.b;
-        red_vec.a[i] = red.a;
-        green_vec.r[i] = green.r;
-        green_vec.g[i] = green.g;
-        green_vec.b[i] = green.b;
-        green_vec.a[i] = green.a;
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        t_vec[i] = 1 / k * j;
-    }
-
-    // Build other params and expected RGBA set from interpolating individually
-    var expected: LinearRGB.Vector = undefined;
-    var expected_encoded: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        const expected_scalar = LinearRGB.interpolate(red, green, t_vec[i]);
-        const expected_encoded_scalar = LinearRGB.interpolateEncode(red, green, t_vec[i]);
-        expected.r[i] = expected_scalar.r;
-        expected.g[i] = expected_scalar.g;
-        expected.b[i] = expected_scalar.b;
-        expected.a[i] = expected_scalar.a;
-        expected_encoded.r[i] = expected_encoded_scalar.r;
-        expected_encoded.g[i] = expected_encoded_scalar.g;
-        expected_encoded.b[i] = expected_encoded_scalar.b;
-        expected_encoded.a[i] = expected_encoded_scalar.a;
-    }
-
-    const got = LinearRGB.interpolateVec(red_vec, green_vec, t_vec);
-    const got_encoded = LinearRGB.interpolateEncodeVec(red_vec, green_vec, t_vec);
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_encoded, got_encoded);
-}
-
 test "SRGB.init" {
     {
         // Basic
@@ -1483,30 +963,6 @@ test "SRGB.fromColor" {
     }
 }
 
-test "SRGB.fromColorVec" {
-    // Simple test here designed to scale with vector_length, basically we do
-    // Red in HSL, scaling on lightness from 0 - 0.5 in 1 / vector_length
-    // intervals.
-    var colors: [vector_length]Color = undefined;
-    var expected: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        colors[i] = HSL.init(0, 1, 0.5 * (1 / k * j), 1).asColor();
-        expected.r[i] = math.pow(f32, 1.0 * (1.0 / k * j), 1.0 / 2.2);
-        expected.g[i] = 0;
-        expected.b[i] = 0;
-        expected.a[i] = 1;
-    }
-    const got = SRGB.fromColorVec(colors);
-    for (0..vector_length) |i| {
-        try testing.expectApproxEqAbs(expected.r[i], got.r[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.g[i], got.g[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.b[i], got.b[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.a[i], got.a[i], math.floatEps(f32));
-    }
-}
-
 test "SRGB.decodeRGBA, SRGB.decodeRGBARaw" {
     // TODO: using pixel.RGBA's clamping for now (applies pre-multiplication
     // for us). I don't necessarily have plans to remove the direct
@@ -1534,49 +990,24 @@ test "SRGB.decodeRGBA, SRGB.decodeRGBARaw" {
     try testing.expectEqualDeep(expected_raw, got_raw);
 }
 
-test "SRGB.encodeRGBA, LinearRGB.encodeRGBAVec, SRGB.encodeRGBARaw, SRGB.encodeRGBAVecRaw" {
+test "SRGB.encodeRGBA, SRGB.encodeRGBARaw" {
     const in = SRGB.init(0.5296636, 0.7284379, 0.87481296, 0.9019608);
-    var in_vec: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
     const got = SRGB.encodeRGBA(in);
-    const got_vec = SRGB.encodeRGBAVec(in_vec);
     const got_raw = SRGB.encodeRGBARaw(in);
-    const got_raw_vec = SRGB.encodeRGBAVecRaw(in_vec);
     const expected: pixel.RGBA = .{
         .r = 56,
         .g = 114,
         .b = 171,
         .a = 230,
     };
-    var expected_vec: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     const expected_raw: pixel.RGBA = .{
         .r = 135,
         .g = 186,
         .b = 223,
         .a = 230,
     };
-    var expected_raw_vec: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        expected_raw_vec.r[i] = expected_raw.r;
-        expected_raw_vec.g[i] = expected_raw.g;
-        expected_raw_vec.b[i] = expected_raw.b;
-        expected_raw_vec.a[i] = expected_raw.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
     try testing.expectEqualDeep(expected_raw, got_raw);
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "SRGB.multiply" {
@@ -1607,60 +1038,28 @@ test "SRGB.demultiply" {
     try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
 }
 
-test "SRGB.removeGamma, SRGB.removeGammaVec" {
+test "SRGB.removeGamma" {
     const in = SRGB.init(0.25, 0.5, 0.75, 0.9);
-    var in_vec: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
     const got = in.removeGamma();
-    const got_vec = SRGB.removeGammaVec(in_vec);
     const expected: SRGB = .{
         .r = 0.047366142,
         .g = 0.21763763,
         .b = 0.53104925,
         .a = 0.9,
     };
-    var expected_vec: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
-test "SRGB.applyGamma, SRGB.applyGammaVec" {
+test "SRGB.applyGamma" {
     const in = SRGB.init(0.25, 0.5, 0.75, 0.9);
-    var in_vec: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        in_vec.r[i] = in.r;
-        in_vec.g[i] = in.g;
-        in_vec.b[i] = in.b;
-        in_vec.a[i] = in.a;
-    }
     const got = in.applyGamma();
-    const got_vec = SRGB.applyGammaVec(in_vec);
     const expected: SRGB = .{
         .r = 0.53252053,
         .g = 0.7297400,
         .b = 0.8774243,
         .a = 0.9,
     };
-    var expected_vec: SRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        expected_vec.r[i] = expected.r;
-        expected_vec.g[i] = expected.g;
-        expected_vec.b[i] = expected.b;
-        expected_vec.a[i] = expected.a;
-    }
     try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "SRGB.interpolate, SRGB.interpolateEncode" {
@@ -1750,18 +1149,8 @@ test "SRGB.interpolate, SRGB.interpolateEncode" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             const got = SRGB.interpolate(tc.a, tc.b, tc.t);
-            // NOTE: This is a good demonstration of how interpolating in sRGB
-            // can cause issues; our RGB interpolation functionality
-            // intentionally does not convert back to linear space before
-            // writing out pixels (as it does not de-multiply first, which
-            // would be an essential step here). This is essentially the same
-            // as *encoding* non-linear sRGB as its gamma-corrected value with
-            // the alpha pre-multiplied, and as such this is not recommended
-            // for use in the library. We explicitly (currently) do not allow
-            // interpolation in non-linear RGB in InterpolationMethod for this
-            // reason.
             const got_rgba = SRGB.interpolateEncode(tc.a, tc.b, tc.t);
-            const expected_rgba = SRGB.encodeRGBARaw(tc.expected.multiply());
+            const expected_rgba = SRGB.encodeRGBA(tc.expected);
             try testing.expectApproxEqAbs(tc.expected.r, got.r, math.floatEps(f32));
             try testing.expectApproxEqAbs(tc.expected.g, got.g, math.floatEps(f32));
             try testing.expectApproxEqAbs(tc.expected.b, got.b, math.floatEps(f32));
@@ -1770,51 +1159,6 @@ test "SRGB.interpolate, SRGB.interpolateEncode" {
         }
     };
     try runCases(name, cases, TestFn.f);
-}
-
-test "SRGB.interpolateEncodeVec" {
-    // Interpolation from red to green over the vector length.
-    const red = SRGB.init(1, 0, 0, 0.9);
-    const green = SRGB.init(0, 1, 0, 0.9);
-
-    // Build params
-    var red_vec: SRGB.Vector = undefined;
-    var green_vec: SRGB.Vector = undefined;
-    var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
-        red_vec.r[i] = red.r;
-        red_vec.g[i] = red.g;
-        red_vec.b[i] = red.b;
-        red_vec.a[i] = red.a;
-        green_vec.r[i] = green.r;
-        green_vec.g[i] = green.g;
-        green_vec.b[i] = green.b;
-        green_vec.a[i] = green.a;
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        t_vec[i] = 1 / k * j;
-    }
-
-    // Build other params and expected RGBA set from interpolating individually
-    var expected: SRGB.Vector = undefined;
-    var expected_encoded: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        const expected_scalar = SRGB.interpolate(red, green, t_vec[i]);
-        const expected_encoded_scalar = SRGB.interpolateEncode(red, green, t_vec[i]);
-        expected.r[i] = expected_scalar.r;
-        expected.g[i] = expected_scalar.g;
-        expected.b[i] = expected_scalar.b;
-        expected.a[i] = expected_scalar.a;
-        expected_encoded.r[i] = expected_encoded_scalar.r;
-        expected_encoded.g[i] = expected_encoded_scalar.g;
-        expected_encoded.b[i] = expected_encoded_scalar.b;
-        expected_encoded.a[i] = expected_encoded_scalar.a;
-    }
-
-    const got = LinearRGB.interpolateVec(red_vec, green_vec, t_vec);
-    const got_encoded = SRGB.interpolateEncodeVec(red_vec, green_vec, t_vec);
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_encoded, got_encoded);
 }
 
 test "HSL.init" {
@@ -1943,27 +1287,6 @@ test "HSL.fromColor" {
     try runCases(name, cases, TestFn.f);
 }
 
-test "HSL.fromColorVec" {
-    // This the reverse of our fromColorVec tests for RGB, with a minor
-    // modification (see below).
-    var colors: [vector_length]Color = undefined;
-    var expected: HSL.Vector = undefined;
-    for (0..vector_length) |i| {
-        // Bump j up so that it's 1-indexed versus 0-indexed, this ensures that
-        // we don't actually init black (as we'll just get a zero-value HSL
-        // back in that case).
-        const j: f32 = @floatFromInt(i + 1);
-        const k: f32 = @floatFromInt(vector_length);
-        colors[i] = LinearRGB.init(1 * (1 / k * j), 0, 0, 1).asColor();
-        expected.h[i] = 0;
-        expected.s[i] = 1;
-        expected.l[i] = 0.5 * (1 / k * j);
-        expected.a[i] = 1;
-    }
-    const got = HSL.fromColorVec(colors);
-    try testing.expectEqualDeep(expected, got);
-}
-
 test "HSL.fromRGB, zero value (black)" {
     // Asserts that we return zero values for pure black.
     //
@@ -1987,28 +1310,6 @@ test "HSL.toRGB" {
     try testing.expectApproxEqAbs(expected.g, got.g, epsilon);
     try testing.expectApproxEqAbs(expected.b, got.b, epsilon);
     try testing.expectApproxEqAbs(expected.a, got.a, epsilon);
-}
-
-test "HSL.toSRGBVec" {
-    // This is just the SRGBLinear.fromColorVec test for HSL -> SRGB, just with
-    // the color unwrapped.
-    var src_vec: HSL.Vector = undefined;
-    var expected: LinearRGB.Vector = undefined;
-    for (0..vector_length) |i| {
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        const src = HSL.init(0, 1, 0.5 * (1 / k * j), 1);
-        src_vec.h[i] = src.h;
-        src_vec.s[i] = src.s;
-        src_vec.l[i] = src.l;
-        src_vec.a[i] = src.a;
-        expected.r[i] = 1 * (1 / k * j);
-        expected.g[i] = 0;
-        expected.b[i] = 0;
-        expected.a[i] = 1;
-    }
-    const got = HSL.toRGBVec(src_vec);
-    try testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.multiply" {
@@ -2037,23 +1338,6 @@ test "HSL.demultiply" {
     try testing.expectApproxEqAbs(expected.s, got.s, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.l, got.l, math.floatEps(f32));
     try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
-}
-
-test "HSL.demultiplyVec, divide by zero" {
-    const in: HSL.Vector = .{
-        .h = @splat(240),
-        .s = @splat(0.5),
-        .l = @splat(0.25),
-        .a = @splat(0.0),
-    };
-    const got = HSL.demultiplyVec(in);
-    const expected: HSL.Vector = .{
-        .h = @splat(240),
-        .s = @splat(0.0),
-        .l = @splat(0.0),
-        .a = @splat(0.0),
-    };
-    try testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.interpolate, HSL.interpolateEncode" {
@@ -2233,67 +1517,6 @@ test "HSL.interpolate, HSL.interpolateEncode" {
         }
     };
     try runCases(name, cases, TestFn.f);
-}
-
-test "HSL.interpolateEncodeVec" {
-    // Interpolation from red to blue over the vector length.
-    const red = HSL.init(0, 1, 0.5, 0.9);
-    const blue = HSL.init(240, 1, 0.5, 0.9);
-
-    // Build params
-    var red_vec: HSL.Vector = undefined;
-    var blue_vec: HSL.Vector = undefined;
-    var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
-        red_vec.h[i] = red.h;
-        red_vec.s[i] = red.s;
-        red_vec.l[i] = red.l;
-        red_vec.a[i] = red.a;
-        blue_vec.h[i] = blue.h;
-        blue_vec.s[i] = blue.s;
-        blue_vec.l[i] = blue.l;
-        blue_vec.a[i] = blue.a;
-        const j: f32 = @floatFromInt(i);
-        const k: f32 = @floatFromInt(vector_length);
-        t_vec[i] = 1 / k * j;
-    }
-
-    // Build other params and expected RGBA set from interpolating individually
-    var expected_short: vectorize(pixel.RGBA) = undefined;
-    var expected_long: vectorize(pixel.RGBA) = undefined;
-    var expected_cw: vectorize(pixel.RGBA) = undefined;
-    var expected_ccw: vectorize(pixel.RGBA) = undefined;
-    for (0..vector_length) |i| {
-        const expected_scalar_short = HSL.interpolateEncode(red, blue, t_vec[i], .shorter);
-        const expected_scalar_long = HSL.interpolateEncode(red, blue, t_vec[i], .longer);
-        const expected_scalar_cw = HSL.interpolateEncode(red, blue, t_vec[i], .increasing);
-        const expected_scalar_ccw = HSL.interpolateEncode(red, blue, t_vec[i], .decreasing);
-        expected_short.r[i] = expected_scalar_short.r;
-        expected_short.g[i] = expected_scalar_short.g;
-        expected_short.b[i] = expected_scalar_short.b;
-        expected_short.a[i] = expected_scalar_short.a;
-        expected_long.r[i] = expected_scalar_long.r;
-        expected_long.g[i] = expected_scalar_long.g;
-        expected_long.b[i] = expected_scalar_long.b;
-        expected_long.a[i] = expected_scalar_long.a;
-        expected_cw.r[i] = expected_scalar_cw.r;
-        expected_cw.g[i] = expected_scalar_cw.g;
-        expected_cw.b[i] = expected_scalar_cw.b;
-        expected_cw.a[i] = expected_scalar_cw.a;
-        expected_ccw.r[i] = expected_scalar_ccw.r;
-        expected_ccw.g[i] = expected_scalar_ccw.g;
-        expected_ccw.b[i] = expected_scalar_ccw.b;
-        expected_ccw.a[i] = expected_scalar_ccw.a;
-    }
-
-    const got_short = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .shorter);
-    const got_long = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .longer);
-    const got_cw = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .increasing);
-    const got_ccw = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .decreasing);
-    try testing.expectEqualDeep(expected_short, got_short);
-    try testing.expectEqualDeep(expected_long, got_long);
-    try testing.expectEqualDeep(expected_cw, got_cw);
-    try testing.expectEqualDeep(expected_ccw, got_ccw);
 }
 
 test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
@@ -2559,259 +1782,6 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             const got_rgba = tc.method.interpolateEncode(tc.a, tc.b, tc.t);
             try testing.expectEqualDeep(tc.expected, got);
             try testing.expectEqualDeep(expected_rgba, got_rgba);
-        }
-    };
-    try runCases(name, cases, TestFn.f);
-}
-
-test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeVec" {
-    const name = "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeVec";
-    const cases = [_]struct {
-        name: []const u8,
-        method: InterpolationMethod,
-        a: Color,
-        b: Color,
-        t: f32,
-    }{
-        .{
-            .name = ".linear_rgb, linear + linear",
-            .method = .{ .linear_rgb = {} },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".linear_rgb, HSL + linear",
-            .method = .{ .linear_rgb = {} },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".linear_rgb, linear + HSL",
-            .method = .{ .linear_rgb = {} },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".linear_rgb, HSL + HSL",
-            .method = .{ .linear_rgb = {} },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".linear_rgb, gamma + gamma",
-            .method = .{ .linear_rgb = {} },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".srgb, linear + linear",
-            .method = .{ .srgb = {} },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".srgb, HSL + linear",
-            .method = .{ .srgb = {} },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".srgb, linear + HSL",
-            .method = .{ .srgb = {} },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".srgb, HSL + HSL",
-            .method = .{ .srgb = {} },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".srgb, gamma + gamma",
-            .method = .{ .srgb = {} },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, shorter, linear + linear",
-            .method = .{ .hsl = .shorter },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, shorter, HSL + linear",
-            .method = .{ .hsl = .shorter },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, shorter, linear + HSL",
-            .method = .{ .hsl = .shorter },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, shorter, HSL + HSL",
-            .method = .{ .hsl = .shorter },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, shorter, gamma + gamma",
-            .method = .{ .hsl = .shorter },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, longer, linear + linear",
-            .method = .{ .hsl = .longer },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, longer, HSL + linear",
-            .method = .{ .hsl = .longer },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, longer, linear + HSL",
-            .method = .{ .hsl = .longer },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, longer, HSL + HSL",
-            .method = .{ .hsl = .longer },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, longer, gamma + gamma",
-            .method = .{ .hsl = .longer },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, increasing, linear + linear",
-            .method = .{ .hsl = .increasing },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, increasing, HSL + linear",
-            .method = .{ .hsl = .increasing },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, increasing, linear + HSL",
-            .method = .{ .hsl = .increasing },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, increasing, HSL + HSL",
-            .method = .{ .hsl = .increasing },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, increasing, gamma + gamma",
-            .method = .{ .hsl = .increasing },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, decreasing, linear + linear",
-            .method = .{ .hsl = .decreasing },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, decreasing, HSL + linear",
-            .method = .{ .hsl = .decreasing },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = LinearRGB.init(0, 1, 0, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, decreasing, linear + HSL",
-            .method = .{ .hsl = .decreasing },
-            .a = LinearRGB.init(1, 0, 0, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, decreasing, HSL + HSL",
-            .method = .{ .hsl = .decreasing },
-            .a = HSL.init(0, 1, 0.5, 1).asColor(),
-            .b = HSL.init(120, 1, 0.5, 1).asColor(),
-            .t = 0.5,
-        },
-        .{
-            .name = ".hsl, decreasing, gamma + gamma",
-            .method = .{ .hsl = .decreasing },
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
-            .t = 0.5,
-        },
-    };
-    const TestFn = struct {
-        fn f(tc: anytype) TestingError!void {
-            var a_vec: [vector_length]Color = undefined;
-            var b_vec: [vector_length]Color = undefined;
-            var t_vec: [vector_length]f32 = undefined;
-            var expected: LinearRGB.Vector = undefined;
-            var expected_encoded: vectorize(pixel.RGBA) = undefined;
-            for (0..vector_length) |i| {
-                a_vec[i] = tc.a;
-                b_vec[i] = tc.b;
-                const j: f32 = @floatFromInt(i);
-                const k: f32 = @floatFromInt(vector_length);
-                t_vec[i] = 1 / k * j;
-                const expected_scalar = LinearRGB.fromColor(tc.method.interpolate(tc.a, tc.b, t_vec[i]));
-                const expected_encoded_scalar = tc.method.interpolateEncode(tc.a, tc.b, t_vec[i]);
-                expected.r[i] = expected_scalar.r;
-                expected.g[i] = expected_scalar.g;
-                expected.b[i] = expected_scalar.b;
-                expected.a[i] = expected_scalar.a;
-                expected_encoded.r[i] = expected_encoded_scalar.r;
-                expected_encoded.g[i] = expected_encoded_scalar.g;
-                expected_encoded.b[i] = expected_encoded_scalar.b;
-                expected_encoded.a[i] = expected_encoded_scalar.a;
-            }
-            const got = tc.method.interpolateVec(a_vec, b_vec, t_vec);
-            const got_encoded = tc.method.interpolateEncodeVec(a_vec, b_vec, t_vec);
-            try testing.expectEqualDeep(expected, got);
-            try testing.expectEqualDeep(expected_encoded, got_encoded);
         }
     };
     try runCases(name, cases, TestFn.f);
