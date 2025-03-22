@@ -1,5 +1,13 @@
 ## 0.6.0 (Unreleased)
 
+ZIG 0.14.0 REQUIRED
+
+Version 0.6.0 now requires Zig 0.14.0.
+
+Our cut to Zig 0.14.0 has been kept as close as possible to the release of
+0.6.0, and those still needing 0.13.0 should be able to get most, if not all,
+of its functionality by fetching commit d0acc1d387307c7b1f0f6f19f0c90f0cdbf52e58.
+
 GRADIENTS
 
 This release marks another major feature addition for z2d - the addition of
