@@ -2241,8 +2241,8 @@ const FloatOps = struct {
 };
 
 const max_u8_scalar: u16 = 255;
-const max_u8_vec: @Vector(vector_length, u16) = @splat(255);
-const zero_int_vec: @Vector(vector_length, u16) = @splat(0);
+const max_u8_vec = splat(u16, 255);
+const zero_int_vec = splat(u16, 0);
 const zero_float_vec = @import("internal/util.zig").zero_float_vec;
 const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 

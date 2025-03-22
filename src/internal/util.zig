@@ -77,7 +77,7 @@ pub fn gather(slice: anytype, index: anytype) @Vector(
 }
 
 /// Short-hand splatted f32 zero values, used in multiple places.
-pub const zero_float_vec: @Vector(vector_length, f32) = @splat(0.0);
+pub const zero_float_vec = splat(f32, 0.0);
 
 /// Short-hand splatted color zero values, used in multiple places.
 pub const zero_color_vec: [vector_length]colorpkg.Color = zero_color_vec: {

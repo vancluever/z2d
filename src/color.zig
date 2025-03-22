@@ -208,9 +208,6 @@ fn RGB(profile: RGBProfile) type {
     return struct {
         const Self = @This();
 
-        /// The color profile for this sRGB type.
-        pub const color_profile = profile;
-
         /// The fast-gamma correction value.
         pub const gamma: f32 = switch (profile) {
             .linear => 1.0,
