@@ -113,11 +113,11 @@ fn fillMark(context: *z2d.Context) !void {
 
 ## About
 
-z2d is a 2D graphics library whose main purpose is to raster shapes composed
-off of vector primitives: lines and cubic Beziers, e.g., things you would need
-if you were rendering something like an SVG file, or rendering shapes directly
-for UI elements. It also provides a (growing) API for image manipulation, which
-mainly supports our vector rasterization features, but can also be worked with
+z2d is a 2D graphics library whose main purpose is to raster shapes composed of
+vector primitives: lines and cubic Beziers, e.g., things you would need if you
+were rendering something like an SVG file, or rendering shapes directly for UI
+elements. It also provides a (growing) API for image manipulation, which mainly
+supports our vector rasterization features, but can also be worked with
 directly at the lower level.
 
 Our drawing model is (loosely) inspired by
