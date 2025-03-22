@@ -1,6 +1,6 @@
 # z2d
 
-A 2d vector graphics library, written in pure Zig.
+A 2D graphics library, written in pure Zig.
 
 ## Example
 
@@ -113,10 +113,12 @@ fn fillMark(context: *z2d.Context) !void {
 
 ## About
 
-z2d is a 2D graphics library primarily designed around rasterizing vector
-primitives like lines and cubic Beziers. In other words, it's designed around
-supporting operations that you would see in SVG or other vector languages like
-PostScript or PDF.
+z2d is a 2D graphics library whose main purpose is to raster shapes composed
+off of vector primitives: lines and cubic Beziers, e.g., things you would need
+if you were rendering something like an SVG file, or rendering shapes directly
+for UI elements. It also provides a (growing) API for image manipulation, which
+mainly supports our vector rasterization features, but can also be worked with
+directly at the lower level.
 
 Our drawing model is (loosely) inspired by
 [Cairo](https://www.cairographics.org): most operations take place through the
@@ -127,9 +129,11 @@ stroking operations.
 Every component of z2d can be worked with directly in an unmanaged fashion
 without the `Context` as well, if so desired; `Surfaces` can be interfaced with
 directly, `Surface` and `Path` can be used with static buffers (in addition to
-their traditional unmanaged variant), and the painter methods for filling and
-stroking can be called directly with the output of these. For these cases,
-`Context` serves as a reference example.
+their traditional unmanaged variant), and the `painter` functions for filling
+and stroking can be called directly with the output of these. For these cases,
+`Context` serves as a reference example. Additionally, plumbing further into
+the `painter` package can demonstrate how functions in the `compositor` package
+can be worked with at the lower level.
 
 ## What's supported
 
@@ -147,9 +151,9 @@ Currently:
  * Composition:
    - Single pixel sources and linear, radial, and conic gradients supported.
      Access to lower-level compositor primitives is supplied to allow for
-     manipulation of surfaces outside of higher-level drawing operations. 28
-     compositor operators supported across the set of Porter-Duff and PDF blend
-     modes.
+     manipulation of surfaces outside of higher-level drawing operations.
+   - 28 compositor operators supported across the set of Porter-Duff and PDF
+     blend modes.
  * Pixel formats:
    - RGBA, RGB, and alpha-only in 8, 4, 2, and 1-bit formats.
  * Color spaces:
