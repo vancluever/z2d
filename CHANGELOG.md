@@ -1,3 +1,7 @@
+## 0.6.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.6.0 (March 22, 2025)
 
 ZIG 0.14.0 REQUIRED
