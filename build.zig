@@ -144,11 +144,6 @@ pub fn build(b: *std.Build) void {
         "update",
         "Update spec (E2E) tests (needs to be run with the \"spec\" target)",
     );
-    const tracy_enable = b.option(
-        bool,
-        "tracy",
-        "Enable Tracy profiler support (needs to be run with the \"spec\" target)",
-    );
 
     const spec_test = spec: {
         if (spec_update orelse false)
@@ -169,19 +164,7 @@ pub fn build(b: *std.Build) void {
     };
     spec_test.root_module.addImport("z2d", z2d);
     const spec_options = b.addOptions();
-    spec_options.addOption(bool, "tracy_enable", tracy_enable orelse false);
     spec_test.root_module.addOptions("spec_options", spec_options);
-    if (tracy_enable orelse false) tracy: {
-        const tracy_dep = b.lazyDependency("zig-tracy", .{
-            .target = target,
-            .optimize = optimize,
-            .tracy_enable = tracy_enable orelse false,
-            .tracy_callstack = @as(u8, @intCast(32)),
-        }) orelse break :tracy;
-        spec_test.root_module.addImport("tracy", tracy_dep.module("tracy"));
-        spec_test.linkLibrary(tracy_dep.artifact("tracy"));
-        spec_test.linkLibCpp();
-    }
     const spec_run = b.addRunArtifact(spec_test);
     b.step("spec", "Run spec (E2E) tests").dependOn(&spec_run.step);
     check_step.dependOn(&spec_test.step);

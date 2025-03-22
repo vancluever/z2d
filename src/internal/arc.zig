@@ -186,7 +186,7 @@ pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
     //
     //      r²(θ) = (a² + b² + c² + d²)/2
     //         + (a² + b² - c² - d²)*cos(2*θ)/2
-    // 	     + (a*c + b*d)*sin(2*θ)
+    //      + (a*c + b*d)*sin(2*θ)
     //            = f + g*cos(φ) + h*sin(φ)
     //
     // Where

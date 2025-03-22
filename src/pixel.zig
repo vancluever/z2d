@@ -493,8 +493,8 @@ fn Alpha(comptime fmt: Format) type {
             const src_T = @TypeOf(val);
             if (target_T == src_T) return val;
 
-            const from_bits = @typeInfo(src_T).Int.bits;
-            const to_bits = @typeInfo(target_T).Int.bits;
+            const from_bits = @typeInfo(src_T).int.bits;
+            const to_bits = @typeInfo(target_T).int.bits;
             if (from_bits > to_bits) {
                 return @intCast(val >> from_bits - to_bits);
             }

@@ -87,27 +87,27 @@ pub fn compare(a: Slope, b: Slope) i32 {
 /// Consider the miter join formed when two line segments
 /// meet at an angle psi:
 ///
-///	   /.\
-///	  /. .\
-///	 /./ \.\
-///	/./psi\.\
+///       /.\
+///      /. .\
+///     /./ \.\
+///    /./psi\.\
 ///
 /// We can zoom in on the right half of that to see:
 ///
-///	    |\
-///	    | \ psi/2
-///	    |  \
-///	    |   \
-///	    |    \
-///	    |     \
-///	  miter    \
-///	 length     \
-///	    |        \
-///	    |        .\
-///	    |    .     \
-///	    |.   line   \
-///	     \    width  \
-///	      \           \
+///        |\
+///        | \ psi/2
+///        |  \
+///        |   \
+///        |    \
+///        |     \
+///      miter    \
+///     length     \
+///        |        \
+///        |        .\
+///        |    .     \
+///        |.   line   \
+///         \    width  \
+///          \           \
 ///
 ///
 /// The right triangle in that figure, (the line-width side is
@@ -115,27 +115,27 @@ pub fn compare(a: Slope, b: Slope) i32 {
 /// following expression relating miter length, angle and line
 /// width:
 ///
-///	1 /sin (psi/2) = miter_length / line_width
+///    1 /sin (psi/2) = miter_length / line_width
 ///
 /// The right-hand side of this relationship is the same ratio
 /// in which the miter limit (ml) is expressed. We want to know
 /// when the miter length is within the miter limit. That is
 /// when the following condition holds:
 ///
-///	1/sin(psi/2) <= ml
-///	1 <= ml sin(psi/2)
-///	1 <= ml² sin²(psi/2)
-///	2 <= ml² 2 sin²(psi/2)
-///				2·sin²(psi/2) = 1-cos(psi)
-///	2 <= ml² (1-cos(psi))
+///    1/sin(psi/2) <= ml
+///    1 <= ml sin(psi/2)
+///    1 <= ml² sin²(psi/2)
+///    2 <= ml² 2 sin²(psi/2)
+///                2·sin²(psi/2) = 1-cos(psi)
+///    2 <= ml² (1-cos(psi))
 ///
-///				in · out = |in| |out| cos (psi)
+///                in · out = |in| |out| cos (psi)
 ///
 /// in and out are both unit vectors, so:
 ///
-///				in · out = cos (psi)
+///                in · out = cos (psi)
 ///
-///	2 <= ml² (1 + in · out)
+///    2 <= ml² (1 + in · out)
 ///
 /// NOTE: The proof solution has a typo in Cairo, which you can usually easily
 /// see given that it is immediately repeated in code after the comments; while

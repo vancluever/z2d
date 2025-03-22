@@ -657,7 +657,7 @@ const RGBA16Vec = struct {
         if (limit) debug.assert(limit_len < vector_length);
         switch (src) {
             inline .rgb, .rgba, .alpha8 => |_src| {
-                const src_t = @typeInfo(@TypeOf(_src)).Pointer.child;
+                const src_t = @typeInfo(@TypeOf(_src)).pointer.child;
                 const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
                 const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
@@ -771,7 +771,7 @@ const RGBA16Vec = struct {
         if (limit) debug.assert(limit_len < vector_length);
         switch (dst) {
             inline .rgb, .rgba, .alpha8 => |_dst| {
-                const dst_t = @typeInfo(@TypeOf(_dst)).Pointer.child;
+                const dst_t = @typeInfo(@TypeOf(_dst)).pointer.child;
                 const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
                 const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
@@ -1137,7 +1137,7 @@ const IntegerOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(vec_elem_t, p0(dca, da), a(sca, dca, sa, da), b(sca, dca, sa, da));
             }
 
@@ -1226,7 +1226,7 @@ const IntegerOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(
                     vec_elem_t,
                     p0(sca, sa),
@@ -1314,7 +1314,7 @@ const IntegerOps = struct {
 
     // Clamps the value between the min and max u8 value.
     fn limitU8(x: anytype) @TypeOf(x) {
-        const max: @TypeOf(x) = if (@typeInfo(@TypeOf(x)) == .Vector)
+        const max: @TypeOf(x) = if (@typeInfo(@TypeOf(x)) == .vector)
             max_u8_vec
         else
             max_u8_scalar;
@@ -1324,7 +1324,7 @@ const IntegerOps = struct {
     // Utility integer-equivalent multiplication function for colors, downscales by
     // the max u8 value after multiplication. Supports both vectors and scalars.
     fn mul(a: anytype, b: anytype) @TypeOf(a, b) {
-        return if (@typeInfo(@TypeOf(a, b)) == .Vector)
+        return if (@typeInfo(@TypeOf(a, b)) == .vector)
             @divTrunc(a * b, max_u8_vec)
         else
             @divTrunc(a * b, max_u8_scalar);
@@ -1342,13 +1342,13 @@ const IntegerOps = struct {
     // color is floating-point normalized (a 0-1 value). Aptly named "inv" as it as
     // the effect of `inverting` the color.
     fn inv(a: anytype) @TypeOf(a) {
-        return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec - a else max_u8_scalar - a;
+        return if (@typeInfo(@TypeOf(a)) == .vector) max_u8_vec - a else max_u8_scalar - a;
     }
 
     // Utility integer-equivalent function for colors, equivalent to 1 + a when the
     // color is floating-point normalized (a 0-1 value). "Reverse" inversion.
     fn rInv(a: anytype) @TypeOf(a) {
-        return if (@typeInfo(@TypeOf(a)) == .Vector) max_u8_vec + a else max_u8_scalar + a;
+        return if (@typeInfo(@TypeOf(a)) == .vector) max_u8_vec + a else max_u8_scalar + a;
     }
 
     // Utility integer-equivalent function for colors, equivalent to a * (1 - b)
@@ -1364,7 +1364,7 @@ const IntegerOps = struct {
     }
 
     fn widenType(comptime T: type) type {
-        return if (@typeInfo(T) == .Vector) @Vector(vector_length, i32) else i32;
+        return if (@typeInfo(T) == .vector) @Vector(vector_length, i32) else i32;
     }
 };
 
@@ -1557,7 +1557,7 @@ const FloatOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(vec_elem_t, p0(dca, da), a(sca, dca, sa, da), b(sca, dca, sa, da));
             }
 
@@ -1632,7 +1632,7 @@ const FloatOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(
                     vec_elem_t,
                     p0(sca, dca, sa),
@@ -1710,7 +1710,7 @@ const FloatOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(
                     vec_elem_t,
                     p0(sca, dca, sa),
@@ -1789,7 +1789,7 @@ const FloatOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(
                     vec_elem_t,
                     p0(sca, sa),
@@ -1852,7 +1852,7 @@ const FloatOps = struct {
                 sa: anytype,
                 da: anytype,
             ) @TypeOf(sca, dca, sa, da) {
-                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).Vector.child;
+                const vec_elem_t = @typeInfo(@TypeOf(sca, dca, sa, da)).vector.child;
                 return @select(
                     vec_elem_t,
                     p0(da),
@@ -2077,7 +2077,7 @@ const FloatOps = struct {
                     _x: anytype,
                     _a: anytype,
                 ) @TypeOf(_c, _l, _n, _x, _a) {
-                    const vec_elem_t = @typeInfo(@TypeOf(_c, _l, _n, _x, _a)).Vector.child;
+                    const vec_elem_t = @typeInfo(@TypeOf(_c, _l, _n, _x, _a)).vector.child;
                     const t_l_n = _l - _n;
                     const t_x_l = _x - _l;
                     var r = _c;
@@ -2180,7 +2180,7 @@ const FloatOps = struct {
                     _s: anytype,
                     _d: anytype,
                 ) @TypeOf(_c, _n, _s, _d) {
-                    const vec_elem_t = @typeInfo(@TypeOf(_c, _n, _s, _d)).Vector.child;
+                    const vec_elem_t = @typeInfo(@TypeOf(_c, _n, _s, _d)).vector.child;
                     return @select(
                         vec_elem_t,
                         _d == splat(f32, 0.0),
@@ -2222,7 +2222,7 @@ const FloatOps = struct {
     };
 
     fn vecOrScalar(comptime T: type, value: anytype) vecOrScalarT(T) {
-        return if (@typeInfo(T) == .Vector or
+        return if (@typeInfo(T) == .vector or
             T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             splat(f32, value)
@@ -2231,7 +2231,7 @@ const FloatOps = struct {
     }
 
     fn vecOrScalarT(comptime T: type) type {
-        return if (@typeInfo(T) == .Vector or
+        return if (@typeInfo(T) == .vector or
             T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             @Vector(vector_length, f32)
@@ -2247,7 +2247,7 @@ const zero_float_vec = @import("internal/util.zig").zero_float_vec;
 const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 
 fn boolOrVec(comptime T: type) type {
-    return if (@typeInfo(T) == .Vector) @Vector(vector_length, bool) else bool;
+    return if (@typeInfo(T) == .vector) @Vector(vector_length, bool) else bool;
 }
 
 test "src_over" {

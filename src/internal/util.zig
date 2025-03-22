@@ -32,18 +32,18 @@ pub const TestingError = error{
 /// `@Vector(vector_length, T)`, to allow for SIMD and ease of utilization by
 /// the compositor.
 pub fn vectorize(comptime T: type) type {
-    var new_fields: [@typeInfo(T).Struct.fields.len]builtin.Type.StructField = undefined;
-    for (@typeInfo(T).Struct.fields, 0..) |f, i| {
+    var new_fields: [@typeInfo(T).@"struct".fields.len]builtin.Type.StructField = undefined;
+    for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
         new_fields[i] = .{
             .name = f.name,
             .type = @Vector(vector_length, f.type),
-            .default_value = null,
+            .default_value_ptr = null,
             .is_comptime = false,
             .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
     }
     return @Type(.{
-        .Struct = .{
+        .@"struct" = .{
             .layout = .auto,
             .fields = &new_fields,
             .decls = &.{},
@@ -63,11 +63,11 @@ pub fn splat(comptime T: type, value: anytype) @Vector(vector_length, T) {
 ///
 /// Based on https://github.com/ziglang/zig/issues/12815#issuecomment-1243043038
 pub fn gather(slice: anytype, index: anytype) @Vector(
-    @typeInfo(@TypeOf(index)).Vector.len,
-    @typeInfo(@TypeOf(slice)).Pointer.child,
+    @typeInfo(@TypeOf(index)).vector.len,
+    @typeInfo(@TypeOf(slice)).pointer.child,
 ) {
-    const vector_len = @typeInfo(@TypeOf(index)).Vector.len;
-    const Elem = @typeInfo(@TypeOf(slice)).Pointer.child;
+    const vector_len = @typeInfo(@TypeOf(index)).vector.len;
+    const Elem = @typeInfo(@TypeOf(slice)).pointer.child;
     var result: [vector_len]Elem = undefined;
     comptime var vec_i = 0;
     inline while (vec_i < vector_len) : (vec_i += 1) {

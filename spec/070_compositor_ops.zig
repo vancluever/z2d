@@ -25,7 +25,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         height,
     );
 
-    inline for (@typeInfo(z2d.compositor.Operator).Enum.fields, 0..) |op, i| {
+    inline for (@typeInfo(z2d.compositor.Operator).@"enum".fields, 0..) |op, i| {
         for (0..2) |j| {
             try draw(
                 alloc,
