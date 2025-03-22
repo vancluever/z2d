@@ -8,8 +8,10 @@ const simd = @import("std").simd;
 const testing = @import("std").testing;
 
 const colorpkg = @import("color.zig");
+const color_vector = @import("internal/color_vector.zig");
 const gradient = @import("gradient.zig");
 const pixel = @import("pixel.zig");
+const pixel_vector = @import("internal/pixel_vector.zig");
 
 const Gradient = @import("gradient.zig").Gradient;
 const Surface = @import("surface.zig").Surface;
@@ -605,12 +607,6 @@ pub fn runPixel(
     };
 }
 
-const max_u8_scalar: u16 = 255;
-const max_u8_vec: @Vector(vector_length, u16) = @splat(255);
-const zero_int_vec: @Vector(vector_length, u16) = @splat(0);
-const zero_float_vec = @import("internal/util.zig").zero_float_vec;
-const zero_color_vec = @import("internal/util.zig").zero_color_vec;
-
 /// Represents an RGBA value as 16bpc. Note that this is only for intermediary
 /// calculations, no channel should be bigger than an u8 after any particular
 /// compositor step.
@@ -644,23 +640,17 @@ const RGBA16 = struct {
     }
 };
 
-/// Represents an RGBA value as a series of 16bpc vectors. Note that this is
-/// only for intermediary calculations, no channel should be bigger than an u8
-/// after any particular compositor step.
 const RGBA16Vec = struct {
-    r: @Vector(vector_length, u16),
-    g: @Vector(vector_length, u16),
-    b: @Vector(vector_length, u16),
-    a: @Vector(vector_length, u16),
+    underlying: pixel_vector.RGBA16,
 
     fn fromPixel(src: pixel.Pixel) RGBA16Vec {
         const _src = pixel.RGBA.fromPixel(src);
-        return .{
+        return .{ .underlying = .{
             .r = @splat(_src.r),
             .g = @splat(_src.g),
             .b = @splat(_src.b),
             .a = @splat(_src.a),
-        };
+        } };
     }
 
     fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
@@ -671,7 +661,7 @@ const RGBA16Vec = struct {
                 const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
                 const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                return .{
+                return .{ .underlying = .{
                     .r = if (has_color)
                         transposeToVec(_src[idx..end], .r, limit, limit_len)
                     else
@@ -688,10 +678,10 @@ const RGBA16Vec = struct {
                         transposeToVec(_src[idx..end], .a, limit, limit_len)
                     else
                         max_u8_vec,
-                };
+                } };
             },
             inline .alpha4, .alpha2, .alpha1 => |_src| {
-                var result: RGBA16Vec = .{
+                var result: pixel_vector.RGBA16 = .{
                     .r = zero_int_vec,
                     .g = zero_int_vec,
                     .b = zero_int_vec,
@@ -709,7 +699,7 @@ const RGBA16Vec = struct {
                         if (i + 1 == limit_len) break;
                     }
                 }
-                return result;
+                return .{ .underlying = result };
             },
         }
     }
@@ -736,17 +726,18 @@ const RGBA16Vec = struct {
                 if (i + 1 == limit_len) break;
             }
         }
-        const result_rgba8 = src.underlying.getInterpolationMethod().interpolateEncodeVec(
+        const result_rgba8 = color_vector.interpolateEncodeVec(
+            src.underlying.getInterpolationMethod(),
             c0_vec,
             c1_vec,
             offsets_vec,
         );
-        return .{
+        return .{ .underlying = .{
             .r = result_rgba8.r,
             .g = result_rgba8.g,
             .b = result_rgba8.b,
             .a = result_rgba8.a,
-        };
+        } };
     }
 
     fn fromDither(
@@ -755,13 +746,19 @@ const RGBA16Vec = struct {
         comptime limit: bool,
         limit_len: usize,
     ) RGBA16Vec {
-        const result = src.underlying.getRGBAVec(src.x + @as(i32, @intCast(idx)), src.y, limit, limit_len);
-        return .{
+        const result = color_vector.fromDitherVecEncode(
+            &src.underlying,
+            src.x + @as(i32, @intCast(idx)),
+            src.y,
+            limit,
+            limit_len,
+        );
+        return .{ .underlying = .{
             .r = result.r,
             .g = result.g,
             .b = result.b,
             .a = result.a,
-        };
+        } };
     }
 
     fn toStride(
@@ -778,10 +775,10 @@ const RGBA16Vec = struct {
                 const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
                 const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                if (has_color) transposeFromVec(_dst[idx..end], self.r, .r, limit, limit_len);
-                if (has_color) transposeFromVec(_dst[idx..end], self.g, .g, limit, limit_len);
-                if (has_color) transposeFromVec(_dst[idx..end], self.b, .b, limit, limit_len);
-                if (has_alpha) transposeFromVec(_dst[idx..end], self.a, .a, limit, limit_len);
+                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.r, .r, limit, limit_len);
+                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.g, .g, limit, limit_len);
+                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.b, .b, limit, limit_len);
+                if (has_alpha) transposeFromVec(_dst[idx..end], self.underlying.a, .a, limit, limit_len);
             },
             inline .alpha4, .alpha2, .alpha1 => |_dst| {
                 for (0..vector_length) |i| {
@@ -789,7 +786,7 @@ const RGBA16Vec = struct {
                     dst_t.setInPacked(
                         _dst.buf,
                         _dst.px_offset + idx + i,
-                        dst_t.fromPixel(.{ .alpha8 = .{ .a = @intCast(self.a[i]) } }),
+                        dst_t.fromPixel(.{ .alpha8 = .{ .a = @intCast(self.underlying.a[i]) } }),
                     );
                     if (limit) {
                         if (i + 1 == limit_len) break;
@@ -800,78 +797,47 @@ const RGBA16Vec = struct {
     }
 
     fn runOperator(dst: RGBA16Vec, src: RGBA16Vec, op: Operator) RGBA16Vec {
-        return IntegerOps.run(op, dst, src);
+        return .{ .underlying = IntegerOps.run(op, dst.underlying, src.underlying) };
     }
-};
 
-/// Short-hand helpers so that we do not need to print raw strings in code.
-/// Should line up with the fields of RGBA16Vec.
-const VecField = enum {
-    r,
-    g,
-    b,
-    a,
-};
+    fn transposeToVec(
+        arr: anytype,
+        comptime field: VecField,
+        comptime limit: bool,
+        limit_len: usize,
+    ) @Vector(vector_length, u16) {
+        var result: @Vector(vector_length, u16) = zero_int_vec;
+        for (0..vector_length) |idx| {
+            result[idx] = @field(arr[idx], @tagName(field));
+            if (limit) {
+                if (idx + 1 == limit_len) break;
+            }
+        }
+        return result;
+    }
 
-// NOTE: anything that uses the transpose functions should assert
-// limit_len < vector_length upstream
-
-fn transposeToVec(
-    arr: anytype,
-    comptime field: VecField,
-    comptime limit: bool,
-    limit_len: usize,
-) @Vector(vector_length, u16) {
-    var result: @Vector(vector_length, u16) = zero_int_vec;
-    for (0..vector_length) |idx| {
-        result[idx] = @field(arr[idx], @tagName(field));
-        if (limit) {
-            if (idx + 1 == limit_len) break;
+    fn transposeFromVec(
+        arr: anytype,
+        src: @Vector(vector_length, u16),
+        comptime field: VecField,
+        comptime limit: bool,
+        limit_len: usize,
+    ) void {
+        for (0..vector_length) |idx| {
+            @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
+            if (limit) {
+                if (idx + 1 == limit_len) break;
+            }
         }
     }
-    return result;
-}
 
-fn transposeFromVec(
-    arr: anytype,
-    src: @Vector(vector_length, u16),
-    comptime field: VecField,
-    comptime limit: bool,
-    limit_len: usize,
-) void {
-    for (0..vector_length) |idx| {
-        @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
-        if (limit) {
-            if (idx + 1 == limit_len) break;
-        }
-    }
-}
-
-fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
-    return switch (src) {
-        inline .rgb, .rgba, .alpha8 => |_src| _src[idx].asPixel(),
-        inline .alpha4, .alpha2, .alpha1 => |_src| @TypeOf(_src).T.getFromPacked(
-            _src.buf,
-            _src.px_offset + idx,
-        ).asPixel(),
+    const VecField = enum {
+        r,
+        g,
+        b,
+        a,
     };
-}
-
-fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
-    return switch (dst) {
-        inline .rgb, .rgba, .alpha8 => |_dst| {
-            _dst[idx] = @typeInfo(@TypeOf(_dst)).Pointer.child.fromPixel(px);
-        },
-        inline .alpha4, .alpha2, .alpha1 => |_dst| {
-            const dst_t = @TypeOf(_dst).T;
-            dst_t.setInPacked(
-                _dst.buf,
-                _dst.px_offset + idx,
-                dst_t.fromPixel(px),
-            );
-        },
-    };
-}
+};
 
 const RGBAFloat = struct {
     underlying: colorpkg.LinearRGB,
@@ -891,7 +857,7 @@ const RGBAFloat = struct {
     }
 
     const Vector = struct {
-        underlying: colorpkg.LinearRGB.Vector,
+        underlying: color_vector.LinearRGB.T,
 
         fn fromPixel(src: pixel.Pixel) Vector {
             const _src = colorpkg.LinearRGB.decodeRGBARaw(pixel.RGBA.fromPixel(src));
@@ -909,22 +875,12 @@ const RGBAFloat = struct {
             comptime limit: bool,
             limit_len: usize,
         ) Vector {
-            // TODO: Clean this up once API stabilizes (it'd be nice
-            // not to have to intCast).
-            //
-            // We just re-use RGBA16Vec here and intCast down, this
-            // keeps us from having to do some messy generic
-            // programming and intCast is free in ReleaseFast. We
-            // *could* possibly export RGBA16Vec and use that in
-            // LinearRGB, but this should be fine for now; the
-            // expectation is that you'd be using ReleaseFast if you
-            // truly want performance.
             const _src = RGBA16Vec.fromStride(src, idx, limit, limit_len);
-            return .{ .underlying = colorpkg.LinearRGB.decodeRGBAVecRaw(.{
-                .r = @intCast(_src.r),
-                .g = @intCast(_src.g),
-                .b = @intCast(_src.b),
-                .a = @intCast(_src.a),
+            return .{ .underlying = color_vector.LinearRGB.decodeRGBAVecRaw(.{
+                .r = _src.underlying.r,
+                .g = _src.underlying.g,
+                .b = _src.underlying.b,
+                .a = _src.underlying.a,
             }) };
         }
 
@@ -950,7 +906,8 @@ const RGBAFloat = struct {
                     if (i + 1 == limit_len) break;
                 }
             }
-            return .{ .underlying = src.underlying.getInterpolationMethod().interpolateVec(
+            return .{ .underlying = color_vector.interpolateVec(
+                src.underlying.getInterpolationMethod(),
                 c0_vec,
                 c1_vec,
                 offsets_vec,
@@ -964,7 +921,8 @@ const RGBAFloat = struct {
             limit_len: usize,
         ) Vector {
             return .{
-                .underlying = src.underlying.getColorVec(
+                .underlying = color_vector.fromDitherVec(
+                    &src.underlying,
                     src.x + @as(i32, @intCast(idx)),
                     src.y,
                     limit,
@@ -980,14 +938,10 @@ const RGBAFloat = struct {
             comptime limit: bool,
             limit_len: usize,
         ) void {
-            const _src = colorpkg.LinearRGB.encodeRGBAVecRaw(self.underlying);
-            RGBA16Vec.toStride(
-                .{
-                    .r = _src.r,
-                    .g = _src.g,
-                    .b = _src.b,
-                    .a = _src.a,
-                },
+            const _src: RGBA16Vec = .{
+                .underlying = color_vector.LinearRGB.encodeRGBAVecRaw(self.underlying),
+            };
+            _src.toStride(
                 dst,
                 idx,
                 limit,
@@ -1037,7 +991,7 @@ const IntegerOps = struct {
     }
 
     fn clear(dst: anytype, src: anytype) @TypeOf(dst, src) {
-        const zero = if (@TypeOf(dst, src) == RGBA16Vec)
+        const zero = if (@TypeOf(dst, src) == pixel_vector.RGBA16)
             zero_int_vec
         else
             0;
@@ -1218,13 +1172,14 @@ const IntegerOps = struct {
                 const _sa: wide_t = sa;
                 const _da: wide_t = da;
                 return @intCast(
-                    rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(mulScalar(_dca, 2), _sca) - mul(_da, _sa),
+                    rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(mulScalar(_dca, 2), _sca) -
+                        mul(_da, _sa),
                 );
             }
         };
 
         return switch (@TypeOf(dst, src)) {
-            RGBA16Vec => .{
+            pixel_vector.RGBA16 => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1241,18 +1196,24 @@ const IntegerOps = struct {
 
     fn darken(dst: anytype, src: anytype) @TypeOf(dst, src) {
         return .{
-            .r = @min(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
-            .g = @min(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
-            .b = @min(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+            .r = @min(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) +
+                invMul(dst.r, src.a),
+            .g = @min(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) +
+                invMul(dst.g, src.a),
+            .b = @min(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) +
+                invMul(dst.b, src.a),
             .a = src.a + dst.a - mul(src.a, dst.a),
         };
     }
 
     fn lighten(dst: anytype, src: anytype) @TypeOf(dst, src) {
         return .{
-            .r = @max(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
-            .g = @max(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
-            .b = @max(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+            .r = @max(mul(src.r, dst.a), mul(dst.r, src.a)) + invMul(src.r, dst.a) +
+                invMul(dst.r, src.a),
+            .g = @max(mul(src.g, dst.a), mul(dst.g, src.a)) + invMul(src.g, dst.a) +
+                invMul(dst.g, src.a),
+            .b = @max(mul(src.b, dst.a), mul(dst.b, src.a)) + invMul(src.b, dst.a) +
+                invMul(dst.b, src.a),
             .a = src.a + dst.a - mul(src.a, dst.a),
         };
     }
@@ -1308,13 +1269,14 @@ const IntegerOps = struct {
                 const _sa: wide_t = sa;
                 const _da: wide_t = da;
                 return @intCast(
-                    rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(_sa, _da) - mul(mulScalar(_sca, 2), _dca),
+                    rInvMul(_sca, _da) + rInvMul(_dca, _sa) - mul(_sa, _da) -
+                        mul(mulScalar(_sca, 2), _dca),
                 );
             }
         };
 
         return switch (@TypeOf(dst, src)) {
-            RGBA16Vec => .{
+            pixel_vector.RGBA16 => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1340,9 +1302,12 @@ const IntegerOps = struct {
 
     fn exclusion(dst: anytype, src: anytype) @TypeOf(dst, src) {
         return .{
-            .r = (mul(src.r, dst.a) + mul(dst.r, src.a) - mulScalar(mul(src.r, dst.r), 2)) + invMul(src.r, dst.a) + invMul(dst.r, src.a),
-            .g = (mul(src.g, dst.a) + mul(dst.g, src.a) - mulScalar(mul(src.g, dst.g), 2)) + invMul(src.g, dst.a) + invMul(dst.g, src.a),
-            .b = (mul(src.b, dst.a) + mul(dst.b, src.a) - mulScalar(mul(src.b, dst.b), 2)) + invMul(src.b, dst.a) + invMul(dst.b, src.a),
+            .r = (mul(src.r, dst.a) + mul(dst.r, src.a) - mulScalar(mul(src.r, dst.r), 2)) +
+                invMul(src.r, dst.a) + invMul(dst.r, src.a),
+            .g = (mul(src.g, dst.a) + mul(dst.g, src.a) - mulScalar(mul(src.g, dst.g), 2)) +
+                invMul(src.g, dst.a) + invMul(dst.g, src.a),
+            .b = (mul(src.b, dst.a) + mul(dst.b, src.a) - mulScalar(mul(src.b, dst.b), 2)) +
+                invMul(src.b, dst.a) + invMul(dst.b, src.a),
             .a = src.a + dst.a - mul(src.a, dst.a),
         };
     }
@@ -1624,7 +1589,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1716,12 +1681,13 @@ const FloatOps = struct {
 
             fn c(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
                 const one = vecOrScalar(@TypeOf(dst, src), 1.0);
-                return sa * da * @min(one, dca / da * sa / (sa - sca)) + sca * (one - da) + dca * (one - sa);
+                return sa * da * @min(one, dca / da * sa / (sa - sca)) + sca * (one - da) +
+                    dca * (one - sa);
             }
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1794,12 +1760,13 @@ const FloatOps = struct {
 
             fn c(sca: anytype, dca: anytype, sa: anytype, da: anytype) @TypeOf(sca, dca, sa, da) {
                 const one = vecOrScalar(@TypeOf(dst, src), 1.0);
-                return sa * da * (one - @min(one, (one - dca / da) * sa / sca)) + sca * (one - da) + dca * (one - sa);
+                return sa * da * (one - @min(one, (one - dca / da) * sa / sca)) + sca * (one - da) +
+                    dca * (one - sa);
             }
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1862,7 +1829,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1968,7 +1935,7 @@ const FloatOps = struct {
         };
 
         return switch (@TypeOf(dst, src)) {
-            colorpkg.LinearRGB.Vector => .{
+            color_vector.LinearRGB.T => .{
                 .r = Ops.runVec(src.r, dst.r, src.a, dst.a),
                 .g = Ops.runVec(src.g, dst.g, src.a, dst.a),
                 .b = Ops.runVec(src.b, dst.b, src.a, dst.a),
@@ -1997,9 +1964,12 @@ const FloatOps = struct {
         const one = vecOrScalar(@TypeOf(dst, src), 1.0);
         const two = vecOrScalar(@TypeOf(dst, src), 2.0);
         return .{
-            .r = (src.r * dst.a + dst.r * src.a - two * src.r * dst.r) + src.r * (one - dst.a) + dst.r * (one - src.a),
-            .g = (src.g * dst.a + dst.g * src.a - two * src.g * dst.g) + src.g * (one - dst.a) + dst.g * (one - src.a),
-            .b = (src.b * dst.a + dst.b * src.a - two * src.b * dst.b) + src.b * (one - dst.a) + dst.b * (one - src.a),
+            .r = (src.r * dst.a + dst.r * src.a - two * src.r * dst.r) + src.r * (one - dst.a) +
+                dst.r * (one - src.a),
+            .g = (src.g * dst.a + dst.g * src.a - two * src.g * dst.g) + src.g * (one - dst.a) +
+                dst.g * (one - src.a),
+            .b = (src.b * dst.a + dst.b * src.a - two * src.b * dst.b) + src.b * (one - dst.a) +
+                dst.b * (one - src.a),
             .a = src.a + dst.a - src.a * dst.a,
         };
     }
@@ -2043,7 +2013,7 @@ const FloatOps = struct {
         const Vector = vectorize(NonSeparable);
         fn fromRGBT(T: type) type {
             return switch (T) {
-                colorpkg.LinearRGB.Vector => Vector,
+                color_vector.LinearRGB.T => Vector,
                 colorpkg.LinearRGB => NonSeparable,
                 else => @compileError("unsupported type"),
             };
@@ -2051,7 +2021,7 @@ const FloatOps = struct {
 
         fn toRGBT(T: type) type {
             return switch (T) {
-                Vector => colorpkg.LinearRGB.Vector,
+                Vector => color_vector.LinearRGB.T,
                 NonSeparable => colorpkg.LinearRGB,
                 else => @compileError("unsupported type"),
             };
@@ -2114,13 +2084,23 @@ const FloatOps = struct {
                     r = @select(
                         vec_elem_t,
                         p_n_neg(_n),
-                        @select(vec_elem_t, t_l_n == splat(f32, 0.0), splat(f32, 0.0), n_neg(_c, _l, t_l_n)),
+                        @select(
+                            vec_elem_t,
+                            t_l_n == splat(f32, 0.0),
+                            splat(f32, 0.0),
+                            n_neg(_c, _l, t_l_n),
+                        ),
                         r,
                     );
                     r = @select(
                         vec_elem_t,
                         p_x_high(_x, _a),
-                        @select(vec_elem_t, t_x_l == splat(f32, 0.0), splat(f32, 0.0), x_high(_c, _l, t_x_l, _a)),
+                        @select(
+                            vec_elem_t,
+                            t_x_l == splat(f32, 0.0),
+                            splat(f32, 0.0),
+                            x_high(_c, _l, t_x_l, _a),
+                        ),
                         r,
                     );
 
@@ -2243,7 +2223,7 @@ const FloatOps = struct {
 
     fn vecOrScalar(comptime T: type, value: anytype) vecOrScalarT(T) {
         return if (@typeInfo(T) == .Vector or
-            T == colorpkg.LinearRGB.Vector or
+            T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             splat(f32, value)
         else
@@ -2252,13 +2232,19 @@ const FloatOps = struct {
 
     fn vecOrScalarT(comptime T: type) type {
         return if (@typeInfo(T) == .Vector or
-            T == colorpkg.LinearRGB.Vector or
+            T == color_vector.LinearRGB.T or
             T == NonSeparable.Vector)
             @Vector(vector_length, f32)
         else
             f32;
     }
 };
+
+const max_u8_scalar: u16 = 255;
+const max_u8_vec = splat(u16, 255);
+const zero_int_vec = splat(u16, 0);
+const zero_float_vec = @import("internal/util.zig").zero_float_vec;
+const zero_color_vec = @import("internal/util.zig").zero_color_vec;
 
 fn boolOrVec(comptime T: type) type {
     return if (@typeInfo(T) == .Vector) @Vector(vector_length, bool) else bool;
@@ -2287,15 +2273,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 3, .g = 63, .b = 62 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 4, .g = 67, .b = 66 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 5, .g = 84, .b = 83 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 0, .g = 0, .b = 0 } },
@@ -2308,7 +2309,12 @@ test "src_over" {
         const bg_mul = bg.multiply();
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 54, .g = 10, .b = 63, .a = 255 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 43, .g = 64, .b = 102, .a = 249 } },
@@ -2316,15 +2322,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 57, .b = 55, .a = 249 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 60, .b = 59, .a = 249 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 4, .g = 76, .b = 74, .a = 247 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
@@ -2337,7 +2358,12 @@ test "src_over" {
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
@@ -2345,15 +2371,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 247 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
@@ -2366,7 +2407,12 @@ test "src_over" {
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
@@ -2374,15 +2420,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
@@ -2395,7 +2456,12 @@ test "src_over" {
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
@@ -2403,15 +2469,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
@@ -2424,7 +2505,12 @@ test "src_over" {
         var bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
@@ -2446,15 +2532,30 @@ test "src_over" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .src_over),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(),
+                .src_over,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
@@ -2486,15 +2587,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 190, .b = 186 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 186, .b = 182 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 10, .g = 169, .b = 166 } },
-            runPixel(.integer, bg_rgb.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_rgb.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 15, .g = 254, .b = 249 } },
@@ -2507,7 +2623,12 @@ test "dst_in" {
         const bg_mul = bg.multiply();
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
@@ -2515,15 +2636,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 167, .b = 163, .a = 167 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 8, .g = 152, .b = 148, .a = 152 } },
-            runPixel(.integer, bg_mul.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_mul.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
@@ -2536,7 +2672,12 @@ test "dst_in" {
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
@@ -2544,15 +2685,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 167 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 152 } },
-            runPixel(.integer, bg_alpha8.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha8.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
@@ -2565,7 +2721,12 @@ test "dst_in" {
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
@@ -2573,15 +2734,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 10 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 9 } },
-            runPixel(.integer, bg_alpha4.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha4.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
@@ -2594,7 +2770,12 @@ test "dst_in" {
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
@@ -2602,15 +2783,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha8.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha4.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
-            runPixel(.integer, bg_alpha2.asPixel(), pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha2.asPixel(),
+                pixel.Alpha2.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
@@ -2623,7 +2819,12 @@ test "dst_in" {
         const bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.RGB.fromPixel(fg.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.RGB.fromPixel(fg.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
@@ -2639,15 +2840,30 @@ test "dst_in" {
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha8.fromPixel(fg_127.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha4.fromPixel(fg_127.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
-            runPixel(.integer, bg_alpha1.asPixel(), pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(), .dst_in),
+            runPixel(
+                .integer,
+                bg_alpha1.asPixel(),
+                pixel.Alpha2.fromPixel(fg_127.asPixel()).asPixel(),
+                .dst_in,
+            ),
         );
         try testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
