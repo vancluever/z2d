@@ -13,7 +13,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     const height = 300;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = try z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     context.setAntiAliasingMode(aa_mode);

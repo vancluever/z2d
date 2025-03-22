@@ -27,7 +27,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     defer gradient.deinit(alloc);
     try gradient.addStop(alloc, 0, .{ .rgba = .{ 0, 0, 0, 0 } });
     try gradient.addStop(alloc, 1, .{ .rgba = .{ 1, 1, 1, 1 } });
-    var context = try z2d.Context.init(alloc, &dst_sfc);
+    var context = z2d.Context.init(alloc, &dst_sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
     context.setSource(gradient.asPattern());

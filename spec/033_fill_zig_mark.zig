@@ -39,7 +39,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     // </g>
     // </svg>
 
-    var context = try z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
     context.setAntiAliasingMode(aa_mode);

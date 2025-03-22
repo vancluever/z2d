@@ -24,9 +24,6 @@ const native_endian = builtin.cpu.arch.endian();
 pub const Error = error{
     /// Error during streaming graphical data.
     BytesWrittenMismatch,
-
-    /// The surface format is unsupported for export.
-    UnsupportedSurfaceFormat,
 };
 
 /// **Note for autodoc viewers:** Several members of this error set have been
@@ -77,7 +74,7 @@ fn writePNGMagic(file: fs.File) fs.File.WriteError!void {
 }
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteError)!void {
+fn writePNGIHDR(file: fs.File, sfc: surface.Surface) fs.File.WriteError!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
@@ -113,7 +110,7 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (Error || fs.File.WriteErro
     );
 }
 
-fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) (Error || fs.File.WriteError)!void {
+fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) fs.File.WriteError!void {
     const gamma: u32 = @intFromFloat((switch (profile) {
         .linear => 1 / color.LinearRGB.gamma,
         .srgb => 1 / color.SRGB.gamma,

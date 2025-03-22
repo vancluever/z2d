@@ -93,6 +93,8 @@ More details for everything above can be found in the compositor PR
 
 OTHER CHANGES
 
+* `Context.init` no longer returns errors, and `Path` can now be initialized
+  off the zero value.
 * `setSource` and `getSource` now take and return `Pattern` types specifically,
   instead of pixels. This is to accommodate gradients; you can still set pixel
   data directly as a source using `setSourceToPixel`.

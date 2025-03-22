@@ -1,21 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024 Chris Marchesi
 
-//! Pattern types and interfaces. Patterns are sources of pixel data, such as
-//! "opaque" single-pixel patterns, gradients, or even whole other surfaces.
-//!
-//! The main purpose the `Pattern` union serves is to unify all possible pixel
-//! sources to be able to be passed through to the context via
-//! `Context.setSource`. There is not much functionality here otherwise,
-//! although `Pattern.getPixel` does serve as a baseline for all patterns to
-//! assert that they fulfill their basic role of supplying pixel data for
-//! drawing operations.
-//!
-//! For more in-depth pattern management, consult the packages holding the
-//! primitives, such as `gradient`.
-//!
-//! Currently, only opaque patterns and linear gradients are supported, others
-//! are WIP.
+//! Pattern types and interfaces.
 const testing = @import("std").testing;
 
 const gradient = @import("gradient.zig");
@@ -31,7 +17,18 @@ pub const PatternType = enum {
     dither,
 };
 
-/// Represents an interface as a union of all patterns.
+/// Represents sources of pixel data, such as "opaque" single-pixel patterns,
+/// gradients, or dithering (additional patterns are WIP).
+///
+/// The main purpose the `Pattern` union serves is to unify all possible pixel
+/// sources to be able to be passed through to the context via
+/// `Context.setSource`. There is not much functionality here otherwise,
+/// although `Pattern.getPixel` does serve as a baseline for all patterns to
+/// assert that they fulfill their basic role of supplying pixel data for
+/// drawing operations.
+///
+/// For more in-depth pattern management, consult the packages holding the
+/// primitives, such as `gradient` or `pixel`.
 pub const Pattern = union(PatternType) {
     opaque_pattern: OpaquePattern,
     gradient: *Gradient,

@@ -32,7 +32,7 @@ const height = 300;
 
 pub fn render(alloc: mem.Allocator) !z2d.Surface {
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
-    var context = try z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(alloc, &sfc);
     defer context.deinit();
     context.setAntiAliasingMode(.none);
 
