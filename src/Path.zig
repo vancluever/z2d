@@ -4,7 +4,23 @@
 //! Path is the "path builder" type, and contains a set of sub-paths used for
 //! filling or stroking operations.
 //!
-//! Note that the same allocator needs to be used for the lifetime of the path.
+//! Paths can be initialized via:
+//!
+//! * An empty value, or using `initCapacity` - when done this way, you must
+//! use the methods that take an allocator (e.g., `moveTo`) and call `deinit`
+//! when done. Note that the same allocator needs to be used for the lifetime
+//! of the path.
+//!
+//! * By using `initBuffer` and the methods that do not take an allocator
+//! (e.g., `moveToAssumeCapacity`). Using this method, you manage the node
+//! memory manually and `deinit` should not be called.
+//!
+//! A `Context` contains a managed `Path`, and you only need to use this
+//! package directly if you are not using it.
+//!
+//! You may also be interested in `StaticPath`, which is an infallible wrapper
+//! over the static buffer-managed pattern that you would get by using
+//! `initBuffer` here.
 const Path = @This();
 
 const std = @import("std");
@@ -37,7 +53,7 @@ pub const Error = error{
 
 /// The underlying node set. Do not edit or populate this directly, use the
 /// builder functions (e.g., `moveTo`, `lineTo`, `curveTo`, `close`, etc).
-nodes: std.ArrayListUnmanaged(PathNode),
+nodes: std.ArrayListUnmanaged(PathNode) = .{},
 
 /// The start of the current subpath when working with drawing operations.
 initial_point: ?Point = null,

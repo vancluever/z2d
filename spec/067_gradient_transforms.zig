@@ -23,7 +23,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try linear.addStop(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
     try linear.addStop(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
     try linear.addStop(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
-    var context = try z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(alloc, &sfc);
     defer context.deinit();
     context.scale(2, 2);
     context.setAntiAliasingMode(aa_mode);

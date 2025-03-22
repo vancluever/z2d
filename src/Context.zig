@@ -51,11 +51,11 @@ transformation: Transformation = Transformation.identity,
 /// Initializes a `Context` with the passed in allocator and surface. Call
 /// `deinit` to release any resources managed solely by the context, such as
 /// the managed `Path`.
-pub fn init(alloc: mem.Allocator, surface: *Surface) mem.Allocator.Error!Context {
+pub fn init(alloc: mem.Allocator, surface: *Surface) Context {
     return .{
         .alloc = alloc,
         .surface = surface,
-        .path = try Path.initCapacity(alloc, 0),
+        .path = .{},
     };
 }
 

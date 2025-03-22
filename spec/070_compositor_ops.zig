@@ -78,7 +78,7 @@ fn draw(
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, 100, 100);
     defer scratch_sfc.deinit(alloc);
 
-    var context = try z2d.Context.init(alloc, &scratch_sfc);
+    var context = z2d.Context.init(alloc, &scratch_sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
     context.setPrecision(precision);
