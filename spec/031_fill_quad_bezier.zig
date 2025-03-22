@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Renders and fills quadratic beziers and degenerate curves (where one
 //! of the control points is the same as the start or end point) on a 300x300

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Renders and fills multiple shapes using a single path operation, used
 //! to ensure we can do this without having to fill each polygon individually.

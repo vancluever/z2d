@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 //   Copyright (c) 2024 Mitchell Hashimoto
 
 //! Case: Renders and fills the ghostty logo (https://ghostty.org) using a

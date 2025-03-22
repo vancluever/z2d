@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 //   Copyright © 2002 University of Southern California
 //
 // Portions of the code in this file have been derived and adapted from the

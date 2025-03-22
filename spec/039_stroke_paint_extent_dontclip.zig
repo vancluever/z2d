@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Ensures that certain extents don't get clipped on the larger
 //! y-boundary.

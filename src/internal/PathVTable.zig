@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! An interface for the path builder. Used by arc methods to deconstruct said
 //! operations into spline instructions.

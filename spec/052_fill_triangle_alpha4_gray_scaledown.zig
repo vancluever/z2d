@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Renders and fills a triangle on a 300x300 surface using alpha8 for
 //! grayscale, to an alpha4 surface.

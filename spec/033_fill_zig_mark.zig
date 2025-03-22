@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Renders the Zig logomark. Interpreted from:
 //!   https://github.com/ziglang/logo/blob/9d06c090ca39ef66019a639241ea2d7e448b9fe1/zig-mark.svg

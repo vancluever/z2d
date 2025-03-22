@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024 Chris Marchesi
+//   Copyright © 2024-2025 Chris Marchesi
 
 //! `Context` represents the managed drawing interface to z2d. It holds a
 //! `Path`, `Surface`, and `Pattern` that it uses for these operations and a
