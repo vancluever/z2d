@@ -26,7 +26,7 @@ pub fn main() !void {
 
     var context = z2d.Context.init(alloc, &surface);
     defer context.deinit();
-    context.setSource(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
     try fillMark(&context);
     try z2d.png_exporter.writeToPNGFile(surface, "zig-mark.png", .{});
 }
