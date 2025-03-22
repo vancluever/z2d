@@ -15,9 +15,17 @@ const heap = @import("std").heap;
 const mem = @import("std").mem;
 const z2d = @import("z2d");
 
+var debug_allocator: heap.DebugAllocator(.{}) = .init;
+
 pub fn main() !void {
-    var gpa = heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
+    const alloc, const is_debug = switch (builtin.mode) {
+        .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+        .ReleaseFast, .ReleaseSmall => .{ heap.smp_allocator, false },
+    };
+
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
 
     const width = 153;
     const height = 140;
