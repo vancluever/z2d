@@ -28,12 +28,6 @@
 //!
 //! Note that all color values are stored de-multiplied, and are expected to be
 //! supplied as such (unless otherwise specified).
-//!
-//! Additionally, note that this package exports vectorized functionality to
-//! support the compositor. This functionality should be considered unstable
-//! internal API. Keep this in mind if you use said functionality; it may
-//! experience a high degree of change, be inconsistently exported and/or later
-//! removed.
 
 const math = @import("std").math;
 const testing = @import("std").testing;
