@@ -11,6 +11,7 @@ logo](https://github.com/ziglang/logo) logomark:
 <summary>Click to expand</summary>
 
 ```zig
+const builtin = @import("builtin");
 const heap = @import("std").heap;
 const z2d = @import("z2d");
 
