@@ -12,7 +12,6 @@ logo](https://github.com/ziglang/logo) logomark:
 
 ```zig
 const heap = @import("std").heap;
-const mem = @import("std").mem;
 const z2d = @import("z2d");
 
 var debug_allocator: heap.DebugAllocator(.{}) = .init;
