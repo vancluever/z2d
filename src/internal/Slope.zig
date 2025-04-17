@@ -44,10 +44,16 @@ pub fn calculate(self: Slope) f64 {
 ///   * == 0 when a is the same as b
 ///   * > 0 when a is larger than b
 pub fn compare(a: Slope, b: Slope) i32 {
+    // We snap our b slope to our a slope if the differences are below the f64
+    // epsilon. This ensures downstream calculations that depend on slopes
+    // being non-parallel do not produce undefined behavior or NaNs.
+    const bdy = if (@abs(b.dy - a.dy) > math.floatEps(f64)) b.dy else a.dy;
+    const bdx = if (@abs(b.dx - a.dx) > math.floatEps(f64)) b.dx else a.dx;
+
     // Do basic comparison first. Our comparison is done multiplicatively
     // on the vector (saves division, allows for calculation of things like
     // clockwise/counterclockwise direction, etc).
-    const cmp = math.sign(a.dy * b.dx - b.dy * a.dx);
+    const cmp = math.sign(a.dy * bdx - bdy * a.dx);
     if (cmp != 0) {
         return @intFromFloat(cmp);
     }
@@ -56,9 +62,9 @@ pub fn compare(a: Slope, b: Slope) i32 {
 
     // Zero vectors all compare equal, and more positive than any non-zero
     // vector.
-    if (a.dx == 0 and a.dy == 0 and b.dx == 0 and b.dy == 0) return 0;
+    if (a.dx == 0 and a.dy == 0 and bdx == 0 and bdy == 0) return 0;
     if (a.dx == 0 and a.dy == 0) return 1;
-    if (b.dx == 0 and b.dy == 0) return -1;
+    if (bdx == 0 and bdy == 0) return -1;
 
     // Handler logic for vectors that are either equal to pi or differ by
     // exactly pi. Note our current f64 implementation probably makes these
@@ -69,7 +75,7 @@ pub fn compare(a: Slope, b: Slope) i32 {
     // We check if we need to do comparison by checking for the sign (note
     // in Cairo, this is done using XOR on the sign bit, not too sure if
     // this would be faster than math.sign on fixed point or not).
-    if (math.sign(a.dx) != math.sign(b.dx) or math.sign(a.dy) != math.sign(b.dy)) {
+    if (math.sign(a.dx) != math.sign(bdx) or math.sign(a.dy) != math.sign(bdy)) {
         // In this case, a is always considered less than b.
         return if (a.dx > 0 or (a.dx == 0 and a.dy > 0)) -1 else 1;
     }
