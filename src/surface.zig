@@ -345,7 +345,9 @@ pub fn ImageSurface(comptime T: type) type {
             if (width < 0) return error.InvalidWidth;
             if (height < 0) return error.InvalidHeight;
 
-            const buf = try alloc.alloc(T, @intCast(height * width));
+            const h_usize: usize = @intCast(height);
+            const w_usize: usize = @intCast(width);
+            const buf = try alloc.alloc(T, h_usize * w_usize);
             return initBuffer(buf, width, height, initial_px_);
         }
 
@@ -490,7 +492,10 @@ pub fn ImageSurface(comptime T: type) type {
         /// safety-checked undefined behavior.
         pub fn paintStride(self: *ImageSurface(T), x: i32, y: i32, len: usize, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            const start: usize = @intCast(self.width * y + x);
+            const w_usize: usize = @intCast(self.width);
+            const y_usize: usize = @intCast(y);
+            const x_usize: usize = @intCast(x);
+            const start = w_usize * y_usize + x_usize;
             @memset(self.buf[start .. start + len], T.fromPixel(px));
         }
     };
@@ -718,7 +723,10 @@ pub fn PackedImageSurface(comptime T: type) type {
             // individually set, if they exist.
             const src_px = T.fromPixel(px);
             const scale = 8 / @bitSizeOf(T);
-            const start: usize = @intCast(self.width * y + x);
+            const w_usize: usize = @intCast(self.width);
+            const y_usize: usize = @intCast(y);
+            const x_usize: usize = @intCast(x);
+            const start = w_usize * y_usize + x_usize;
             const end = (start + len);
             const slice_start: usize = start / scale;
             const slice_end: usize = end / scale;
