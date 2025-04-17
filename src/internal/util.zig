@@ -22,8 +22,11 @@ pub fn runCases(name: []const u8, cases: anytype, f: *const fn (case: anytype) T
 /// Error union for `runCases`' test function. Must accommodate all of the
 /// appropriate errors from the testing package in use.
 pub const TestingError = error{
+    TestUnexpectedError, // Use as placeholder for unexpected errors
+
     TestExpectedEqual,
     TestExpectedApproxEqAbs,
+    TestUnexpectedResult,
     InvalidMatrix, // Transformation.Error.InvalidMatrix
     OutOfMemory, // std.mem.Allocator.Error
 };

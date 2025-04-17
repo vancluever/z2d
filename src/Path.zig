@@ -53,7 +53,7 @@ pub const Error = error{
 
 /// The underlying node set. Do not edit or populate this directly, use the
 /// builder functions (e.g., `moveTo`, `lineTo`, `curveTo`, `close`, etc).
-nodes: std.ArrayListUnmanaged(PathNode) = .{},
+nodes: std.ArrayListUnmanaged(PathNode) = .empty,
 
 /// The start of the current subpath when working with drawing operations.
 initial_point: ?Point = null,
@@ -75,6 +75,9 @@ tolerance: f64 = options.default_tolerance,
 /// The default CTM is the identity matrix (i.e., 1:1 with user space and
 /// device space).
 transformation: Transformation = Transformation.identity,
+
+/// Represents an empty `Path`.
+pub const empty: Path = .{};
 
 /// Initializes the path set with an initial capacity of exactly `num`. Call
 /// `deinit` to release the node list when complete.
