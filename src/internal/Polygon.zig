@@ -37,6 +37,7 @@ pub fn plot(
     point: Point,
     before_: ?*CornerList.Node,
 ) mem.Allocator.Error!void {
+    debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
     const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
@@ -53,6 +54,7 @@ pub fn plot(
 /// Like plot, but adds points in the reverse direction (i.e., at the start of
 /// the polygon instead of the end.
 pub fn plotReverse(self: *Polygon, alloc: mem.Allocator, point: Point) mem.Allocator.Error!void {
+    debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
     const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
