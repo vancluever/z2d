@@ -1,6 +1,12 @@
-## 0.6.1-pre (Unreleased)
+## 0.7.0 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Added a bit of tolerance to fix stroke operations where some line joins are
+  at such a small slope difference that floating-point error would cause them
+  to be considered parallel. [#102](https://github.com/vancluever/z2d/pull/102)
+* Fixed integer casting for working with large-dimension surfaces.
+  [#101](https://github.com/vancluever/z2d/pull/101)
 
 ## 0.6.0 (March 22, 2025)
 
