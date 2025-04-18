@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const debug = @import("std").debug;
+const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
@@ -623,5 +624,50 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             next_ = n.next;
         }
         try testing.expectEqual(4, corners_len);
+    }
+}
+
+test "slope difference below epsilon does not produce NaN" {
+    {
+        // p1 -> p2 is equal
+        const alloc = testing.allocator;
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        defer nodes.deinit(alloc);
+        try nodes.append(
+            alloc,
+            .{ .move_to = .{ .point = .{ .x = 2.8641015625e2, .y = 1.43154296875e1 } } },
+        );
+        try nodes.append(
+            alloc,
+            .{ .line_to = .{ .point = .{ .x = 2.822548828125e2, .y = 1.6e1 } } },
+        );
+        try nodes.append(
+            alloc,
+            .{ .line_to = .{ .point = .{ .x = 2.80990234375e2, .y = 1.65126953125e1 } } },
+        );
+
+        var result = try plot(alloc, nodes.items, .{
+            .cap_mode = .butt,
+            .ctm = Transformation.identity,
+            .dashes = &.{},
+            .dash_offset = 0,
+            .join_mode = .miter,
+            .miter_limit = 10,
+            .scale = 1,
+            .thickness = 2,
+            .tolerance = 0.01,
+        });
+        defer result.deinit(alloc);
+        try testing.expectEqual(1, result.polygons.len());
+        var idx: usize = 0;
+        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
+        while (next_) |n| {
+            if (!math.isFinite(n.data.x) or !math.isFinite(n.data.y)) {
+                debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, n.data });
+                return error.TestExpectedFinite;
+            }
+            idx += 1;
+            next_ = n.next;
+        }
     }
 }
