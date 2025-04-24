@@ -367,7 +367,7 @@ pub const SurfaceCompositor = struct {
         while (src_y < height) : (src_y += 1) {
             const dst_start_x = src_start_x + dst_x;
             const dst_start_y = src_y + dst_y;
-            const len: usize = @intCast(width - src_start_x);
+            const len: usize = @intCast(@max(0, width - src_start_x));
             // Get our destination stride
             const _dst = dst.getStride(dst_start_x, dst_start_y, len);
             // Build our batch for this line
@@ -3638,4 +3638,21 @@ test "composite, all operators (float)" {
         }
     };
     try runCases(name, cases, TestFn.f);
+}
+
+test "out-of-bounds compositor testing" {
+    var dst_sfc = try Surface.init(.image_surface_rgb, testing.allocator, 100, 100);
+    defer dst_sfc.deinit(testing.allocator);
+    var src_sfc = try Surface.init(.image_surface_alpha8, testing.allocator, 10, 10);
+    defer src_sfc.deinit(testing.allocator);
+
+    for (0..5) |i| {
+        const x_offset: i32 = @intCast(i * 50);
+        for (0..5) |j| {
+            const y_offset: i32 = @intCast(j * 50);
+            SurfaceCompositor.run(&dst_sfc, -50 + x_offset, -50 + y_offset, 1, .{
+                .{ .operator = .src_over, .src = .{ .surface = &src_sfc } },
+            }, .{});
+        }
+    }
 }
