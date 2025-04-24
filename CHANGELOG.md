@@ -2,6 +2,9 @@
 
 BUG FIXES:
 
+* Fixed an issue where composition of a surface that would be completely
+  out-of-bounds on the x-axis (but in-bounds on the y-axis) was causing a
+  stride length overflow. [#105](https://github.com/vancluever/z2d/pull/105)
 * Added a bit of tolerance to fix stroke operations where some line joins are
   at such a small slope difference that floating-point error would cause them
   to be considered parallel. [#102](https://github.com/vancluever/z2d/pull/102)
