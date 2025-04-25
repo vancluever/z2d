@@ -1,3 +1,7 @@
+## 0.6.2-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.6.1 (April 25, 2025)
 
 BUG FIXES:
