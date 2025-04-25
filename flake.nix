@@ -1,11 +1,7 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  inputs.zls = {
-    url = "github:zigtools/zls/0.14.0";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
 
-  outputs = { self, nixpkgs, zls }:
+  outputs = { self, nixpkgs }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -31,7 +27,7 @@
           pkgs.mkShell {
             packages = with pkgs; [
               zig_0_14
-              zls.packages.${system}.zls
+              zls
               python3
             ];
           }
