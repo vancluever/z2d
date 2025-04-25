@@ -1,4 +1,4 @@
-## 0.6.1 (Unreleased)
+## 0.6.1 (April 25, 2025)
 
 BUG FIXES:
 
