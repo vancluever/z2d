@@ -6,24 +6,31 @@ Bumped version for dev.
 
 BUG FIXES:
 
-* Fixed an issue where composition of a surface that would be completely
-  out-of-bounds on the x-axis (but in-bounds on the y-axis) was causing a
-  stride length overflow. [#105](https://github.com/vancluever/z2d/pull/105)
 * Added a bit of tolerance to fix stroke operations where some line joins are
   at such a small slope difference that floating-point error would cause them
   to be considered parallel. [#102](https://github.com/vancluever/z2d/pull/102)
 * Fixed integer casting for working with large-dimension surfaces.
   [#101](https://github.com/vancluever/z2d/pull/101)
 
+SECURITY:
+
+* Fixed an issue where composition of a surface that would be completely
+  out-of-bounds on the x-axis (but in-bounds on the y-axis) was causing a
+  stride length overflow. [#105](https://github.com/vancluever/z2d/pull/105)
+    - This has been marked as a security vulnerability due to its potential for
+      invalid memory access or corruption in unsafe release modes. More detail
+      in [GHSA-mm4c-p35v-7hx3](https://github.com/vancluever/z2d/security/advisories/GHSA-mm4c-p35v-7hx3).
+      Those using z2d after v0.5.1 and before v0.6.1 (including non-tagged
+      versions between) are recommended to update to 0.6.1. If you are still on
+      Zig 0.13.0, the advice is to downgrade to v0.5.1, the last unaffected
+      tagged version.
+
 ## 0.6.0 (March 22, 2025)
 
 ZIG 0.14.0 REQUIRED
 
-Version 0.6.0 now requires Zig 0.14.0.
-
-Our cut to Zig 0.14.0 has been kept as close as possible to the release of
-0.6.0, and those still needing 0.13.0 should be able to get most, if not all,
-of its functionality by fetching commit d0acc1d387307c7b1f0f6f19f0c90f0cdbf52e58.
+Version 0.6.0 now requires Zig 0.14.0. Those requiring Zig 0.13.0 must use
+version 0.5.1 or earlier (for details, see the security notes for 0.6.1).
 
 GRADIENTS
 

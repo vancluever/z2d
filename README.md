@@ -181,8 +181,7 @@ vector rasterization, suitable for UI design and other similar tasks.
 
 `zig fetch --save git+https://github.com/vancluever/z2d#[tag or commit]`
 
-Zig 0.14.0 is required (check the CHANGELOG for details on commits that you can
-use for Zig 0.13.0).
+Zig 0.14.0 is required; those requiring Zig 0.13.0 should use v0.5.1.
 
 ## Documentation and examples
 
