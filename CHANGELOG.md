@@ -1,6 +1,14 @@
-## 0.6.2-pre (Unreleased)
+## 0.6.2 (Unreleased)
 
-Bumped version for dev.
+ENHANCEMENTS:
+
+* Surfaces can no longer have dimensions that would ultimately result in
+  an zero-size surface. [#107](https://github.com/vancluever/z2d/pull/107)
+
+* Added additional checks in the painter during composition to make sure that
+  the polygon(s) to draw will be in the bounds of the destination surface. This
+  adds additional validation and safety surrounding degenerate cases and avoids
+  unnecessary work. [#106](https://github.com/vancluever/z2d/pull/106)
 
 ## 0.6.1 (April 25, 2025)
 
