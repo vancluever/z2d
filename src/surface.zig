@@ -342,8 +342,8 @@ pub fn ImageSurface(comptime T: type) type {
             height: i32,
             initial_px_: ?T,
         ) (Surface.Error || mem.Allocator.Error)!ImageSurface(T) {
-            if (width < 0) return error.InvalidWidth;
-            if (height < 0) return error.InvalidHeight;
+            if (width < 1) return error.InvalidWidth;
+            if (height < 1) return error.InvalidHeight;
 
             const h_usize: usize = @intCast(height);
             const w_usize: usize = @intCast(width);
@@ -360,8 +360,8 @@ pub fn ImageSurface(comptime T: type) type {
             height: i32,
             initial_px_: ?T,
         ) ImageSurface(T) {
-            if (width < 0) @panic("invalid width");
-            if (height < 0) @panic("invalid height");
+            if (width < 1) @panic("invalid width");
+            if (height < 1) @panic("invalid height");
 
             if (initial_px_) |initial_px| {
                 @memset(buf, initial_px);
@@ -543,8 +543,8 @@ pub fn PackedImageSurface(comptime T: type) type {
             height: i32,
             initial_px_: ?T,
         ) (Surface.Error || mem.Allocator.Error)!PackedImageSurface(T) {
-            if (width < 0) return error.InvalidWidth;
-            if (height < 0) return error.InvalidHeight;
+            if (width < 1) return error.InvalidWidth;
+            if (height < 1) return error.InvalidHeight;
 
             const h_usize: usize = @intCast(height);
             const w_usize: usize = @intCast(width);
@@ -562,8 +562,8 @@ pub fn PackedImageSurface(comptime T: type) type {
             height: i32,
             initial_px_: ?T,
         ) PackedImageSurface(T) {
-            if (width < 0) @panic("invalid width");
-            if (height < 0) @panic("invalid height");
+            if (width < 1) @panic("invalid width");
+            if (height < 1) @panic("invalid height");
 
             if (initial_px_) |initial_px| {
                 _paintPixel(buf, initial_px);
@@ -1342,5 +1342,85 @@ test "PackedImageSurface, alpha1" {
         try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
         try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 2));
         try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
+    }
+}
+
+test "ImageSurface, dimension validation" {
+    const alloc = testing.allocator;
+    {
+        var sfc = try ImageSurface(pixel.RGB).init(alloc, 1, 1, .{ .r = 255, .g = 255, .b = 255 });
+        defer sfc.deinit(alloc);
+    }
+    {
+        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
+            alloc,
+            0,
+            1,
+            .{ .r = 255, .g = 255, .b = 255 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
+            alloc,
+            -1,
+            1,
+            .{ .r = 255, .g = 255, .b = 255 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
+            alloc,
+            1,
+            0,
+            .{ .r = 255, .g = 255, .b = 255 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
+            alloc,
+            1,
+            -1,
+            .{ .r = 255, .g = 255, .b = 255 },
+        ));
+    }
+}
+
+test "PackedImageSurface, dimension validation" {
+    const alloc = testing.allocator;
+    {
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(alloc, 1, 1, .{ .a = 1 });
+        defer sfc.deinit(alloc);
+    }
+    {
+        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
+            alloc,
+            0,
+            1,
+            .{ .a = 1 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
+            alloc,
+            -1,
+            1,
+            .{ .a = 1 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
+            alloc,
+            1,
+            0,
+            .{ .a = 1 },
+        ));
+    }
+    {
+        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
+            alloc,
+            1,
+            -1,
+            .{ .a = 1 },
+        ));
     }
 }
