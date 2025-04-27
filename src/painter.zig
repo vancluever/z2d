@@ -281,6 +281,12 @@ fn paintDirect(
     operator: compositor.Operator,
     precision: compositor.Precision,
 ) PaintError!void {
+    // Do an initial check to see if our polygon is within the surface, if it
+    // isn't, it's a no-op.
+    if (!polygons.inBox(1.0, surface.getWidth(), surface.getHeight())) {
+        return;
+    }
+
     const bounded = operator.isBounded();
     // We need to check to see if we need to override the precision as we don't
     // use the surface compositor here
@@ -385,6 +391,12 @@ fn paintComposite(
     operator: compositor.Operator,
     precision: compositor.Precision,
 ) PaintError!void {
+    // Do an initial check to see if our polygon is within the surface, if it
+    // isn't, it's a no-op.
+    if (!polygons.inBox(scale, surface.getWidth(), surface.getHeight())) {
+        return;
+    }
+
     // This math expects integer scaling.
     debug.assert(@floor(scale) == scale);
     const i_scale: i32 = @intFromFloat(scale);
