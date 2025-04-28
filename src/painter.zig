@@ -281,35 +281,43 @@ fn paintDirect(
     operator: compositor.Operator,
     precision: compositor.Precision,
 ) PaintError!void {
+    const sfc_width: i32 = surface.getWidth();
+    const sfc_height: i32 = surface.getHeight();
+    const _precision = if (operator.requiresFloat()) .float else precision;
+    const bounded = operator.isBounded();
+
     // Do an initial check to see if our polygon is within the surface, if it
     // isn't, it's a no-op.
-    if (!polygons.inBox(1.0, surface.getWidth(), surface.getHeight())) {
+    //
+    // This also enforces positive and non-zero surface dimensions, and
+    // correctly defined polygon extents (e.g., that the end extents are
+    // greater than the start extents).
+    if (!polygons.inBox(1.0, sfc_width, sfc_height)) {
         return;
     }
 
-    const bounded = operator.isBounded();
-    // We need to check to see if we need to override the precision as we don't
-    // use the surface compositor here
-    const _precision = if (operator.requiresFloat()) .float else precision;
-    const poly_start_y: i32 = if (bounded)
-        math.clamp(
-            @as(i32, @intFromFloat(@floor(polygons.start.y))),
-            0,
-            surface.getHeight() - 1,
-        )
-    else
-        0;
-    const poly_end_y: i32 = if (bounded)
-        math.clamp(
-            @as(i32, @intFromFloat(@ceil(polygons.end.y))),
-            0,
-            surface.getHeight() - 1,
-        )
-    else
-        surface.getHeight() - 1;
+    // This is the scanline range on the original image which our polygons may
+    // touch (in the event our operator is bounded, otherwise it's the whole of
+    // the surface).
+    //
+    // This range has to accommodate the extents of the top and bottom of the
+    // polygon rectangle, so it needs to be "pushed out"; floored on the top,
+    // and ceilinged on the bottom.
+    const poly_start_y: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y)) else 0;
+    const poly_end_y: i32 = if (bounded) @intFromFloat(@ceil(polygons.end.y)) else sfc_height - 1;
+    // Clamp the scanlines to the surface
+    const start_scanline: u32 = @intCast(math.clamp(poly_start_y, 0, sfc_height - 1));
+    const end_scanline: u32 = @intCast(
+        math.clamp(poly_end_y, @as(i32, @intCast(start_scanline)), sfc_height - 1),
+    );
 
-    var y = poly_start_y;
-    while (y <= poly_end_y) : (y += 1) {
+    // Note that we have to add 1 to the end scanline here as our start -> end
+    // boundaries above only account for+clamp to the last line to be scanned,
+    // so our len is end + 1. This helps correct for scenarios like small
+    // polygons laying on edges, or very small surfaces (e.g., 1 pixel high).
+    for (start_scanline..end_scanline + 1) |y_u| {
+        const y: i32 = @intCast(y_u);
+
         // Make a small FBA for edge caches, falling back to the passed in
         // allocator if we need to. This should be more than enough to do most
         // cases, but we can't guarantee it and we don't necessarily want to
@@ -321,7 +329,8 @@ fn paintDirect(
 
         if (!bounded and edge_list.edges.len == 0) {
             // Empty line but we're not bounded, so we clear the whole line.
-            const clear_stride = surface.getStride(0, y, @intCast(surface.getWidth()));
+            const sfc_width_u: u32 = @intCast(@max(0, sfc_width));
+            const clear_stride = surface.getStride(0, y, sfc_width_u);
             compositor.StrideCompositor.run(clear_stride, &.{.{
                 .operator = .clear,
                 .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
@@ -331,18 +340,20 @@ fn paintDirect(
         }
 
         while (edge_list.next()) |edge_pair| {
-            const start_x = math.clamp(
+            const start_x: i32 = math.clamp(
                 edge_pair.start,
                 0,
-                surface.getWidth() - 1,
+                sfc_width - 1,
             );
-            const end_x = math.clamp(
+            const end_x: i32 = math.clamp(
                 edge_pair.end,
-                0,
-                surface.getWidth(),
+                start_x,
+                sfc_width,
             );
+            const fill_len: i32 = end_x - start_x;
+            const end_clear_len: i32 = sfc_width - end_x;
 
-            if (!bounded) {
+            if (!bounded and start_x > 0) {
                 // Clear up to the start
                 const clear_stride = surface.getStride(0, y, @intCast(start_x));
                 compositor.StrideCompositor.run(clear_stride, &.{.{
@@ -351,27 +362,29 @@ fn paintDirect(
                 }}, .{ .precision = .integer });
             }
 
-            const dst_stride = surface.getStride(start_x, y, @intCast(end_x - start_x));
-            compositor.StrideCompositor.run(dst_stride, &.{.{
-                .operator = operator,
-                .src = switch (pattern.*) {
-                    .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                    .gradient => |g| .{ .gradient = .{
-                        .underlying = g,
-                        .x = start_x,
-                        .y = y,
-                    } },
-                    .dither => .{ .dither = .{
-                        .underlying = pattern.dither,
-                        .x = start_x,
-                        .y = y,
-                    } },
-                },
-            }}, .{ .precision = _precision });
+            if (fill_len > 0) {
+                const dst_stride = surface.getStride(start_x, y, @intCast(fill_len));
+                compositor.StrideCompositor.run(dst_stride, &.{.{
+                    .operator = operator,
+                    .src = switch (pattern.*) {
+                        .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                        .gradient => |g| .{ .gradient = .{
+                            .underlying = g,
+                            .x = start_x,
+                            .y = y,
+                        } },
+                        .dither => .{ .dither = .{
+                            .underlying = pattern.dither,
+                            .x = start_x,
+                            .y = y,
+                        } },
+                    },
+                }}, .{ .precision = _precision });
+            }
 
-            if (!bounded) {
+            if (!bounded and end_clear_len > 0) {
                 // Clear to the end
-                const clear_stride = surface.getStride(end_x, y, @intCast(surface.getWidth() - end_x));
+                const clear_stride = surface.getStride(end_x, y, @intCast(end_clear_len));
                 compositor.StrideCompositor.run(clear_stride, &.{.{
                     .operator = .clear,
                     .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
