@@ -397,13 +397,14 @@ pub fn ImageSurface(comptime T: type) type {
             const scale = supersample_scale;
             const height: usize = @intCast(@divFloor(self.height, scale));
             const width: usize = @intCast(@divFloor(self.width, scale));
+            const width_orig_u: usize = @intCast(self.width);
 
-            for (0..@intCast(height)) |y| {
-                for (0..@intCast(width)) |x| {
+            for (0..height) |y| {
+                for (0..width) |x| {
                     var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
                     for (0..scale) |i| {
                         for (0..scale) |j| {
-                            const idx = (y * scale + i) * @as(usize, @intCast(self.width)) + (x * scale + j);
+                            const idx = (y * scale + i) * width_orig_u + (x * scale + j);
                             pixels[i * scale + j] = self.buf[idx];
                         }
                     }
@@ -599,13 +600,14 @@ pub fn PackedImageSurface(comptime T: type) type {
             const scale = supersample_scale;
             const height: usize = @intCast(@divFloor(self.height, scale));
             const width: usize = @intCast(@divFloor(self.width, scale));
+            const width_orig_u: usize = @intCast(self.width);
 
-            for (0..@intCast(height)) |y| {
-                for (0..@intCast(width)) |x| {
+            for (0..height) |y| {
+                for (0..width) |x| {
                     var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
                     for (0..scale) |i| {
                         for (0..scale) |j| {
-                            const idx = (y * scale + i) * @as(usize, @intCast(self.width)) + (x * scale + j);
+                            const idx = (y * scale + i) * width_orig_u + (x * scale + j);
                             pixels[i * scale + j] = self._get(idx);
                         }
                     }
@@ -730,7 +732,9 @@ pub fn PackedImageSurface(comptime T: type) type {
             const end = (start + len);
             const slice_start: usize = start / scale;
             const slice_end: usize = end / scale;
-            if (slice_start >= slice_end) {
+            if (slice_start > slice_end) {
+                @panic("invalid range for paint (start > end). this is a bug, please report it");
+            } else if (slice_start == slice_end) {
                 // There's nothing we can memset, just set the range individually.
                 for (start..end) |idx| self._set(idx, src_px);
                 return;
@@ -739,9 +743,21 @@ pub fn PackedImageSurface(comptime T: type) type {
             const slice_offset = @intFromBool(start_rem > 0);
             // Set our contiguous range
             _paintPixel(self.buf[slice_start + slice_offset .. slice_end], src_px);
-            // Set the ends
-            for (start..start + (scale - start_rem)) |idx| self._set(idx, src_px);
-            for (end - end % scale..end) |idx| self._set(idx, src_px);
+            // Set the ends.
+            // Note that the subtractions here should be safe; start_rem is
+            // (start % scale), the result of which will always be less than
+            // scale, so worst case it is (scale - (@max(0, scale - 1))). Worst
+            // case for (end - end % scale) is always 0 when end < scale, and
+            // positive otherwise.
+            //
+            // zig fmt: off
+            const l_low:  usize = start;                       // start of left of non-contiguous range
+            const l_high: usize = start + (scale - start_rem); // end of left of non-contiguous range
+            const r_low:  usize = end - end % scale;           // start of right non-contiguous range
+            const r_high: usize = end;                         // end of left of non-contiguous range
+            // zig fmt: on
+            for (l_low..l_high) |idx| self._set(idx, src_px);
+            for (r_low..r_high) |idx| self._set(idx, src_px);
         }
 
         fn _get(self: *const PackedImageSurface(T), index: usize) T {
