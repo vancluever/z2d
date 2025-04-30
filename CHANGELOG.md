@@ -10,9 +10,11 @@ ENHANCEMENTS:
   adds additional validation and safety surrounding degenerate cases and avoids
   unnecessary work. [#106](https://github.com/vancluever/z2d/pull/106)
 
-* Additional internal changes to the painter and compositor to ensure safety.
+* Additional internal changes to the painter, surface, and compositor to ensure
+  safety.
   [#108](https://github.com/vancluever/z2d/pull/108),
-  [#109](https://github.com/vancluever/z2d/pull/109)
+  [#109](https://github.com/vancluever/z2d/pull/109),
+  [#110](https://github.com/vancluever/z2d/pull/110)
 
 ## 0.6.1 (April 25, 2025)
 
