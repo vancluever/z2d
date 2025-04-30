@@ -350,33 +350,65 @@ pub const SurfaceCompositor = struct {
             },
         };
 
-        const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
+        // "Reflect" our x/y offsets if they are negative, which indicates
+        // where we start on the source, otherwise we start at 0.
         const src_start_x: i32 = if (dst_x < 0) @intCast(@abs(dst_x)) else 0;
+        const src_start_y: i32 = if (dst_y < 0) @intCast(@abs(dst_y)) else 0;
 
         // Compute our actual drawing dimensions.
-        const height = if (src_dimensions.height + dst_y > dst.getHeight())
-            dst.getHeight() - dst_y
-        else
-            src_dimensions.height;
         const width = if (src_dimensions.width + dst_x > dst.getWidth())
             dst.getWidth() - dst_x
         else
             src_dimensions.width;
+        const height = if (src_dimensions.height + dst_y > dst.getHeight())
+            dst.getHeight() - dst_y
+        else
+            src_dimensions.height;
 
-        var src_y = src_start_y;
-        while (src_y < height) : (src_y += 1) {
-            const dst_start_x = src_start_x + dst_x;
-            const dst_start_y = src_y + dst_y;
-            const len: usize = @intCast(@max(0, width - src_start_x));
+        if (src_start_x >= width or src_start_y >= height) {
+            // Our calculated source offsets are completely outside of the draw
+            // area itself. This can happen when the source is offset above or
+            // to the left enough that it does not overlap with the destination
+            // at all (due to the reflection of the large negative offset in
+            // this scenario). Return, as nothing will be drawn.
+            return;
+        }
+
+        // Determine our destination offset and scanline width ahead of time.
+        const dst_start_x: i32 = src_start_x + dst_x;
+        const scanline_width: usize = @intCast(@max(0, width - src_start_x));
+
+        const src_scan_low: usize = @intCast(@max(0, src_start_y));
+        const src_scan_high: usize = @intCast(@max(@as(i32, @intCast(src_scan_low)), height));
+
+        // Assert that the dst_start_x (calculated above) and absolute minimum
+        // dst_start_y (calculated per scanline below) are not below zero. This
+        // should be ultimately handled above, and negative co-ordinates are
+        // safe to pass into getStride (in this case, a zero-length stride is
+        // returned), but it's not intended and this exists as a final
+        // safeguard against that.
+        {
+            const dst_start_y: i32 = @as(i32, @intCast(src_scan_low)) + dst_y;
+            if (dst_start_x < 0 or dst_start_y < 0) {
+                @panic("invalid initial effective offsets. this is a bug, please report it");
+            }
+        }
+
+        for (src_scan_low..src_scan_high) |src_y_u| {
+            const src_y: i32 = @intCast(src_y_u);
+            const dst_start_y: i32 = src_y + dst_y;
+
             // Get our destination stride
-            const _dst = dst.getStride(dst_start_x, dst_start_y, len);
+            const _dst = dst.getStride(dst_start_x, dst_start_y, scanline_width);
             // Build our batch for this line
             const stride_ops: [operations_len]StrideCompositor.Operation = stride_ops: {
                 var stride_op: [operations_len]StrideCompositor.Operation = undefined;
                 for (operations, 0..) |op, idx| {
                     stride_op[idx].operator = op.operator;
                     stride_op[idx].dst = switch (op.dst) {
-                        .surface => |sfc| .{ .stride = sfc.getStride(dst_start_x, dst_start_y, len) },
+                        .surface => |sfc| .{
+                            .stride = sfc.getStride(dst_start_x, dst_start_y, scanline_width),
+                        },
                         .none => .{ .none = {} },
                         .pixel => |px| .{ .pixel = px },
                         .gradient => |gr| .{ .gradient = .{
@@ -391,7 +423,9 @@ pub const SurfaceCompositor = struct {
                         } },
                     };
                     stride_op[idx].src = switch (op.src) {
-                        .surface => |sfc| .{ .stride = sfc.getStride(src_start_x, src_y, len) },
+                        .surface => |sfc| .{
+                            .stride = sfc.getStride(src_start_x, src_y, scanline_width),
+                        },
                         .none => .{ .none = {} },
                         .pixel => |px| .{ .pixel = px },
                         .gradient => |gr| .{ .gradient = .{
@@ -524,6 +558,11 @@ pub const StrideCompositor = struct {
             .float => RGBAFloat.Vector,
         };
         const len = dst.pxLen();
+        // Early exit if len == 0
+        if (len == 0) {
+            return;
+        }
+
         for (0..len / vector_length) |i| {
             // Vector section - we step on the vector length, and operate on each.
             // The working result does not leave the vectors (unless overridden).
