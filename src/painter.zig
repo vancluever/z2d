@@ -406,6 +406,10 @@ fn paintComposite(
 ) PaintError!void {
     // Do an initial check to see if our polygon is within the surface, if it
     // isn't, it's a no-op.
+    //
+    // This also enforces positive and non-zero surface dimensions, and
+    // correctly defined polygon extents (e.g., that the end extents are
+    // greater than the start extents).
     if (!polygons.inBox(scale, surface.getWidth(), surface.getHeight())) {
         return;
     }
@@ -418,31 +422,40 @@ fn paintComposite(
     // the event our operator is bounded, otherwise it's the whole of the
     // surface).
     //
-    // This range is *exclusive* of the right (max) end, hence why we add 1
-    // to the maximum coordinates.
+    // This range has to accommodate the extents of any possible point in the
+    // polygon rectangle, so it needs to be "pushed out"; floored on the
+    // top/left, and ceilinged on the bottom/right.
     const bounded = operator.isBounded();
     const x0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.x / scale)) else 0;
     const y0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y / scale)) else 0;
     const x1: i32 = if (bounded)
-        @intFromFloat(@floor(polygons.end.x / scale) + 1)
+        @intFromFloat(@ceil(polygons.end.x / scale))
     else
         surface.getWidth();
     const y1: i32 = if (bounded)
-        @intFromFloat(@floor(polygons.end.y / scale) + 1)
+        @intFromFloat(@ceil(polygons.end.y / scale))
     else
         surface.getHeight();
 
     var mask_sfc = sfc_m: {
         // We calculate a scaled up version of the
         // extents for our supersampled drawing.
-        const box_x0: i32 = x0 * i_scale;
-        const box_y0: i32 = y0 * i_scale;
-        const box_x1: i32 = x1 * i_scale;
-        const box_y1: i32 = y1 * i_scale;
-        const mask_width: i32 = box_x1 - box_x0;
-        const mask_height: i32 = box_y1 - box_y0;
-        const offset_x: i32 = box_x0;
-        const offset_y: i32 = box_y0;
+        //
+        // These dimensions are clamped to the target surface to avoid
+        // edge cases and unnecessary work.
+        const target_width_scaled: i32 = surface.getWidth() * i_scale;
+        const target_height_scaled: i32 = surface.getHeight() * i_scale;
+        const box_x0: i32 = math.clamp(x0 * i_scale, 0, target_width_scaled - 1);
+        const box_y0: i32 = math.clamp(y0 * i_scale, 0, target_height_scaled - 1);
+        const box_x1: i32 = math.clamp(x1 * i_scale, box_x0, target_width_scaled - 1);
+        const box_y1: i32 = math.clamp(y1 * i_scale, box_y0, target_height_scaled - 1);
+        const mask_width: i32 = (box_x1 + 1) - box_x0;
+        const mask_height: i32 = (box_y1 + 1) - box_y0;
+
+        if (mask_width < 1 or mask_height < 1) {
+            // This should have been checked earlier, if we hit this, it's a bug.
+            @panic("invalid mask dimensions. this is a bug, please report it");
+        }
 
         // Check our surface type. If we are one of our < 8bpp alpha surfaces,
         // we use that type instead.
@@ -456,49 +469,56 @@ fn paintComposite(
             .image_surface_alpha1 => pixel.Alpha1.Opaque.asPixel(),
             else => pixel.Alpha8.Opaque.asPixel(),
         };
-        var scaled_sfc = try Surface.init(
+        var mask_sfc_scaled = try Surface.init(
             surface_type,
             alloc,
             mask_width,
             mask_height,
         );
-        errdefer scaled_sfc.deinit(alloc);
+        errdefer mask_sfc_scaled.deinit(alloc);
 
-        const poly_y0: i32 = box_y0;
-        const poly_y1: i32 = box_y1;
-        var y = poly_y0;
-        while (y < poly_y1) : (y += 1) {
+        const mask_height_u: u32 = @intCast(@max(0, mask_height));
+        for (0..mask_height_u) |y_u| {
+            const y: i32 = @intCast(y_u);
+
             // Make a small FBA for edge caches, falling back to the passed in
             // allocator if we need to. This should be more than enough to do
             // most cases, but we can't guarantee it and we don't necessarily
             // want to blow up the stack.
             var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
             const edge_alloc = edge_stack_fallback.get();
-            var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
+
+            // Our polygon co-ordinates are in (scaled) device space, so when
+            // we search for edges, we need to offset our mask-space scanline
+            // to that.
+            var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y + box_y0), fill_rule);
             defer edge_list.deinit(edge_alloc);
             while (edge_list.next()) |edge_pair| {
-                const start_x = edge_pair.start;
-                const end_x = edge_pair.end;
+                // Inverse to the above; pull back our scaled device space
+                // co-ordinates to mask space.
+                const start_x: i32 = math.clamp(edge_pair.start - box_x0, 0, mask_width - 1);
+                const end_x: i32 = math.clamp(edge_pair.end - box_x0, start_x, mask_width);
 
-                scaled_sfc.paintStride(
-                    start_x - offset_x,
-                    y - offset_y,
-                    @intCast(end_x - start_x),
-                    opaque_px,
-                );
+                const fill_len: i32 = end_x - start_x;
+                if (fill_len > 0) {
+                    mask_sfc_scaled.paintStride(start_x, y, @intCast(fill_len), opaque_px);
+                }
             }
         }
 
-        scaled_sfc.downsample(alloc);
-        break :sfc_m scaled_sfc;
+        mask_sfc_scaled.downsample(alloc);
+        break :sfc_m mask_sfc_scaled;
     };
     defer mask_sfc.deinit(alloc);
 
-    // Do a fast-path combined compositing operation of the mask surface with
-    // the source color. We can do this right now very easily since we only
-    // support single-pixel sources, but the idea is to support this across as
-    // many sources as possible.
-    compositor.SurfaceCompositor.run(surface, x0, y0, 2, .{
+    // We only bother clamping here on the low end since we've clipped
+    // upper-left overlaps at (0,0). Offsets out of bounds of the surface
+    // should have been filtered by the polygon/surface check at the start of
+    // the function (and the compositor will ignore out-of-surface offsets
+    // too).
+    const comp_x: i32 = @max(0, x0);
+    const comp_y: i32 = @max(0, y0);
+    compositor.SurfaceCompositor.run(surface, comp_x, comp_y, 2, .{
         .{
             .operator = .dst_in,
             .dst = switch (pattern.*) {
