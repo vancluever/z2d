@@ -11,7 +11,8 @@ ENHANCEMENTS:
   unnecessary work. [#106](https://github.com/vancluever/z2d/pull/106)
 
 * Additional internal changes to the painter and compositor to ensure safety.
-  [#108](https://github.com/vancluever/z2d/pull/108)
+  [#108](https://github.com/vancluever/z2d/pull/108),
+  [#109](https://github.com/vancluever/z2d/pull/109)
 
 ## 0.6.1 (April 25, 2025)
 
