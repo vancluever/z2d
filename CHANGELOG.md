@@ -15,6 +15,7 @@ ENHANCEMENTS:
   [#108](https://github.com/vancluever/z2d/pull/108),
   [#109](https://github.com/vancluever/z2d/pull/109),
   [#110](https://github.com/vancluever/z2d/pull/110)
+  [#111](https://github.com/vancluever/z2d/pull/111)
 
 ## 0.6.1 (April 25, 2025)
 
