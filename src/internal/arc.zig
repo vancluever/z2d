@@ -14,7 +14,7 @@ const options = @import("../options.zig");
 const PathVTable = @import("PathVTable.zig");
 const Transformation = @import("../Transformation.zig");
 
-const max_full_circles: usize = 65536;
+const max_full_circles = 65536;
 
 // arc_error_normalized and arc_max_angle_for_tolerance_normalized are used for
 // determining the largest angle that can be used in our arc segment splines
@@ -63,19 +63,15 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
     // this value is chosen arbitrarily. this gives an error of about 1.74909e-20
     const max_segments = 1000;
 
-    var i: usize = 0;
-    while (i < table.len) : (i += 1) {
+    for (0..table.len) |i| {
         if (table[i].err < tolerance) return table[i].angle;
     }
 
-    i += 1;
-
     var angle: f64 = undefined;
-    while (true) {
+    for (table.len..max_segments) |i| {
         angle = math.pi / @as(f64, @floatFromInt(i));
-        i += 1;
         const err = arc_error_normalized(angle);
-        if (err > tolerance and i < max_segments) {
+        if (err <= tolerance) {
             break;
         }
     }
@@ -83,7 +79,7 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
     return angle;
 }
 
-fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: f64) usize {
+fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: f64) i32 {
     // the error is amplified by at most the length of the circle.
     const major_axis = transformed_circle_major_axis(ctm, radius);
     const max_angle = arc_max_angle_for_tolerance_normalized(tolerance / major_axis);
@@ -384,12 +380,9 @@ pub fn arc_in_direction(
             yc + radius * @sin(amin),
         );
 
-        var i: usize = 0;
-        while (i < segments) : ({
-            i += 1;
-            amin += step;
-        }) {
+        for (0..@max(0, segments)) |_| {
             try arc_segment(path_impl, xc, yc, radius, amin, amin + step);
+            amin += step;
         }
 
         try arc_segment(path_impl, xc, yc, radius, amin, amax);
