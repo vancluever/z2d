@@ -163,7 +163,9 @@ pub fn fromDitherVec(
     };
     const scale = splat(f32, 1.0 / @as(
         f32,
-        @floatFromInt((@as(usize, 1) << dither.scale) - 1),
+        // Note: dither.scale being u4 limits this value to +65535
+        // ((1 << 15) - 1)
+        @floatFromInt((@as(i32, 1) << dither.scale) - 1),
     ));
     return .{
         .r = apply_dither(rgba.r, m, scale),

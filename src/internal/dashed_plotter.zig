@@ -87,7 +87,6 @@ const Plotter = struct {
 
     pen: ?Pen, // pen (lazy-initialized)
 
-    idx: usize = 0, // node index
     points: PointBuffer = .{}, // point buffer (initial and join points)
     clockwise_: ?bool = null, // clockwise state
 
@@ -100,8 +99,8 @@ const Plotter = struct {
     initial_polygon: union(enum) { none: void, off: Point, on: InitialPolygon } = .{ .none = {} },
 
     fn run(self: *Plotter) Error!void {
-        while (self.idx < self.nodes.len) : (self.idx += 1) {
-            switch (self.nodes[self.idx]) {
+        for (0..self.nodes.len) |idx| {
+            switch (self.nodes[idx]) {
                 .move_to => |n| try self.runMoveTo(n),
                 .line_to => |n| try self.runLineTo(n),
                 .curve_to => |n| try self.runCurveTo(n),

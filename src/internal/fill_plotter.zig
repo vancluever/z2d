@@ -137,7 +137,7 @@ test "degenerate line_to" {
     var result = try plot(alloc, nodes.items, 1, 0.1);
     defer result.deinit(alloc);
     try testing.expectEqual(1, result.polygons.len());
-    var corners_len: usize = 0;
+    var corners_len: i32 = 0;
     var corners: std.ArrayListUnmanaged(Point) = .{};
     defer corners.deinit(alloc);
     var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;

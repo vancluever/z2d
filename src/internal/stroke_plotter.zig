@@ -81,7 +81,6 @@ const Plotter = struct {
 
     pen: ?Pen, // pen (lazy-initialized)
 
-    idx: usize = 0, // node index
     points: PointBuffer = .{}, // point buffer (initial and join points)
     clockwise_: ?bool = null, // clockwise state
 
@@ -90,8 +89,8 @@ const Plotter = struct {
     poly_inner: Polygon, // Current polygon (inner)
 
     fn run(self: *Plotter) Error!void {
-        while (self.idx < self.nodes.len) : (self.idx += 1) {
-            switch (self.nodes[self.idx]) {
+        for (0..self.nodes.len) |idx| {
+            switch (self.nodes[idx]) {
                 .move_to => |n| try self.runMoveTo(n),
                 .line_to => |n| try self.runLineTo(n),
                 .curve_to => |n| try self.runCurveTo(n),
@@ -586,7 +585,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         });
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
-        var corners_len: usize = 0;
+        var corners_len: i32 = 0;
         var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
         while (next_) |n| {
             corners_len += 1;
@@ -617,7 +616,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         });
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
-        var corners_len: usize = 0;
+        var corners_len: i32 = 0;
         var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
         while (next_) |n| {
             corners_len += 1;
@@ -659,7 +658,7 @@ test "slope difference below epsilon does not produce NaN" {
         });
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
-        var idx: usize = 0;
+        var idx: i32 = 0;
         var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
         while (next_) |n| {
             if (!math.isFinite(n.data.x) or !math.isFinite(n.data.y)) {

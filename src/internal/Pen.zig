@@ -47,7 +47,7 @@ pub fn init(
     //
     // Where M is the major axis.
     const radius = thickness / 2;
-    const num_vertices: usize = verts: {
+    const num_vertices: i32 = verts: {
         const major_axis: f64 = arc.transformed_circle_major_axis(ctm, radius);
         // Note that our minimum number of vertices is always 4. There are
         // also situations where our tolerance may be so high that we'd
@@ -77,21 +77,21 @@ pub fn init(
             break :verts 4;
         } else if (@rem(n, 2) != 0) {
             // Add a point for uneven vertex counts
-            break :verts @intCast(n + 1);
+            break :verts n + 1;
         }
 
-        break :verts @intCast(n);
+        break :verts n;
     };
 
     // We can now initialize and plot our vertices
-    var vertices = try std.ArrayListUnmanaged(PenVertex).initCapacity(alloc, num_vertices);
+    var vertices = try std.ArrayListUnmanaged(PenVertex).initCapacity(alloc, @max(0, num_vertices));
     errdefer vertices.deinit(alloc);
 
     // Add the points in a first pass. Note our baseline for determining points
     // is user space (as we're just plotting a circle, so we need to transform
     // off our ctm to get the correct ellipse for the pen.
     const reflect = ctm.determinant() < 0;
-    for (0..num_vertices) |i| {
+    for (0..@max(0, num_vertices)) |i| {
         const theta: f64 = th: {
             var t = 2 * math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
             if (reflect) t = -t;
@@ -109,9 +109,9 @@ pub fn init(
 
     // Add the slopes in a separate pass so that we can add them relative
     // to the vertices surrounding it.
-    for (0..num_vertices) |i| {
-        const next = if (i >= num_vertices - 1) 0 else i + 1;
-        const prev = if (i == 0) num_vertices - 1 else i - 1;
+    for (0..@max(0, num_vertices)) |i| {
+        const next: usize = if (i >= num_vertices - 1) 0 else i + 1;
+        const prev: usize = @max(0, if (i == 0) num_vertices - 1 else @as(i32, @intCast(i)) - 1);
         vertices.items[i].slope_cw = Slope.init(
             vertices.items[prev].point,
             vertices.items[i].point,
@@ -148,8 +148,8 @@ pub fn vertexIteratorFor(
 
     // Check the direction of the join so that we can return the
     // appropriate vertices in the correct order.
-    var start: usize = 0;
-    var end: usize = 0;
+    var start: i32 = 0;
+    var end: i32 = 0;
     const vertices_len: i32 = @intCast(self.vertices.items.len);
     if (clockwise) {
         // Clockwise join
@@ -167,7 +167,7 @@ pub fn vertexIteratorFor(
             i += 1;
             if (i == vertices_len) i = 0;
         }
-        start = @intCast(i);
+        start = i;
 
         if (to_slope.compare(self.vertices.items[@intCast(i)].slope_ccw) >= 0) {
             low = i;
@@ -184,7 +184,7 @@ pub fn vertexIteratorFor(
             if (i >= vertices_len) i -= vertices_len;
         }
 
-        end = @intCast(i);
+        end = i;
     } else {
         // Counter-clockwise join
         var low: i32 = 0;
@@ -201,7 +201,7 @@ pub fn vertexIteratorFor(
             i += 1;
             if (i == vertices_len) i = 0;
         }
-        start = @intCast(i);
+        start = i;
 
         if (self.vertices.items[@intCast(i)].slope_cw.compare(to_slope) <= 0) {
             low = i;
@@ -218,21 +218,19 @@ pub fn vertexIteratorFor(
             if (i >= vertices_len) i -= vertices_len;
         }
 
-        end = @intCast(i);
+        end = i;
     }
 
     return .{
         .pen = self,
-        .start = start,
-        .end = end,
-        .idx = start,
+        .end = @max(0, end),
+        .idx = @max(0, start),
         .clockwise = clockwise,
     };
 }
 
 const VertexIterator = struct {
     pen: *const Pen,
-    start: usize,
     end: usize,
     idx: usize,
     clockwise: bool,
