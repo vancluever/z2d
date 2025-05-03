@@ -345,8 +345,8 @@ pub fn ImageSurface(comptime T: type) type {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
-            const h_usize: usize = @intCast(height);
-            const w_usize: usize = @intCast(width);
+            const h_usize: usize = @max(0, height);
+            const w_usize: usize = @max(0, width);
             const buf = try alloc.alloc(T, h_usize * w_usize);
             return initBuffer(buf, width, height, initial_px_);
         }
@@ -395,9 +395,9 @@ pub fn ImageSurface(comptime T: type) type {
         /// are updated.
         pub fn downsampleBuffer(self: *ImageSurface(T)) void {
             const scale = supersample_scale;
-            const height: usize = @intCast(@divFloor(self.height, scale));
-            const width: usize = @intCast(@divFloor(self.width, scale));
-            const width_orig_u: usize = @intCast(self.width);
+            const height: usize = @max(0, @divFloor(self.height, scale));
+            const width: usize = @max(0, @divFloor(self.width, scale));
+            const width_orig_u: usize = @max(0, self.width);
 
             for (0..height) |y| {
                 for (0..width) |x| {
@@ -418,8 +418,8 @@ pub fn ImageSurface(comptime T: type) type {
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
         pub fn resizeBuffer(self: *ImageSurface(T), alloc: mem.Allocator) void {
-            const height: usize = @intCast(self.height);
-            const width: usize = @intCast(self.width);
+            const height: usize = @max(0, self.height);
+            const width: usize = @max(0, self.width);
             if (self.buf.len == height * width) return;
             if (alloc.resize(self.buf, height * width)) {
                 self.buf = self.buf.ptr[0 .. height * width];
@@ -440,7 +440,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self.buf[@intCast(self.width * y + x)].asPixel();
+            return self.buf[@max(0, @as(i64, self.width) * y + x)].asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -455,7 +455,7 @@ pub fn ImageSurface(comptime T: type) type {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return @unionInit(pixel.Stride, @tagName(T.format), &.{});
             }
-            const start: usize = @intCast(self.width * y + x);
+            const start: usize = @max(0, @as(i64, self.width) * y + x);
             return @unionInit(pixel.Stride, @tagName(T.format), self.buf[start .. start + len]);
         }
 
@@ -463,7 +463,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf[@intCast(self.width * y + x)] = T.fromPixel(px);
+            self.buf[@max(0, @as(i64, self.width) * y + x)] = T.fromPixel(px);
         }
 
         /// Puts the supplied stride at `(x, y)`, proceeding for its full
@@ -493,9 +493,9 @@ pub fn ImageSurface(comptime T: type) type {
         /// safety-checked undefined behavior.
         pub fn paintStride(self: *ImageSurface(T), x: i32, y: i32, len: usize, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            const w_usize: usize = @intCast(self.width);
-            const y_usize: usize = @intCast(y);
-            const x_usize: usize = @intCast(x);
+            const w_usize: usize = @max(0, self.width);
+            const y_usize: usize = @max(0, y);
+            const x_usize: usize = @max(0, x);
             const start = w_usize * y_usize + x_usize;
             @memset(self.buf[start .. start + len], T.fromPixel(px));
         }
@@ -547,8 +547,8 @@ pub fn PackedImageSurface(comptime T: type) type {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
-            const h_usize: usize = @intCast(height);
-            const w_usize: usize = @intCast(width);
+            const h_usize: usize = @max(0, height);
+            const w_usize: usize = @max(0, width);
             const len = (h_usize * w_usize * @bitSizeOf(T) + 7) / 8;
             const buf = try alloc.alloc(u8, len);
             return initBuffer(buf, width, height, initial_px_);
@@ -598,9 +598,9 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// are updated.
         pub fn downsampleBuffer(self: *PackedImageSurface(T)) void {
             const scale = supersample_scale;
-            const height: usize = @intCast(@divFloor(self.height, scale));
-            const width: usize = @intCast(@divFloor(self.width, scale));
-            const width_orig_u: usize = @intCast(self.width);
+            const height: usize = @max(0, @divFloor(self.height, scale));
+            const width: usize = @max(0, @divFloor(self.width, scale));
+            const width_orig_u: usize = @max(0, self.width);
 
             for (0..height) |y| {
                 for (0..width) |x| {
@@ -621,8 +621,8 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
         pub fn resizeBuffer(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
-            const height: usize = @intCast(self.height);
-            const width: usize = @intCast(self.width);
+            const height: usize = @max(0, self.height);
+            const width: usize = @max(0, self.width);
             const new_len: usize = (height * width * @bitSizeOf(T) + 7) / 8;
             if (self.buf.len == new_len) return;
             if (alloc.resize(self.buf, new_len)) {
@@ -644,7 +644,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const PackedImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self._get(@intCast(self.width * y + x)).asPixel();
+            return self._get(@max(0, @as(i64, self.width) * y + x)).asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -663,7 +663,7 @@ pub fn PackedImageSurface(comptime T: type) type {
                 });
             }
             const scale = 8 / @bitSizeOf(T);
-            const px_start: usize = @intCast(self.width * y + x);
+            const px_start: usize = @max(0, @as(i64, self.width) * y + x);
             const px_offset = px_start % scale;
             const slice_start = px_start / scale;
             const slice_len = ((len + px_offset) * @bitSizeOf(T) + 7) / 8;
@@ -678,7 +678,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// pixel is out of range.
         pub fn putPixel(self: *PackedImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self._set(@intCast(self.width * y + x), T.fromPixel(px));
+            self._set(@max(0, @as(i64, self.width) * y + x), T.fromPixel(px));
         }
 
         /// Puts the supplied stride at `(x, y)`, proceeding for its full
@@ -725,9 +725,9 @@ pub fn PackedImageSurface(comptime T: type) type {
             // individually set, if they exist.
             const src_px = T.fromPixel(px);
             const scale = 8 / @bitSizeOf(T);
-            const w_usize: usize = @intCast(self.width);
-            const y_usize: usize = @intCast(y);
-            const x_usize: usize = @intCast(x);
+            const w_usize: usize = @max(0, self.width);
+            const y_usize: usize = @max(0, y);
+            const x_usize: usize = @max(0, x);
             const start = w_usize * y_usize + x_usize;
             const end = (start + len);
             const slice_start: usize = start / scale;
@@ -779,16 +779,6 @@ pub fn PackedImageSurface(comptime T: type) type {
             // slice. Note that this may fill past the end of the canvas into
             // the excess in the last byte, but that's fine as this space is
             // undefined in our implementation anyway.
-            //
-            // NOTE: This pattern *should* be resilient across endianness.
-            // We're not doing any math here, and if intCast from a smaller
-            // bit width to a larger one respects endianness, it should just
-            // throw it in the correct location (least or most significant
-            // portion) in memory, which won't matter when it comes back into
-            // the CPU for bit shifting. After shifting/copying is complete, we
-            // will end up with even copies of the smaller-width integer since
-            // we fill the whole byte, so the order of where it ends up in the
-            // intCast should not matter.
             if (meta.eql(px, mem.zeroes(T))) {
                 // Short-circuit to writing zeroes if the pixel we're setting is zero
                 @memset(buf, 0);
@@ -798,7 +788,7 @@ pub fn PackedImageSurface(comptime T: type) type {
             const px_u8: u8 = px_u8: {
                 const px_int_t = @typeInfo(T).@"struct".backing_integer.?;
                 const px_int = @as(px_int_t, @bitCast(px));
-                break :px_u8 @intCast(px_int);
+                break :px_u8 px_int;
             };
             var packed_px: u8 = 0;
             var sh: usize = 0;
