@@ -374,12 +374,10 @@ pub const SurfaceCompositor = struct {
             return;
         }
 
-        // Determine our destination offset and scanline width ahead of time.
+        const src_scan_low: i32 = src_start_y; // limited to >= 0 above
+        const src_scan_high: i32 = @max(src_scan_low, height);
         const dst_start_x: i32 = src_start_x + dst_x;
-        const scanline_width: usize = @intCast(@max(0, width - src_start_x));
-
-        const src_scan_low: usize = @intCast(@max(0, src_start_y));
-        const src_scan_high: usize = @intCast(@max(@as(i32, @intCast(src_scan_low)), height));
+        const scanline_width: usize = @max(0, width - src_start_x);
 
         // Assert that the dst_start_x (calculated above) and absolute minimum
         // dst_start_y (calculated per scanline below) are not below zero. This
@@ -388,13 +386,13 @@ pub const SurfaceCompositor = struct {
         // returned), but it's not intended and this exists as a final
         // safeguard against that.
         {
-            const dst_start_y: i32 = @as(i32, @intCast(src_scan_low)) + dst_y;
+            const dst_start_y: i32 = src_scan_low + dst_y;
             if (dst_start_x < 0 or dst_start_y < 0) {
                 @panic("invalid initial effective offsets. this is a bug, please report it");
             }
         }
 
-        for (src_scan_low..src_scan_high) |src_y_u| {
+        for (@max(0, src_scan_low)..@max(0, src_scan_high)) |src_y_u| {
             const src_y: i32 = @intCast(src_y_u);
             const dst_start_y: i32 = src_y + dst_y;
 
