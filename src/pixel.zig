@@ -630,7 +630,7 @@ fn Alpha(comptime fmt: Format) type {
 
             const px_u8: u8 = px_u8: {
                 const px_int = @as(IntType, @bitCast(px));
-                break :px_u8 @intCast(px_int);
+                break :px_u8 px_int;
             };
             var packed_px: u8 = 0;
             var sh: usize = 0;

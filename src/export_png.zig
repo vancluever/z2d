@@ -7,6 +7,7 @@ const builtin = @import("builtin");
 const crc32 = @import("std").hash.Crc32;
 const fs = @import("std").fs;
 const io = @import("std").io;
+const math = @import("std").math;
 const mem = @import("std").mem;
 const zlib = @import("std").compress.zlib;
 
@@ -55,6 +56,12 @@ pub fn writeToPNGFile(
     filename: []const u8,
     opts: WriteToPNGFileOptions,
 ) WriteToPNGFileError!void {
+    // Assert the height and width of the surface, we always enforce a minimum
+    // 1x1 surface now.
+    if (sfc.getWidth() < 1 or sfc.getHeight() < 1) {
+        @panic("invalid surface width or height (w|h < 1). this is a bug, please report it");
+    }
+
     // Open and create the file.
     const file = try fs.cwd().createFile(filename, .{});
     defer file.close();
@@ -78,8 +85,8 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) fs.File.WriteError!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
-    mem.writeInt(u32, &width, @intCast(sfc.getWidth()), .big);
-    mem.writeInt(u32, &height, @intCast(sfc.getHeight()), .big);
+    mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
+    mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
         .rgba => 8,
         .rgb => 8,
@@ -137,6 +144,9 @@ fn writePNGIDATStream(
     sfc: surface.Surface,
     profile: ?color.RGBProfile,
 ) WritePNGIDATStreamError!void {
+    const sfc_width: i32 = sfc.getWidth();
+    const sfc_height: i32 = sfc.getHeight();
+
     // Set a minimum remaining buffer size here that is reasonably
     // sized. This may not be 100% scientific, but should account for
     // the 248 byte deflate buffer (see buffer sizes in the stdlib at
@@ -167,7 +177,8 @@ fn writePNGIDATStream(
     // add scanline filtering headers were appropriate.
     //
     // Iterate through each line to encode as scanlines.
-    for (0..@intCast(sfc.getHeight())) |y| {
+    for (0..@max(0, sfc_height)) |y_u| {
+        const y: i32 = @intCast(y_u);
         // Initialize a buffer for pixels. TODO: This will need to
         // increase/change when/if we add additional pixel filtering
         // algorithms.
@@ -177,17 +188,26 @@ fn writePNGIDATStream(
         var pixel_buffer = [_]u8{0} ** (4 * vector_length + 1);
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
-        var x: usize = 0;
-        const stride = sfc.getStride(0, @intCast(y), @intCast(sfc.getWidth()));
-        while (x < sfc.getWidth()) : (x += vector_length) {
+        const stride = sfc.getStride(0, y, @max(0, sfc_width));
+        // Step on our vector length, make sure we have a min loop length of 1
+        // to ensure we catch the remainder of a line when it's less than the
+        // vector length.
+        for (0..@max(0, sfc_width) / vector_length + 1) |x_step| {
+            const x: usize = x_step * vector_length;
             nbytes += written: {
-                const stride_len = stride_len: {
-                    const remaining = @as(usize, @intCast(sfc.getWidth())) - x;
+                const stride_len: usize = stride_len: {
+                    const remaining: usize = @max(0, sfc_width) - x;
                     break :stride_len if (remaining < vector_length)
                         remaining
                     else
                         vector_length;
                 };
+
+                if (stride_len == 0) {
+                    // Early exit if for some reason we don't have data
+                    break :written 0;
+                }
+
                 switch (stride) {
                     .rgb => |s| {
                         var stride_vec = [_]u32{0} ** vector_length;
@@ -350,6 +370,9 @@ fn writePNGIEND(file: fs.File) fs.File.WriteError!void {
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
 fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) fs.File.WriteError!void {
+    if (data.len > math.maxInt(u32)) {
+        @panic("bad PNG chunk data length (larger than 4GB). this is a bug, please report it");
+    }
     const len: u32 = @intCast(data.len);
     const checksum = writePNGChunkCRC(chunk_type, data);
 
