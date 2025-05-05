@@ -306,16 +306,14 @@ fn paintDirect(
     const poly_start_y: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y)) else 0;
     const poly_end_y: i32 = if (bounded) @intFromFloat(@ceil(polygons.end.y)) else sfc_height - 1;
     // Clamp the scanlines to the surface
-    const start_scanline: u32 = @intCast(math.clamp(poly_start_y, 0, sfc_height - 1));
-    const end_scanline: u32 = @intCast(
-        math.clamp(poly_end_y, @as(i32, @intCast(start_scanline)), sfc_height - 1),
-    );
+    const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
+    const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
 
     // Note that we have to add 1 to the end scanline here as our start -> end
     // boundaries above only account for+clamp to the last line to be scanned,
     // so our len is end + 1. This helps correct for scenarios like small
     // polygons laying on edges, or very small surfaces (e.g., 1 pixel high).
-    for (start_scanline..end_scanline + 1) |y_u| {
+    for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
         const y: i32 = @intCast(y_u);
 
         // Make a small FBA for edge caches, falling back to the passed in
@@ -329,8 +327,7 @@ fn paintDirect(
 
         if (!bounded and edge_list.edges.len == 0) {
             // Empty line but we're not bounded, so we clear the whole line.
-            const sfc_width_u: u32 = @intCast(@max(0, sfc_width));
-            const clear_stride = surface.getStride(0, y, sfc_width_u);
+            const clear_stride = surface.getStride(0, y, @max(0, sfc_width));
             compositor.StrideCompositor.run(clear_stride, &.{.{
                 .operator = .clear,
                 .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
@@ -355,7 +352,7 @@ fn paintDirect(
 
             if (!bounded and start_x > 0) {
                 // Clear up to the start
-                const clear_stride = surface.getStride(0, y, @intCast(start_x));
+                const clear_stride = surface.getStride(0, y, @max(0, start_x));
                 compositor.StrideCompositor.run(clear_stride, &.{.{
                     .operator = .clear,
                     .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
@@ -363,7 +360,7 @@ fn paintDirect(
             }
 
             if (fill_len > 0) {
-                const dst_stride = surface.getStride(start_x, y, @intCast(fill_len));
+                const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
                 compositor.StrideCompositor.run(dst_stride, &.{.{
                     .operator = operator,
                     .src = switch (pattern.*) {
@@ -384,7 +381,7 @@ fn paintDirect(
 
             if (!bounded and end_clear_len > 0) {
                 // Clear to the end
-                const clear_stride = surface.getStride(end_x, y, @intCast(end_clear_len));
+                const clear_stride = surface.getStride(end_x, y, @max(0, end_clear_len));
                 compositor.StrideCompositor.run(clear_stride, &.{.{
                     .operator = .clear,
                     .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
@@ -477,8 +474,7 @@ fn paintComposite(
         );
         errdefer mask_sfc_scaled.deinit(alloc);
 
-        const mask_height_u: u32 = @intCast(@max(0, mask_height));
-        for (0..mask_height_u) |y_u| {
+        for (0..@max(0, mask_height)) |y_u| {
             const y: i32 = @intCast(y_u);
 
             // Make a small FBA for edge caches, falling back to the passed in
@@ -501,7 +497,7 @@ fn paintComposite(
 
                 const fill_len: i32 = end_x - start_x;
                 if (fill_len > 0) {
-                    mask_sfc_scaled.paintStride(start_x, y, @intCast(fill_len), opaque_px);
+                    mask_sfc_scaled.paintStride(start_x, y, @max(0, fill_len), opaque_px);
                 }
             }
         }
