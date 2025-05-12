@@ -440,7 +440,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self.buf[@max(0, @as(i64, self.width) * y + x)].asPixel();
+            return self.buf[@max(0, @as(isize, self.width) * y + x)].asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -455,7 +455,7 @@ pub fn ImageSurface(comptime T: type) type {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return @unionInit(pixel.Stride, @tagName(T.format), &.{});
             }
-            const start: usize = @max(0, @as(i64, self.width) * y + x);
+            const start: usize = @max(0, @as(isize, self.width) * y + x);
             return @unionInit(pixel.Stride, @tagName(T.format), self.buf[start .. start + len]);
         }
 
@@ -463,7 +463,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf[@max(0, @as(i64, self.width) * y + x)] = T.fromPixel(px);
+            self.buf[@max(0, @as(isize, self.width) * y + x)] = T.fromPixel(px);
         }
 
         /// Puts the supplied stride at `(x, y)`, proceeding for its full
@@ -644,7 +644,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const PackedImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self._get(@max(0, @as(i64, self.width) * y + x)).asPixel();
+            return self._get(@max(0, @as(isize, self.width) * y + x)).asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -663,7 +663,7 @@ pub fn PackedImageSurface(comptime T: type) type {
                 });
             }
             const scale = 8 / @bitSizeOf(T);
-            const px_start: usize = @max(0, @as(i64, self.width) * y + x);
+            const px_start: usize = @max(0, @as(isize, self.width) * y + x);
             const px_offset = px_start % scale;
             const slice_start = px_start / scale;
             const slice_len = ((len + px_offset) * @bitSizeOf(T) + 7) / 8;
@@ -678,7 +678,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// pixel is out of range.
         pub fn putPixel(self: *PackedImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self._set(@max(0, @as(i64, self.width) * y + x), T.fromPixel(px));
+            self._set(@max(0, @as(isize, self.width) * y + x), T.fromPixel(px));
         }
 
         /// Puts the supplied stride at `(x, y)`, proceeding for its full
