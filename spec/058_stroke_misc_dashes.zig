@@ -12,7 +12,7 @@ pub const filename = "058_stroke_misc_dashes";
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
-    const height = 1700;
+    const height = 2000;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
     var context = z2d.Context.init(alloc, &sfc);
@@ -306,6 +306,26 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try context.moveTo(0, 0);
     try context.relLineTo(-10, 0);
     try context.stroke();
+    context.resetPath();
+
+    // SVG octagon from
+    // https://en.m.wikipedia.org/wiki/File:Regular_octagon.svg (public domain)
+    context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
+    context.setIdentity();
+    context.translate(200, 1725);
+    context.setDashOffset(0);
+    context.setDashes(&.{ 180, 30 });
+    try context.moveTo(136.737609507049, 188.692435121084);
+    try context.lineTo(63.2623904929514, 188.692435121084);
+    try context.lineTo(11.3075648789165, 136.737609507049);
+    try context.lineTo(11.3075648789165, 63.2623904929514);
+    try context.lineTo(63.2623904929513, 11.3075648789165);
+    try context.lineTo(136.737609507049, 11.3075648789165);
+    try context.lineTo(188.692435121084, 63.2623904929513);
+    try context.lineTo(188.692435121084, 136.737609507049);
+    try context.closePath();
+    try context.stroke();
+    context.resetPath();
 
     return sfc;
 }

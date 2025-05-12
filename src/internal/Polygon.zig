@@ -82,7 +82,7 @@ fn checkUpdateExtents(self: *Polygon, point: Point) void {
 
 /// Concatenates a polygon into this one. It's invalid to use the other polygon
 /// after this operation is done.
-pub fn concat(self: *Polygon, other: Polygon) mem.Allocator.Error!void {
+pub fn concat(self: *Polygon, other: Polygon) void {
     concatByCopying(&self.corners, &other.corners);
 
     self.checkUpdateExtents(other.start);
