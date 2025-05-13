@@ -340,7 +340,7 @@ pub fn plotOpenJoined(
     // Now, concat the end of the inner polygon to the
     // end of the outer to give a single polygon
     // representing the whole open stroke.
-    try self.poly_outer.concat(self.poly_inner);
+    self.poly_outer.concat(self.poly_inner);
 
     // Done
     try self.result.prepend(self.alloc, self.poly_outer);

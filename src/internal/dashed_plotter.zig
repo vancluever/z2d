@@ -21,7 +21,6 @@ const Spline = @import("Spline.zig");
 const Transformation = @import("../Transformation.zig");
 
 const join = @import("stroke_plotter.zig").join;
-const plotClosedJoined = @import("stroke_plotter.zig").plotClosedJoined;
 const plotOpenJoined = @import("stroke_plotter.zig").plotOpenJoined;
 const plotSingle = @import("stroke_plotter.zig").plotSingle;
 const PointBuffer = @import("stroke_plotter.zig").PointBuffer;
@@ -240,9 +239,7 @@ const Plotter = struct {
                         // a helper that does it.
                         self.initial_polygon = .{ .none = {} };
                     } else {
-                        try self.joinAndCapInitial(
-                            self.points.items[self.points.idx - 2],
-                        );
+                        try self.joinAndCapInitial();
                     }
                 } else {
                     // We're off, or we just transitioned to an on segment at
@@ -545,36 +542,79 @@ const Plotter = struct {
         self.initial_polygon = .{ .none = {} };
     }
 
-    fn joinAndCapInitial(
-        self: *Plotter,
-        last_point: Point,
-    ) Error!void {
+    fn joinAndCapInitial(self: *Plotter) Error!void {
         // This adds a join at the beginning of the initial polygon before
         // capping.
         debug.assert(self.initial_polygon == .on);
         debug.assert(self.initial_polygon.on.points.idx >= 2);
 
-        // Do the join
-        try join(
-            InitialPolygon,
-            &self.initial_polygon.on,
-            self.opts.join_mode,
-            last_point,
-            self.initial_polygon.on.points.items[0],
-            self.initial_polygon.on.points.items[1],
-            self.initial_polygon.on.poly_outer.corners.first,
-        );
+        if (self.points.idx > 2) {
+            // We need to actually do some polygon surgery here because we have
+            // some outstanding joins.
+            //
+            // NOTE: This is a bit meaty, a little bit of a hack right now, but
+            // it works for what we need. Could be improved upon, more than likely.
 
-        // Now finish
-        try plotOpenJoined(
-            InitialPolygon,
-            &self.initial_polygon.on,
-            last_point,
-            self.initial_polygon.on.points.items[0],
-            self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
-            self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
-        );
+            // Do the final join on the existing polygon.
+            try join(
+                Plotter,
+                self,
+                self.opts.join_mode,
+                self.points.items[self.points.idx - 2],
+                self.initial_polygon.on.points.items[0],
+                self.initial_polygon.on.points.items[1],
+                null,
+            );
+
+            // Concat the initial polygon to the main outer, and inner to
+            // initial, i.e., the other way around.
+            self.poly_outer.concat(self.initial_polygon.on.poly_outer);
+            self.initial_polygon.on.poly_inner.concat(self.poly_inner);
+            // We need to replace the initial polygon with the outer due to the
+            // direction of the concat happened in.
+            self.initial_polygon.on.poly_outer = self.poly_outer;
+
+            // Our first cap points are based entirely off of the plotter state
+            // (not the initial state).
+            try plotOpenJoined(
+                InitialPolygon,
+                &self.initial_polygon.on,
+                self.points.items[0],
+                self.points.items[1],
+                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
+                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
+            );
+        } else {
+            // Don't need to do any concats and our cap points are last corner
+            // -> start of initial polygon.
+
+            // Do the join
+            try join(
+                InitialPolygon,
+                &self.initial_polygon.on,
+                self.opts.join_mode,
+                self.points.items[self.points.idx - 2],
+                self.initial_polygon.on.points.items[0],
+                self.initial_polygon.on.points.items[1],
+                self.initial_polygon.on.poly_outer.corners.first,
+            );
+
+            try plotOpenJoined(
+                InitialPolygon,
+                &self.initial_polygon.on,
+                self.points.items[0],
+                self.initial_polygon.on.points.items[0],
+                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
+                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
+            );
+        }
+
         self.initial_polygon = .{ .none = {} };
+        //  Reset the main polygon state as we don't do that above (the initial
+        //  gets cleared instead).
+        self.poly_outer = .{ .scale = self.opts.scale };
+        self.poly_inner = .{ .scale = self.opts.scale };
+        self.clockwise_ = null;
     }
 
     const CurveToCtx = struct {
