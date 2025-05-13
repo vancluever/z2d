@@ -20,6 +20,12 @@ ENHANCEMENTS:
   [#115](https://github.com/vancluever/z2d/pull/115),
   [#117](https://github.com/vancluever/z2d/pull/117)
 
+BUG FIXES:
+
+* Corrected an issue with dashed lines when connecting multi-corner closed
+  segments with an initial segment.
+  [#118](https://github.com/vancluever/z2d/pull/118)
+
 ## 0.6.1 (April 25, 2025)
 
 BUG FIXES:
