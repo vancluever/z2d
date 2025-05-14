@@ -22,6 +22,10 @@ ENHANCEMENTS:
 
 BUG FIXES:
 
+* Corrected an issue with strokes when handling the special case where a
+  `lineTo` was made to the initial point right before the `closePath`.
+  [#119](https://github.com/vancluever/z2d/pull/119)
+
 * Corrected an issue with dashed lines when connecting multi-corner closed
   segments with an initial segment.
   [#118](https://github.com/vancluever/z2d/pull/118)
