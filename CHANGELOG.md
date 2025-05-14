@@ -7,7 +7,7 @@ ENHANCEMENTS:
 
 * Added additional checks in the painter during composition to make sure that
   the polygon(s) to draw will be in the bounds of the destination surface. This
-  adds additional validation and safety surrounding degenerate cases and avoids
+  adds additional validation and safety surrounding special cases and avoids
   unnecessary work. [#106](https://github.com/vancluever/z2d/pull/106)
 
 * Additional internal changes to the painter, surface, and compositor to ensure
