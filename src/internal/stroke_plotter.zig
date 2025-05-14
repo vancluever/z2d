@@ -360,11 +360,24 @@ pub fn plotClosedJoined(
     // Fully closed path, record the final join, and then
     // insert a join at the start of each the already plotted
     // inner and outer polygons. Append both.
-    //
-    // Final join (close_path acts as line_to to initial point)
-    try join(T, self, self.opts.join_mode, p1, p2, initial0, null);
-    // Join around the initial point
-    try join(T, self, self.opts.join_mode, p2, initial0, initial1, null);
+    if (!p2.equal(initial0)) {
+        // Normal case - current point does not equal the initial point.
+        //
+        // Do the final join (close_path acts as line_to to initial point), and
+        // then join around the initial point.
+        try join(T, self, self.opts.join_mode, p1, p2, initial0, null);
+        try join(T, self, self.opts.join_mode, p2, initial0, initial1, null);
+    } else {
+        // Degenerate case - the current point is equal to the initial point.
+        //
+        // This will happen when a line_to or equivalent has already been
+        // processed previously to the initial point. In this case, the final
+        // join (p1 -> p2 -> initial0 as per above in the normal case) will
+        // have already been done, and our points will have essentially shifted
+        // up so that effectively p1 takes the place of p2. This means that we
+        // only need to join p1 -> initial0 -> initial1 as our closing join.
+        try join(T, self, self.opts.join_mode, p1, initial0, initial1, null);
+    }
 
     // Done
     try self.result.prepend(self.alloc, self.poly_outer);
