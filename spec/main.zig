@@ -83,6 +83,7 @@ const _069_gradient_dither_context = @import("069_gradient_dither_context.zig");
 const _070_compositor_ops = @import("070_compositor_ops.zig");
 const _071_gamma_linear = @import("071_gamma_linear.zig");
 const _072_gamma_srgb = @import("072_gamma_srgb.zig");
+const _073_stroke_sameclose = @import("073_stroke_sameclose.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -162,6 +163,7 @@ pub fn main() !void {
     try pathExportRun(alloc, _070_compositor_ops);
     try compositorExportRun(alloc, _071_gamma_linear);
     try compositorExportRun(alloc, _072_gamma_srgb);
+    try pathExportRun(alloc, _073_stroke_sameclose);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -452,6 +454,10 @@ test "071_gamma_linear" {
 
 test "072_gamma_srgb" {
     try compositorTestRun(testing.allocator, _072_gamma_srgb);
+}
+
+test "073_stroke_sameclose" {
+    try pathTestRun(testing.allocator, _073_stroke_sameclose);
 }
 
 //////////////////////////////////////////////////////////////////////////////
