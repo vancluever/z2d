@@ -1,3 +1,7 @@
+## 0.6.3-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.6.2 (May 21, 2025)
 
 ENHANCEMENTS:
