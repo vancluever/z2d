@@ -172,7 +172,7 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Release automation
     /////////////////////////////////////////////////////////////////////////
-    const release_cmd = b.addSystemCommand(&.{"build-support/release/release.sh"});
+    const release_cmd = b.addSystemCommand(&.{"build-support/scripts/release.sh"});
     b.step("release", "Tag and push a release").dependOn(&release_cmd.step);
 
     /////////////////////////////////////////////////////////////////////////
