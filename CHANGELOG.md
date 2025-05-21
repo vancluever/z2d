@@ -1,4 +1,4 @@
-## 0.6.2 (Unreleased)
+## 0.6.2 (May 21, 2025)
 
 ENHANCEMENTS:
 
