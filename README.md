@@ -185,7 +185,8 @@ Zig 0.14.0 is required; those requiring Zig 0.13.0 should use v0.5.1.
 
 ## Documentation and examples
 
-View the documentation for the `main` branch at: https://z2d.vancluevertech.com/docs
+View the documentation for the latest release at:
+<https://z2d.vancluevertech.com/docs>
 
 See the [`spec/`](spec/) directory for a number of rudimentary usage examples.
 
