@@ -17,12 +17,14 @@ const mem = @import("std").mem;
 const compositor = @import("compositor.zig");
 const options = @import("options.zig");
 const painter = @import("painter.zig");
+const text = @import("text.zig");
 
 const Dither = @import("Dither.zig");
 const Path = @import("Path.zig");
 const Pixel = @import("pixel.zig").Pixel;
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
+const Font = @import("Font.zig");
 const Transformation = @import("Transformation.zig");
 
 alloc: mem.Allocator,
@@ -33,12 +35,18 @@ pattern: Pattern = .{
         .pixel = .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
     },
 },
+font: union(enum) {
+    none: void,
+    file: Font,
+    buffer: Font,
+} = .none,
 
 anti_aliasing_mode: options.AntiAliasMode = .default,
 dashes: []const f64 = &.{},
 dash_offset: f64 = 0,
 dither: Dither.Type = .none,
 fill_rule: options.FillRule = .non_zero,
+font_size: f64 = 16.0,
 line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
 line_width: f64 = 2.0,
@@ -64,6 +72,15 @@ pub fn init(alloc: mem.Allocator, surface: *Surface) Context {
 pub fn deinit(self: *Context) void {
     self.path.deinit(self.alloc);
     self.path = undefined;
+}
+
+/// Releases any font data held on by the context.
+fn deinitFont(self: *Context) void {
+    switch (self.font) {
+        .file => self.font.file.deinit(self.alloc),
+        else => {},
+    }
+    self.font = .none;
 }
 
 /// Returns the current underlying `Pixel` for the context's pattern.
@@ -280,6 +297,46 @@ pub fn setTolerance(self: *Context, tolerance: f64) void {
     const t = @max(tolerance, 0.001);
     self.tolerance = t;
     self.path.tolerance = t;
+}
+
+/// Determines the source type to use when setting the font.
+pub const SetFontSource = union(enum) {
+    /// Load from a file at the supplied path. The contents of the file are
+    /// read into memory using the context's allocator and freed when `deinit`
+    /// is called, or if the font is switched via another `setFont` call.
+    file: []const u8,
+
+    /// Load from a supplied buffer of externally managed memory.
+    buffer: []const u8,
+};
+
+/// Sets the font to use with `showText`, loading the file form the supplied
+/// path. The contents of the file are read into memory using the context's
+/// allocator and freed when `deinit` is called, or if the font is switched via
+/// another `setFontToFile` or `setFontToBuffer` call.
+pub fn setFontToFile(self: *Context, filename: []const u8) Font.LoadFileError!void {
+    self.deinitFont();
+    self.font = .{ .file = try Font.loadFile(self.alloc, filename) };
+}
+
+/// Sets the font to use with `showText`, using a supplied buffer of externally
+/// managed memory.
+pub fn setFontToBuffer(self: *Context, buffer: []const u8) Font.LoadBufferError!void {
+    self.deinitFont();
+    self.font = .{ .file = try Font.loadBuffer(buffer) };
+}
+
+/// Returns the font size set with `setFont`.
+pub fn getFontSize(self: *Context) f64 {
+    return self.font_size;
+}
+
+/// Sets the font size to use with `showText`, in pixels.
+///
+/// To translate from points, use `target_dpi / 72 * point_size`. The default
+/// is 16px, or 12pt @ 96 DPI.
+pub fn setFontSize(self: *Context, size: f64) void {
+    self.font_size = size;
 }
 
 /// Returns the current transformation matrix (CTM) for the context.
@@ -526,6 +583,42 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
             .precision = self.precision,
             .tolerance = self.tolerance,
             .transformation = self.transformation,
+        },
+    );
+}
+
+/// Shows the text from the UTF-8 supplied string at the co-ordinates specified
+/// by `(x, y)`.
+///
+/// Note that the current transformation matrix, font size, and options that
+/// would normally apply to fill operations are applied to the rendering of
+/// text.
+///
+/// See the `text` package and `Font` type for details on loading in fonts.
+pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) text.ShowTextError!void {
+    const font: *Font = switch (self.font) {
+        inline .file, .buffer => |*f| f,
+        else => return,
+    };
+    const wrapped_pattern = self.wrapDither();
+    try text.show(
+        self.alloc,
+        self.surface,
+        &wrapped_pattern,
+        font,
+        utf8,
+        x,
+        y,
+        .{
+            .transformation = self.transformation,
+            .size = self.font_size,
+            .fill_opts = .{
+                .anti_aliasing_mode = self.anti_aliasing_mode,
+                .fill_rule = self.fill_rule,
+                .operator = self.operator,
+                .precision = self.precision,
+                .tolerance = self.tolerance,
+            },
         },
     );
 }

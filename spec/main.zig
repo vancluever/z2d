@@ -84,6 +84,7 @@ const _070_compositor_ops = @import("070_compositor_ops.zig");
 const _071_gamma_linear = @import("071_gamma_linear.zig");
 const _072_gamma_srgb = @import("072_gamma_srgb.zig");
 const _073_stroke_sameclose = @import("073_stroke_sameclose.zig");
+const _074_text = @import("074_text.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -164,6 +165,7 @@ pub fn main() !void {
     try compositorExportRun(alloc, _071_gamma_linear);
     try compositorExportRun(alloc, _072_gamma_srgb);
     try pathExportRun(alloc, _073_stroke_sameclose);
+    try pathExportRun(alloc, _074_text);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -458,6 +460,10 @@ test "072_gamma_srgb" {
 
 test "073_stroke_sameclose" {
     try pathTestRun(testing.allocator, _073_stroke_sameclose);
+}
+
+test "074_text" {
+    try pathTestRun(testing.allocator, _074_text);
 }
 
 //////////////////////////////////////////////////////////////////////////////
