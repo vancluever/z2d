@@ -1,6 +1,26 @@
-## 0.6.3-pre (Unreleased)
+## 0.7.0 (Unreleased)
 
-Bumped version for dev.
+TEXT SUPPORT
+
+0.7.0 introduces **text support** into z2d!!!
+
+The initial support allows the loading of fonts from a file or external buffer
+and rendering of text for what should be most basic Latin characters. This
+includes diacritics and composite glyphs. Additionally, proper kerning is
+supported (through modern `GPOS` or legacy `kern` data)!
+
+This support will be expanded on an as-needed and future version basis,
+balancing what is on the roadmap with any requests that are made. The only
+current thing that is likely off the table for the time being is loading fonts
+via a font enumeration/substitution tool (such as fontconfig).
+
+Note that currently only whole TrueType/OpenType files are supported, no font
+collections (this will be added later, more than likely).
+
+To use text support, check out the new `setFontToFile`, `setFontToBuffer`,
+`setFontSize`, and `showText` functions in the `Context`. Additionally, check
+out the `Font` type and `text` package to work with text in the unmanaged
+interface.
 
 ## 0.6.2 (May 21, 2025)
 
