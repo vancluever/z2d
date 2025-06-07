@@ -22,6 +22,11 @@ To use text support, check out the new `setFontToFile`, `setFontToBuffer`,
 out the `Font` type and `text` package to work with text in the unmanaged
 interface.
 
+BUG FIXES:
+
+* Downsampling a surface no longer can produce a zero-length buffer surface.
+  [#124](https://github.com/vancluever/z2d/pull/124)
+
 ## 0.6.2 (May 21, 2025)
 
 ENHANCEMENTS:
