@@ -186,6 +186,11 @@ pub const Surface = union(SurfaceType) {
     /// Downsamples the image, using simple pixel averaging. The surface is
     /// downsampled in-place. After downsampling, dimensions are altered and
     /// memory is freed.
+    ///
+    /// Surface dimensions need to be divisible by the value located in
+    /// `supersample_scale` (4 as the time of this writing). Remainders are
+    /// discarded. If either the width of height is smaller than
+    /// `supersample_scale`, the operation is aborted.
     pub fn downsample(self: *Surface, alloc: mem.Allocator) void {
         switch (self.*) {
             inline else => |*s| s.downsample(alloc),
@@ -195,6 +200,8 @@ pub const Surface = union(SurfaceType) {
     /// Downsamples the image buffer, using simple pixel averaging. The surface
     /// is downsampled in-place. After downsampling, dimensions are altered.
     /// Memory must be freed from the underlying buffer manually if desired.
+    ///
+    /// See `downsample` for specific restrictions on this method.
     pub fn downsampleBuffer(self: *Surface) void {
         switch (self.*) {
             inline else => |*s| s.downsampleBuffer(),
@@ -385,6 +392,11 @@ pub fn ImageSurface(comptime T: type) type {
         /// Downsamples the image, using simple pixel averaging. The surface is
         /// downsampled in-place. After downsampling, dimensions are altered
         /// and memory is freed.
+        ///
+        /// Surface dimensions need to be divisible by the value located in
+        /// `supersample_scale` (4 as the time of this writing). Remainders are
+        /// discarded. If either the width of height is smaller than
+        /// `supersample_scale`, the operation is aborted.
         pub fn downsample(self: *ImageSurface(T), alloc: mem.Allocator) void {
             self.downsampleBuffer();
             self.resizeBuffer(alloc);
@@ -393,7 +405,11 @@ pub fn ImageSurface(comptime T: type) type {
         /// Downsamples a buffer in place. The caller is responsible for
         /// freeing the memory. After the downsample is complete, dimensions
         /// are updated.
+        ///
+        /// See `downsample` for specific restrictions on this method.
         pub fn downsampleBuffer(self: *ImageSurface(T)) void {
+            if (self.width < supersample_scale or self.height < supersample_scale) return;
+
             const scale = supersample_scale;
             const height: usize = @max(0, @divFloor(self.height, scale));
             const width: usize = @max(0, @divFloor(self.width, scale));
@@ -588,6 +604,11 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// Downsamples the image, using simple pixel averaging. The surface is
         /// downsampled in-place. After downsampling, dimensions are altered
         /// and memory is freed.
+        ///
+        /// Surface dimensions need to be divisible by the value located in
+        /// `supersample_scale` (4 as the time of this writing). Remainders are
+        /// discarded. If either the width of height is smaller than
+        /// `supersample_scale`, the operation is aborted.
         pub fn downsample(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
             self.downsampleBuffer();
             self.resizeBuffer(alloc);
@@ -596,7 +617,11 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// Downsamples a buffer in place. The caller is responsible for
         /// freeing the memory. After the downsample is complete, dimensions
         /// are updated.
+        ///
+        /// See `downsample` for specific restrictions on this method.
         pub fn downsampleBuffer(self: *PackedImageSurface(T)) void {
+            if (self.width < supersample_scale or self.height < supersample_scale) return;
+
             const scale = supersample_scale;
             const height: usize = @max(0, @divFloor(self.height, scale));
             const width: usize = @max(0, @divFloor(self.width, scale));
@@ -1428,5 +1453,139 @@ test "PackedImageSurface, dimension validation" {
             -1,
             .{ .a = 1 },
         ));
+    }
+}
+
+test "ImageSurface.downsample, edge cases" {
+    {
+        // Width not divisible by 4
+        var sfc = try ImageSurface(pixel.Alpha8).init(
+            testing.allocator,
+            7,
+            4,
+            .{ .a = 255 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(1, sfc.width);
+        try testing.expectEqual(1, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Height not divisible by 4
+        var sfc = try ImageSurface(pixel.Alpha8).init(
+            testing.allocator,
+            4,
+            7,
+            .{ .a = 255 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(1, sfc.width);
+        try testing.expectEqual(1, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Width too small
+        var sfc = try ImageSurface(pixel.Alpha8).init(
+            testing.allocator,
+            3,
+            4,
+            .{ .a = 255 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(3, sfc.width);
+        try testing.expectEqual(4, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Height too small
+        var sfc = try ImageSurface(pixel.Alpha8).init(
+            testing.allocator,
+            4,
+            3,
+            .{ .a = 255 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(4, sfc.width);
+        try testing.expectEqual(3, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+    }
+}
+
+test "PackedImageSurface.downsample, edge cases" {
+    {
+        // Width not divisible by 4
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(
+            testing.allocator,
+            7,
+            4,
+            .{ .a = 1 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(1, sfc.width);
+        try testing.expectEqual(1, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Height not divisible by 4
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(
+            testing.allocator,
+            4,
+            7,
+            .{ .a = 1 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(1, sfc.width);
+        try testing.expectEqual(1, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Width too small
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(
+            testing.allocator,
+            3,
+            4,
+            .{ .a = 1 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(3, sfc.width);
+        try testing.expectEqual(4, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+    }
+    {
+        // Height too small
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(
+            testing.allocator,
+            4,
+            3,
+            .{ .a = 1 },
+        );
+        defer sfc.deinit(testing.allocator);
+
+        sfc.downsample(testing.allocator);
+
+        try testing.expectEqual(4, sfc.width);
+        try testing.expectEqual(3, sfc.height);
+        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
 }
