@@ -375,7 +375,7 @@ const Plotter = struct {
         // stroke.
         //
         // All other zero-length strokes draw nothing.
-        debug.assert(self.poly_inner.corners.len == 0); // should have not been used
+        debug.assert(self.poly_inner.corners.len() == 0); // should have not been used
         switch (self.opts.cap_mode) {
             .round => {
                 // Just plot off all of the pen's vertices, no need to

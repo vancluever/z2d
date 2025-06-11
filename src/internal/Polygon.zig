@@ -10,7 +10,11 @@ const heap = @import("std").heap;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-pub const CornerList = std.DoublyLinkedList(Point);
+pub const CornerList = std.DoublyLinkedList;
+pub const CornerListItem = struct {
+    data: Point,
+    node: std.DoublyLinkedList.Node = .{},
+};
 const Point = @import("Point.zig");
 const PolygonList = @import("PolygonList.zig");
 const InternalError = @import("InternalError.zig").InternalError;
@@ -24,8 +28,9 @@ scale: f64,
 pub fn deinit(self: *const Polygon, alloc: mem.Allocator) void {
     var node_ = self.corners.first;
     while (node_) |node| {
+        const n: *Polygon.CornerListItem = @fieldParentPtr("node", node);
         node_ = node.next;
-        alloc.destroy(node);
+        alloc.destroy(n);
     }
 }
 
@@ -38,7 +43,6 @@ pub fn plot(
     before_: ?*CornerList.Node,
 ) mem.Allocator.Error!void {
     debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
-    const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
         .x = point.x * self.scale,
@@ -47,15 +51,17 @@ pub fn plot(
 
     self.checkUpdateExtents(scaled);
 
-    n.data = scaled;
-    if (before_) |before| self.corners.insertBefore(before, n) else self.corners.append(n);
+    const n = try alloc.create(CornerListItem);
+    n.* = .{
+        .data = scaled,
+    };
+    if (before_) |before| self.corners.insertBefore(before, &n.node) else self.corners.append(&n.node);
 }
 
 /// Like plot, but adds points in the reverse direction (i.e., at the start of
 /// the polygon instead of the end.
 pub fn plotReverse(self: *Polygon, alloc: mem.Allocator, point: Point) mem.Allocator.Error!void {
     debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
-    const n = try alloc.create(CornerList.Node);
 
     const scaled: Point = .{
         .x = point.x * self.scale,
@@ -64,12 +70,15 @@ pub fn plotReverse(self: *Polygon, alloc: mem.Allocator, point: Point) mem.Alloc
 
     self.checkUpdateExtents(scaled);
 
-    n.data = scaled;
-    self.corners.prepend(n);
+    const n = try alloc.create(CornerListItem);
+    n.* = .{
+        .data = scaled,
+    };
+    self.corners.prepend(&n.node);
 }
 
 fn checkUpdateExtents(self: *Polygon, point: Point) void {
-    if (self.corners.len == 0) {
+    if (self.corners.len() == 0) {
         self.start = point;
         self.end = point;
     } else {
@@ -83,26 +92,10 @@ fn checkUpdateExtents(self: *Polygon, point: Point) void {
 /// Concatenates a polygon into this one. It's invalid to use the other polygon
 /// after this operation is done.
 pub fn concat(self: *Polygon, other: Polygon) void {
-    concatByCopying(&self.corners, &other.corners);
+    self.corners.concatByMoving(@constCast(&other.corners));
 
     self.checkUpdateExtents(other.start);
     self.checkUpdateExtents(other.end);
-}
-
-/// Re-implemented from stdlib to just strip the invalidation of the second
-/// list, to allow for const-ness.
-fn concatByCopying(list1: *CornerList, list2: *const CornerList) void {
-    const l2_first = list2.first orelse return;
-    if (list1.last) |l1_last| {
-        l1_last.next = list2.first;
-        l2_first.prev = list1.last;
-        list1.len += list2.len;
-    } else {
-        // list1 was empty
-        list1.first = list2.first;
-        list1.len = list2.len;
-    }
-    list1.last = list2.last;
 }
 
 /// Represents an edge on a polygon for a particular y-scanline.
@@ -145,7 +138,7 @@ pub fn edgesForY(
     const edge_buffer_item_size = edge_buffer_size / @sizeOf(Edge);
     const edge_list_capacity = edge_buffer_item_size - (edge_buffer_item_size / 3 * 2);
     var edge_list = try std.ArrayListUnmanaged(Edge).initCapacity(alloc, edge_list_capacity);
-    if (self.corners.len == 0) return edge_list;
+    if (self.corners.len() == 0) return edge_list;
     defer edge_list.deinit(alloc);
 
     // We take our line measurements at the middle of the line; this helps
@@ -157,13 +150,15 @@ pub fn edgesForY(
     if (self.corners.last == null) return InternalError.InvalidState;
     var last = self.corners.last.?;
     while (current_) |current| : (current_ = current.next) {
-        const last_y = last.data.y;
-        const cur_y = current.data.y;
+        const last_node: *CornerListItem = @fieldParentPtr("node", last);
+        const cur_node: *CornerListItem = @fieldParentPtr("node", current);
+        const last_y = last_node.data.y;
+        const cur_y = cur_node.data.y;
         if (cur_y < line_y_middle and last_y >= line_y_middle or
             cur_y >= line_y_middle and last_y < line_y_middle)
         {
-            const last_x = last.data.x;
-            const cur_x = current.data.x;
+            const last_x = last_node.data.x;
+            const cur_x = cur_node.data.x;
             try edge_list.append(alloc, edge: {
                 // y(x) = (y1 - y0) / (x1 - x0) * (x - x0) + y0
                 //

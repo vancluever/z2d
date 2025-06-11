@@ -19,14 +19,20 @@ const edge_buffer_size = @import("../painter.zig").edge_buffer_size;
 const runCases = @import("util.zig").runCases;
 const TestingError = @import("util.zig").TestingError;
 
-polygons: std.SinglyLinkedList(Polygon) = .{},
+pub const PolygonListItem = struct {
+    data: Polygon,
+    node: std.SinglyLinkedList.Node = .{},
+};
+
+polygons: std.SinglyLinkedList = .{},
 start: Point = .{ .x = 0, .y = 0 },
 end: Point = .{ .x = 0, .y = 0 },
 
 pub fn deinit(self: *PolygonList, alloc: mem.Allocator) void {
-    var poly_ = self.polygons.first;
-    while (poly_) |poly| {
-        poly_ = poly.next;
+    var node_ = self.polygons.first;
+    while (node_) |node| {
+        node_ = node.next;
+        var poly: *PolygonListItem = @fieldParentPtr("node", node);
         poly.data.deinit(alloc);
         alloc.destroy(poly);
     }
@@ -36,9 +42,9 @@ pub fn deinit(self: *PolygonList, alloc: mem.Allocator) void {
 pub fn prepend(self: *PolygonList, alloc: mem.Allocator, poly: Polygon) mem.Allocator.Error!void {
     const first = self.polygons.len() == 0;
 
-    const n = try alloc.create(std.SinglyLinkedList(Polygon).Node);
-    n.data = poly;
-    self.polygons.prepend(n);
+    const n = try alloc.create(PolygonListItem);
+    n.* = .{ .data = poly };
+    self.polygons.prepend(&n.node);
 
     if (first) {
         self.start = poly.start;
@@ -393,8 +399,9 @@ pub fn edgesForY(
     var edge_list = try std.ArrayListUnmanaged(Polygon.Edge).initCapacity(alloc, edge_list_capacity);
     defer edge_list.deinit(alloc);
 
-    var poly_ = self.polygons.first;
-    while (poly_) |poly| : (poly_ = poly.next) {
+    var node_ = self.polygons.first;
+    while (node_) |node| : (node_ = node.next) {
+        const poly: *PolygonListItem = @fieldParentPtr("node", node);
         var poly_edge_list = try poly.data.edgesForY(alloc, line_y);
         defer poly_edge_list.deinit(alloc);
         try edge_list.appendSlice(alloc, poly_edge_list.items);

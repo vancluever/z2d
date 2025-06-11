@@ -208,7 +208,7 @@ const Plotter = struct {
         //
         // Note that we draw rectangles/squares for dashed lines, see this
         // function in the dashed plotter for more details.
-        debug.assert(self.poly_inner.corners.len == 0); // should have not been used
+        debug.assert(self.poly_inner.corners.len() == 0); // should have not been used
         if (self.opts.cap_mode == .round) {
             // Just plot off all of the pen's vertices, no need to
             // determine a subset as we're doing a 360-degree plot.
@@ -246,7 +246,7 @@ const Plotter = struct {
 pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
     // Single-segment line. This can be drawn off of
     // our start line caps.
-    debug.assert(self.poly_inner.corners.len == 0); // should have not been used
+    debug.assert(self.poly_inner.corners.len() == 0); // should have not been used
     const cap_points = Face.init(
         start,
         end,
@@ -599,10 +599,11 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
         var corners_len: i32 = 0;
-        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
-        while (next_) |n| {
+        const poly: *PolygonList.PolygonListItem = @fieldParentPtr("node", result.polygons.first.?.findLast());
+        var next_: ?*Polygon.CornerList.Node = poly.data.corners.first;
+        while (next_) |node| {
             corners_len += 1;
-            next_ = n.next;
+            next_ = node.next;
         }
         try testing.expectEqual(4, corners_len);
     }
@@ -630,7 +631,8 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
         var corners_len: i32 = 0;
-        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
+        const poly: *PolygonList.PolygonListItem = @fieldParentPtr("node", result.polygons.first.?.findLast());
+        var next_: ?*Polygon.CornerList.Node = poly.data.corners.first;
         while (next_) |n| {
             corners_len += 1;
             next_ = n.next;
@@ -672,14 +674,16 @@ test "slope difference below epsilon does not produce NaN" {
         defer result.deinit(alloc);
         try testing.expectEqual(1, result.polygons.len());
         var idx: i32 = 0;
-        var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
-        while (next_) |n| {
+        const poly: *PolygonList.PolygonListItem = @fieldParentPtr("node", result.polygons.first.?.findLast());
+        var next_: ?*Polygon.CornerList.Node = poly.data.corners.first;
+        while (next_) |node| {
+            const n: *Polygon.CornerListItem = @fieldParentPtr("node", node);
             if (!math.isFinite(n.data.x) or !math.isFinite(n.data.y)) {
                 debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, n.data });
                 return error.TestExpectedFinite;
             }
             idx += 1;
-            next_ = n.next;
+            next_ = node.next;
         }
     }
 }
