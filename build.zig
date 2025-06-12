@@ -152,6 +152,7 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path("spec/main.zig"),
                 .target = target,
                 .optimize = optimize,
+                .use_llvm = true,
             })
         else
             break :spec b.addTest(.{
@@ -160,6 +161,7 @@ pub fn build(b: *std.Build) void {
                 .target = target,
                 .optimize = optimize,
                 .filters = test_filters,
+                .use_llvm = true,
             });
     };
     spec_test.root_module.addImport("z2d", z2d);

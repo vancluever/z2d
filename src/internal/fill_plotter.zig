@@ -38,7 +38,7 @@ pub fn plot(
                 if (current_polygon) |poly| {
                     // Only append this polygon if it's useful (has more than 2
                     // corners). Otherwise, get rid of it.
-                    if (poly.corners.len > 2) {
+                    if (poly.corners.len() > 2) {
                         try result.prepend(alloc, poly);
                     } else {
                         poly.deinit(alloc);
@@ -140,9 +140,11 @@ test "degenerate line_to" {
     var corners_len: i32 = 0;
     var corners: std.ArrayListUnmanaged(Point) = .{};
     defer corners.deinit(alloc);
-    var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
+    var next_: ?*std.DoublyLinkedList.Node = Polygon.fromNode(
+        result.polygons.first.?.findLast(),
+    ).corners.first;
     while (next_) |n| {
-        try corners.append(alloc, n.data);
+        try corners.append(alloc, Polygon.Corner.fromNode(n).point);
         corners_len += 1;
         next_ = n.next;
     }
