@@ -22,6 +22,11 @@ To use text support, check out the new `setFontToFile`, `setFontToBuffer`,
 out the `Font` type and `text` package to work with text in the unmanaged
 interface.
 
+ENHANCEMENTS:
+
+* The compositor now uses shuffling to transfer data into and out of vectors.
+  [#126](https://github.com/vancluever/z2d/pull/126)
+
 BUG FIXES:
 
 * Downsampling a surface no longer can produce a zero-length buffer surface.
