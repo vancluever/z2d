@@ -694,28 +694,8 @@ const RGBA16Vec = struct {
         if (limit) debug.assert(limit_len < vector_length);
         switch (src) {
             inline .rgb, .rgba, .alpha8 => |_src| {
-                const src_t = @typeInfo(@TypeOf(_src)).pointer.child;
-                const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
-                const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                return .{ .underlying = .{
-                    .r = if (has_color)
-                        transposeToVec(_src[idx..end], .r, limit, limit_len)
-                    else
-                        zero_int_vec,
-                    .g = if (has_color)
-                        transposeToVec(_src[idx..end], .g, limit, limit_len)
-                    else
-                        zero_int_vec,
-                    .b = if (has_color)
-                        transposeToVec(_src[idx..end], .b, limit, limit_len)
-                    else
-                        zero_int_vec,
-                    .a = if (has_alpha)
-                        transposeToVec(_src[idx..end], .a, limit, limit_len)
-                    else
-                        max_u8_vec,
-                } };
+                return .{ .underlying = transposeToVec(_src[idx..end], limit) };
             },
             inline .alpha4, .alpha2, .alpha1 => |_src| {
                 var result: pixel_vector.RGBA16 = .{
@@ -808,14 +788,8 @@ const RGBA16Vec = struct {
         if (limit) debug.assert(limit_len < vector_length);
         switch (dst) {
             inline .rgb, .rgba, .alpha8 => |_dst| {
-                const dst_t = @typeInfo(@TypeOf(_dst)).pointer.child;
-                const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
-                const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.r, .r, limit, limit_len);
-                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.g, .g, limit, limit_len);
-                if (has_color) transposeFromVec(_dst[idx..end], self.underlying.b, .b, limit, limit_len);
-                if (has_alpha) transposeFromVec(_dst[idx..end], self.underlying.a, .a, limit, limit_len);
+                transposeFromVec(_dst[idx..end], self.underlying, limit);
             },
             inline .alpha4, .alpha2, .alpha1 => |_dst| {
                 for (0..vector_length) |i| {
@@ -837,43 +811,173 @@ const RGBA16Vec = struct {
         return .{ .underlying = IntegerOps.run(op, dst.underlying, src.underlying) };
     }
 
-    fn transposeToVec(
-        arr: anytype,
-        comptime field: VecField,
-        comptime limit: bool,
-        limit_len: usize,
-    ) @Vector(vector_length, u16) {
-        var result: @Vector(vector_length, u16) = zero_int_vec;
-        for (0..vector_length) |idx| {
-            result[idx] = @field(arr[idx], @tagName(field));
-            if (limit) {
-                if (idx + 1 == limit_len) break;
-            }
+    fn genTransposeToShuffleMask(scale: usize, offset: usize) [vector_length]i32 {
+        var result: [vector_length]i32 = undefined;
+        for (0..vector_length) |i| result[i] = @intCast(i * scale + offset);
+        return result;
+    }
+
+    const transpose_to_mask_r = genTransposeToShuffleMask(4, 0);
+    const transpose_to_mask_g = genTransposeToShuffleMask(4, 1);
+    const transpose_to_mask_b = genTransposeToShuffleMask(4, 2);
+    const transpose_to_mask_a = genTransposeToShuffleMask(4, 3);
+
+    /// Transposes a contiguous area of 32-bit RGBA (or RGB with dummied alpha
+    /// channel), or 8-bit alpha channel into a vector. `limit` controls
+    /// whether or not the supplied area of memory is smaller than the vector
+    /// size. There is a guard to prevent memory areas larger than the vector
+    /// size when limiting.
+    fn transposeToVec(src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
+        // Get some details about our source.
+        const src_t = @typeInfo(@TypeOf(src)).pointer.child;
+        const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
+        const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
+        const src_scale = @sizeOf(src_t);
+
+        // This is the byte size of our raw u8 vector that we load the memory
+        // area into.
+        const byte_len = vector_length * src_scale;
+
+        // Load our memory area into a raw u8 vector that we will shuffle from
+        // to get our individual fields. The size of the vector is contingent
+        // on the size of the underlying pixel memory (always going to be 4 or
+        // 1 at the moment).
+        //
+        // When limit is specified (so when the size of the memory area is
+        // smaller than the vector, i.e., at the end of a scanline), we fill a
+        // temporary buffer with zeroes and then copy the buffer into the
+        // start, before loading into the vector.
+        const src_vec: @Vector(byte_len, u8) = if (limit) limit: {
+            var result: [byte_len]u8 = @splat(0);
+            const limit_len = if (src.len <= vector_length)
+                src.len
+            else
+                // This should never happen, but we guard just in case.
+                vector_length;
+            const limit_byte_len = limit_len * src_scale;
+            @memcpy(result[0..limit_byte_len], @as([]u8, @ptrCast(src))[0..limit_byte_len]);
+            break :limit result;
+        } else @as([]u8, @ptrCast(src))[0..byte_len].*;
+
+        // Transpose our individual fields now. This will arrange something like:
+        //
+        // RGBARGBARGBARGBARGBARGBARGBARGBA
+        //
+        // into:
+        //
+        // .{ .r = RRRRRRRR, .g = GGGGGGGG, .b = BBBBBBBB, .a = AAAAAAAA }
+        //
+        // This works by having our shuffle masks select the correct fields
+        // from the raw u8 vector above.
+        //
+        // There are some special cases here - we use a fully opaque alpha for
+        // RGB (no alpha) and opaque black for Alpha8 (no color). In the Alpha8
+        // case as well, we actually don't need to shuffle at all, so we just
+        // coerce our raw vector into the alpha field and call it a day.
+        return .{
+            .r = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_r) else zero_int_vec,
+            .g = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_g) else zero_int_vec,
+            .b = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_b) else zero_int_vec,
+            .a = if (has_color) has_color: {
+                if (has_alpha)
+                    break :has_color @shuffle(u8, src_vec, undefined, transpose_to_mask_a)
+                else
+                    break :has_color max_u8_vec;
+            } else src_vec,
+        };
+    }
+
+    fn genTransposeFromShuffleMask(scale: i32, offset: i32) [vector_length * scale]i32 {
+        const byte_len = vector_length * scale;
+        var result: [byte_len]i32 = undefined;
+        for (0..byte_len) |i| {
+            const j: i32 = @intCast(i);
+            result[i] = if (@rem(j, scale) == offset) @divFloor(j, scale) else ~j;
         }
         return result;
     }
 
-    fn transposeFromVec(
-        arr: anytype,
-        src: @Vector(vector_length, u16),
-        comptime field: VecField,
-        comptime limit: bool,
-        limit_len: usize,
-    ) void {
-        for (0..vector_length) |idx| {
-            @field(arr[idx], @tagName(field)) = @intCast(src[idx]);
-            if (limit) {
-                if (idx + 1 == limit_len) break;
+    const transpose_from_mask_r = genTransposeFromShuffleMask(4, 0);
+    const transpose_from_mask_g = genTransposeFromShuffleMask(4, 1);
+    const transpose_from_mask_b = genTransposeFromShuffleMask(4, 2);
+    const transpose_from_mask_a = genTransposeFromShuffleMask(4, 3);
+
+    /// Transposes our 16-bit RGBA vector into a contiguous area of 32-bit RGBA
+    /// (or RGB with dummied alpha channel), or 8-bit alpha channel.
+    ///
+    /// This is essentially the reverse of transposeToVec; for more details,
+    /// see that function.
+    fn transposeFromVec(dst: anytype, src: pixel_vector.RGBA16, comptime limit: bool) void {
+        // Get some info about our destination.
+        const dst_t = @typeInfo(@TypeOf(dst)).pointer.child;
+        const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
+        const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
+        const dst_scale = @sizeOf(dst_t);
+
+        // Raw vector size
+        const byte_len = vector_length * dst_scale;
+
+        // This is just a guard for limiting cases.
+        const dst_len = if (limit) limit: {
+            break :limit if (dst.len <= vector_length)
+                dst.len
+            else
+                vector_length;
+        } else vector_length;
+
+        // Code generation here should pick the correct path for RGB/RGBA or
+        // Alpha8, and optimize the other out.
+        if (!has_color and has_alpha) {
+            // Alpha8 - we can just set the buffer directly from the vector
+            // and return.
+            //
+            // We coerce the vector to a u8 buffer so that we can slice on it
+            // for limiting cases.
+            @memcpy(
+                @as([]u8, @ptrCast(dst))[0..dst_len],
+                @as([vector_length]u8, @as(@Vector(vector_length, u8), @intCast(src.a)))[0..dst_len],
+            );
+        } else {
+            // RGB and RGBA
+            //
+            // Our temporary vector we shuffle back into
+            var src_vec: @Vector(byte_len, u8) = @splat(0);
+
+            src_vec = @shuffle(
+                u8,
+                @as(@Vector(vector_length, u8), @intCast(src.r)),
+                src_vec,
+                transpose_from_mask_r,
+            );
+            src_vec = @shuffle(
+                u8,
+                @as(@Vector(vector_length, u8), @intCast(src.g)),
+                src_vec,
+                transpose_from_mask_g,
+            );
+            src_vec = @shuffle(
+                u8,
+                @as(@Vector(vector_length, u8), @intCast(src.b)),
+                src_vec,
+                transpose_from_mask_b,
+            );
+            if (has_alpha) {
+                src_vec = @shuffle(
+                    u8,
+                    @as(@Vector(vector_length, u8), @intCast(src.a)),
+                    src_vec,
+                    transpose_from_mask_a,
+                );
             }
+
+            // Copy our shuffled vector back in. We coerce the vector to a u8
+            // buffer so that we can slice on it for limiting cases.
+            @memcpy(
+                @as([]u8, @ptrCast(dst))[0 .. dst_len * dst_scale],
+                @as([byte_len]u8, src_vec)[0 .. dst_len * dst_scale],
+            );
         }
     }
-
-    const VecField = enum {
-        r,
-        g,
-        b,
-        a,
-    };
 };
 
 const RGBAFloat = struct {
