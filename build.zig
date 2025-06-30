@@ -113,11 +113,11 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     const z2d_options = b.addOptions();
     const vector_length = b.option(
-        u8,
+        u32,
         "vector_length",
         "Length of vector operations (default=16)",
     ) orelse 16;
-    z2d_options.addOption(u8, "vector_length", vector_length);
+    z2d_options.addOption(u32, "vector_length", vector_length);
 
     /////////////////////////////////////////////////////////////////////////
     // Main module
