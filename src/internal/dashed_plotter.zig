@@ -15,7 +15,6 @@ const Pen = @import("Pen.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 const Point = @import("Point.zig");
 const Polygon = @import("Polygon.zig");
-const PolygonList = @import("PolygonList.zig");
 const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 const Transformation = @import("../Transformation.zig");
@@ -23,7 +22,7 @@ const Transformation = @import("../Transformation.zig");
 const join = @import("stroke_plotter.zig").join;
 const plotOpenJoined = @import("stroke_plotter.zig").plotOpenJoined;
 const plotSingle = @import("stroke_plotter.zig").plotSingle;
-const PointBuffer = @import("stroke_plotter.zig").PointBuffer;
+const PointBuffer = @import("util.zig").PointBuffer(2, 5);
 const PlotterOptions = @import("stroke_plotter.zig").PlotterOptions;
 
 const InternalError = @import("InternalError.zig").InternalError;
@@ -33,7 +32,7 @@ pub fn plot(
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: PlotterOptions,
-) Error!PolygonList {
+) Error!Polygon {
     // NOTE: `opts.dashes` needs to be validated separately before calling this
     // - this is done from `stroke_plotter.plot` in normal operation. Be
     // cognizant of this if you plan on calling this directly!
@@ -48,16 +47,16 @@ pub fn plot(
             null,
 
         .result = .{},
-        .poly_outer = .{ .scale = opts.scale },
-        .poly_inner = .{ .scale = opts.scale },
+        .outer = .{ .scale = opts.scale },
+        .inner = .{ .scale = opts.scale },
 
         .dasher = Dasher.init(opts.dashes, opts.dash_offset),
     };
 
     errdefer {
         plotter.result.deinit(alloc);
-        plotter.poly_outer.deinit(alloc);
-        plotter.poly_inner.deinit(alloc);
+        plotter.outer.deinit(alloc);
+        plotter.inner.deinit(alloc);
     }
 
     defer if (plotter.pen) |*p| p.deinit(alloc);
@@ -74,9 +73,9 @@ const Plotter = struct {
         pen: ?Pen,
         points: PointBuffer,
         clockwise_: ?bool,
-        result: *PolygonList,
-        poly_outer: Polygon,
-        poly_inner: Polygon,
+        result: *Polygon,
+        outer: Polygon.Contour,
+        inner: Polygon.Contour,
         current_slope: Slope,
     };
 
@@ -89,9 +88,9 @@ const Plotter = struct {
     points: PointBuffer = .{}, // point buffer (initial and join points)
     clockwise_: ?bool = null, // clockwise state
 
-    result: PolygonList, // Result polygon
-    poly_outer: Polygon, // Current polygon (outer)
-    poly_inner: Polygon, // Current polygon (inner)
+    result: Polygon, // Result polygon
+    outer: Polygon.Contour, // Current polygon (outer)
+    inner: Polygon.Contour, // Current polygon (inner)
 
     dasher: Dasher,
     current_slope: Slope = undefined, // normalized current device slope (see _lineTo)
@@ -126,12 +125,12 @@ const Plotter = struct {
         join_mode: options.JoinMode,
         node: nodepkg.PathLineTo,
     ) Error!void {
-        if (self.points.idx <= 0) return InternalError.InvalidState;
-        if (node.point.equal(self.points.items[self.points.idx - 1])) {
+        const current_point = self.points.last() orelse return InternalError.InvalidState;
+        if (node.point.equal(current_point)) {
             // consume degenerate nodes
             return;
         }
-        const first_dash_point = self.points.items[self.points.idx - 1];
+        const first_dash_point = current_point;
         var slope = Slope.init(first_dash_point, node.point);
         self.current_slope = slope;
         _ = self.current_slope.normalize();
@@ -148,21 +147,21 @@ const Plotter = struct {
                 .x = first_dash_point.x + x_offset,
                 .y = first_dash_point.y + y_offset,
             };
-            if (!current_dash_point.equal(self.points.items[self.points.idx - 1])) {
+            if (!current_dash_point.equal(self.points.last() orelse unreachable)) {
                 // Only add this point if it's different than the point
                 // before it, this allows us to plot dots (and squares
                 // also), i.e., zero-length dash stops.
                 self.points.add(current_dash_point);
             }
             if (self.dasher.on) {
-                if (self.points.idx > 2) {
+                if (self.points.len > 2) {
                     try join(
                         Plotter,
                         self,
                         join_mode,
-                        self.points.items[self.points.idx - 3],
-                        self.points.items[self.points.idx - 2],
-                        self.points.items[self.points.idx - 1],
+                        self.points.tail(3) orelse unreachable,
+                        self.points.tail(2) orelse unreachable,
+                        self.points.tail(1) orelse unreachable,
                         null,
                     );
                 }
@@ -174,7 +173,7 @@ const Plotter = struct {
     }
 
     fn runCurveTo(self: *Plotter, node: nodepkg.PathCurveTo) Error!void {
-        if (self.points.idx <= 0) return InternalError.InvalidState;
+        const current_point = self.points.last() orelse return InternalError.InvalidState;
         // Lazy-init the pen if it has not been initialized. It
         // does not need to be de-initialized here (nor should it),
         // deinit on the plotter will take care of it.
@@ -187,7 +186,7 @@ const Plotter = struct {
 
         var plotter_ctx: CurveToCtx = .{ .plotter = self };
         var spline: Spline = .{
-            .a = self.points.items[self.points.idx - 1],
+            .a = current_point,
             .b = node.p1,
             .c = node.p2,
             .d = node.p3,
@@ -201,28 +200,27 @@ const Plotter = struct {
     }
 
     fn runClosePath(self: *Plotter) Error!void {
-        if (self.points.idx <= 0) return InternalError.InvalidState;
+        if (self.points.len <= 0) return InternalError.InvalidState;
         // Unlike non-dashed close_path, we need to dash to our initial
         // point to ensure that any dashes inbetween are taken care of.
         try self._runLineTo(self.opts.join_mode, .{
             .point = switch (self.initial_polygon) {
                 .on => |poly| pt: {
-                    debug.assert(poly.points.idx > 0);
-                    break :pt poly.points.items[0];
+                    break :pt poly.points.first() orelse return InternalError.InvalidState;
                 },
                 .off => |initial_point| initial_point,
-                else => self.points.items[0],
+                else => self.points.first() orelse unreachable, // Already validated above
             },
         });
         // How we close now depends on whether or not we actually dashed.
         switch (self.initial_polygon) {
             .on => |poly| {
                 // Check the current dasher state
-                if (self.dasher.on and self.points.idx > 1) {
+                if (self.dasher.on and self.points.len > 1) {
                     // We're on, so we need to join our last segment to the
                     // initial polygon.
-                    debug.assert(poly.points.idx > 0);
-                    if (poly.points.idx == 1) {
+                    debug.assert(poly.points.len > 0);
+                    if (poly.points.len == 1) {
                         // Our initial polygon was a dot (zero-length dash).
                         // Since we actually have already plotted back to our
                         // original point, we can just treat this as a
@@ -230,10 +228,10 @@ const Plotter = struct {
                         try plotOpenJoined(
                             Plotter,
                             self,
-                            self.points.items[0],
-                            self.points.items[1],
-                            self.points.items[self.points.idx - 2],
-                            self.points.items[self.points.idx - 1],
+                            self.points.head(0) orelse unreachable,
+                            self.points.head(1) orelse unreachable,
+                            self.points.tail(2) orelse unreachable,
+                            self.points.tail(1) orelse unreachable,
                         );
                         // Reset the initial state since we're not invoking
                         // a helper that does it.
@@ -245,14 +243,14 @@ const Plotter = struct {
                     // We're off, or we just transitioned to an on segment at
                     // exactly the original point, so cap off the initial using
                     // the original initial points.
-                    debug.assert(poly.points.idx > 0);
-                    if (poly.points.idx == 1) {
-                        // Zero-length dash, plot a dot
-                        try self.finishInitialDotted();
-                    } else try self.finishInitial(
-                        poly.points.items[0],
-                        poly.points.items[1],
-                    );
+                    switch (poly.points.len) {
+                        0 => return InternalError.InvalidState,
+                        1 => try self.finishInitialDotted(), // Zero-length dash, plot a dot
+                        else => try self.finishInitial(
+                            poly.points.head(0) orelse unreachable,
+                            poly.points.head(1) orelse unreachable,
+                        ),
+                    }
                 }
             },
             .off => {
@@ -265,14 +263,14 @@ const Plotter = struct {
                 // This almost acts like an undashed closed path, but since
                 // we've already advanced to our end point in the above line_to
                 // call, we need to act accordingly.
-                switch (self.points.idx) {
+                switch (self.points.len) {
                     0 => unreachable,
-                    1 => try self.plotDotted(self.points.items[0], self.current_slope),
+                    1 => try self.plotDotted(self.points.first() orelse unreachable, self.current_slope),
                     2 => try plotSingle(
                         Plotter,
                         self,
-                        self.points.items[0],
-                        self.points.items[1],
+                        self.points.head(0) orelse unreachable,
+                        self.points.head(1) orelse unreachable,
                     ),
                     else => {
                         // We only need to plot the final join here, since
@@ -283,17 +281,21 @@ const Plotter = struct {
                             Plotter,
                             self,
                             self.opts.join_mode,
-                            self.points.items[self.points.idx - 2],
-                            self.points.items[0],
-                            self.points.items[1],
+                            self.points.tail(2) orelse unreachable,
+                            self.points.head(0) orelse unreachable,
+                            self.points.head(1) orelse unreachable,
                             null,
                         );
 
                         // Done
-                        try self.result.prepend(self.alloc, self.poly_outer);
-                        try self.result.prepend(self.alloc, self.poly_inner);
-                        self.poly_outer = .{ .scale = self.opts.scale };
-                        self.poly_inner = .{ .scale = self.opts.scale };
+                        try self.result.addEdgesFromContour(self.alloc, self.outer);
+                        try self.result.addEdgesFromContour(self.alloc, self.inner);
+
+                        // De-allocate corners along with resetting state.
+                        self.outer.deinit(self.alloc);
+                        self.inner.deinit(self.alloc);
+                        self.outer = .{ .scale = self.opts.scale };
+                        self.inner = .{ .scale = self.opts.scale };
                         self.clockwise_ = null;
                     },
                 }
@@ -306,22 +308,22 @@ const Plotter = struct {
         if (self.initial_polygon == .none)
             self.saveInitial()
         else if (!self.dasher.on) {
-            switch (self.points.idx) {
+            switch (self.points.len) {
                 0 => {}, //Nothing
-                1 => try self.plotDotted(self.points.items[0], self.current_slope),
+                1 => try self.plotDotted(self.points.first() orelse unreachable, self.current_slope),
                 2 => try plotSingle(
                     Plotter,
                     self,
-                    self.points.items[0],
-                    self.points.items[1],
+                    self.points.head(0) orelse unreachable,
+                    self.points.head(1) orelse unreachable,
                 ),
                 else => try plotOpenJoined(
                     Plotter,
                     self,
-                    self.points.items[0],
-                    self.points.items[1],
-                    self.points.items[self.points.idx - 2],
-                    self.points.items[self.points.idx - 1],
+                    self.points.head(0) orelse unreachable,
+                    self.points.head(1) orelse unreachable,
+                    self.points.tail(2) orelse unreachable,
+                    self.points.tail(1) orelse unreachable,
                 ),
             }
         }
@@ -332,33 +334,34 @@ const Plotter = struct {
     fn finish(self: *Plotter) Error!void {
         switch (self.initial_polygon) {
             .on => |poly| {
-                debug.assert(poly.points.idx > 0);
-                if (poly.points.idx == 1) {
-                    try self.finishInitialDotted();
-                } else try self.finishInitial(
-                    poly.points.items[0],
-                    poly.points.items[1],
-                );
+                switch (poly.points.len) {
+                    0 => return InternalError.InvalidState,
+                    1 => try self.finishInitialDotted(),
+                    else => try self.finishInitial(
+                        poly.points.head(0) orelse unreachable,
+                        poly.points.head(1) orelse unreachable,
+                    ),
+                }
             },
             .off => self.initial_polygon = .{ .none = {} },
             .none => {},
         }
-        if (self.dasher.on) switch (self.points.idx) {
+        if (self.dasher.on) switch (self.points.len) {
             0 => {}, //Nothing
-            1 => try self.plotDotted(self.points.items[0], self.current_slope),
+            1 => try self.plotDotted(self.points.first() orelse unreachable, self.current_slope),
             2 => try plotSingle(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
             ),
             else => try plotOpenJoined(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
-                self.points.items[self.points.idx - 2],
-                self.points.items[self.points.idx - 1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
+                self.points.tail(2) orelse unreachable,
+                self.points.tail(1) orelse unreachable,
             ),
         };
     }
@@ -375,14 +378,14 @@ const Plotter = struct {
         // stroke.
         //
         // All other zero-length strokes draw nothing.
-        debug.assert(self.poly_inner.corners.len == 0); // should have not been used
+        debug.assert(self.inner.corners.len == 0); // should have not been used
         switch (self.opts.cap_mode) {
             .round => {
                 // Just plot off all of the pen's vertices, no need to
                 // determine a subset as we're doing a 360-degree plot.
                 debug.assert(self.pen != null);
                 for (self.pen.?.vertices.items) |v| {
-                    try self.poly_outer.plot(
+                    try self.outer.plot(
                         self.alloc,
                         .{
                             .x = point.x + v.point.x,
@@ -393,12 +396,12 @@ const Plotter = struct {
                 }
 
                 // Done
-                try self.result.prepend(self.alloc, self.poly_outer);
+                try self.result.addEdgesFromContour(self.alloc, self.outer);
             },
             .square => {
                 // "cap" a single point with the last slope we've logged in
                 // a line_to or close_path. We just take a subset of
-                // capSquare in face, while still computing the offsets
+                // capSquare in Face, while still computing the offsets
                 // using some of the init functionality.
                 //
                 // TODO: This (honestly, along with Face in general) is due
@@ -417,7 +420,7 @@ const Plotter = struct {
                 var offset_x = face.user_slope.dx * face.half_width;
                 var offset_y = face.user_slope.dy * face.half_width;
                 self.opts.ctm.userToDeviceDistance(&offset_x, &offset_y);
-                try self.poly_outer.plot(
+                try self.outer.plot(
                     self.alloc,
                     .{
                         .x = face.p1_cw.x - offset_x,
@@ -425,7 +428,7 @@ const Plotter = struct {
                     },
                     null,
                 );
-                try self.poly_outer.plot(
+                try self.outer.plot(
                     self.alloc,
                     .{
                         .x = face.p1_cw.x + offset_x,
@@ -433,7 +436,7 @@ const Plotter = struct {
                     },
                     null,
                 );
-                try self.poly_outer.plot(
+                try self.outer.plot(
                     self.alloc,
                     .{
                         .x = face.p1_ccw.x + offset_x,
@@ -441,7 +444,7 @@ const Plotter = struct {
                     },
                     null,
                 );
-                try self.poly_outer.plot(
+                try self.outer.plot(
                     self.alloc,
                     .{
                         .x = face.p1_ccw.x - offset_x,
@@ -450,11 +453,14 @@ const Plotter = struct {
                     null,
                 );
                 // Done
-                try self.result.prepend(self.alloc, self.poly_outer);
+                try self.result.addEdgesFromContour(self.alloc, self.outer);
             },
             else => {},
         }
-        self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
+        // Reset outer, de-allocating our contour that has been recorded as
+        // edges and resetting state.
+        self.outer.deinit(self.alloc);
+        self.outer = .{ .scale = self.opts.scale };
         self.clockwise_ = null;
     }
 
@@ -490,8 +496,8 @@ const Plotter = struct {
                 .points = self.points,
                 .clockwise_ = self.clockwise_,
                 .result = &self.result,
-                .poly_outer = self.poly_outer,
-                .poly_inner = self.poly_inner,
+                .outer = self.outer,
+                .inner = self.inner,
                 .current_slope = self.current_slope,
             } };
         } else {
@@ -501,23 +507,24 @@ const Plotter = struct {
             // currently in. This can happen when dash offsets have
             // pushed/pulled the state into an off segment at the start of
             // the stroke.
-            debug.assert(self.points.idx > 0);
-            self.initial_polygon = .{ .off = self.points.items[0] };
+            debug.assert(self.points.len > 0);
+            self.initial_polygon = .{ .off = self.points.first() orelse unreachable };
         }
 
-        // Reset other polygon stuff
-        self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
-        self.poly_inner = .{ .scale = self.opts.scale }; // reset inner
+        // Reset the contours, and clockwise state. As our corner data has been
+        // off-loaded to the initial polygon, no deinit is necessary on either
+        // contour.
+        self.outer = .{ .scale = self.opts.scale };
+        self.inner = .{ .scale = self.opts.scale };
         self.clockwise_ = null;
     }
 
     fn finishInitialDotted(
         self: *Plotter,
     ) Error!void {
-        debug.assert(self.initial_polygon == .on);
-        debug.assert(self.initial_polygon.on.points.idx > 0);
+        if (self.initial_polygon != .on) return InternalError.InvalidState;
         try self.plotDotted(
-            self.initial_polygon.on.points.items[0],
+            self.initial_polygon.on.points.first() orelse return InternalError.InvalidState,
             self.initial_polygon.on.current_slope,
         );
         self.initial_polygon = .{ .none = {} };
@@ -528,27 +535,27 @@ const Plotter = struct {
         last_point: Point,
         second_to_last_point: Point,
     ) Error!void {
-        debug.assert(self.initial_polygon == .on);
-        debug.assert(self.initial_polygon.on.points.idx >= 2);
-
+        if (self.initial_polygon != .on) return InternalError.InvalidState;
         try plotOpenJoined(
             InitialPolygon,
             &self.initial_polygon.on,
             last_point,
             second_to_last_point,
-            self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
-            self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
+            self.initial_polygon.on.points.tail(2) orelse return InternalError.InvalidState,
+            self.initial_polygon.on.points.tail(1) orelse return InternalError.InvalidState,
         );
+        // Note that our generic plotOpenJoined within stroke_plotter.zig will
+        // properly deinit our contour state within our initial polygon, so all
+        // we need to do here is change the initial polygon state back to
+        // .none.
         self.initial_polygon = .{ .none = {} };
     }
 
     fn joinAndCapInitial(self: *Plotter) Error!void {
         // This adds a join at the beginning of the initial polygon before
         // capping.
-        debug.assert(self.initial_polygon == .on);
-        debug.assert(self.initial_polygon.on.points.idx >= 2);
-
-        if (self.points.idx > 2) {
+        if (self.initial_polygon != .on) return InternalError.InvalidState;
+        if (self.points.len > 2) {
             // We need to actually do some polygon surgery here because we have
             // some outstanding joins.
             //
@@ -560,29 +567,29 @@ const Plotter = struct {
                 Plotter,
                 self,
                 self.opts.join_mode,
-                self.points.items[self.points.idx - 2],
-                self.initial_polygon.on.points.items[0],
-                self.initial_polygon.on.points.items[1],
+                self.points.tail(2) orelse unreachable,
+                self.initial_polygon.on.points.head(0) orelse return InternalError.InvalidState,
+                self.initial_polygon.on.points.head(1) orelse return InternalError.InvalidState,
                 null,
             );
 
             // Concat the initial polygon to the main outer, and inner to
             // initial, i.e., the other way around.
-            self.poly_outer.concat(self.initial_polygon.on.poly_outer);
-            self.initial_polygon.on.poly_inner.concat(self.poly_inner);
+            self.outer.concat(&self.initial_polygon.on.outer);
+            self.initial_polygon.on.inner.concat(&self.inner);
             // We need to replace the initial polygon with the outer due to the
             // direction of the concat happened in.
-            self.initial_polygon.on.poly_outer = self.poly_outer;
+            self.initial_polygon.on.outer = self.outer;
 
             // Our first cap points are based entirely off of the plotter state
             // (not the initial state).
             try plotOpenJoined(
                 InitialPolygon,
                 &self.initial_polygon.on,
-                self.points.items[0],
-                self.points.items[1],
-                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
-                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
+                self.initial_polygon.on.points.tail(2) orelse return InternalError.InvalidState,
+                self.initial_polygon.on.points.tail(1) orelse return InternalError.InvalidState,
             );
         } else {
             // Don't need to do any concats and our cap points are last corner
@@ -593,27 +600,30 @@ const Plotter = struct {
                 InitialPolygon,
                 &self.initial_polygon.on,
                 self.opts.join_mode,
-                self.points.items[self.points.idx - 2],
-                self.initial_polygon.on.points.items[0],
-                self.initial_polygon.on.points.items[1],
-                self.initial_polygon.on.poly_outer.corners.first,
+                self.points.tail(2) orelse unreachable,
+                self.initial_polygon.on.points.head(0) orelse return InternalError.InvalidState,
+                self.initial_polygon.on.points.head(1) orelse return InternalError.InvalidState,
+                self.initial_polygon.on.outer.corners.first,
             );
 
             try plotOpenJoined(
                 InitialPolygon,
                 &self.initial_polygon.on,
-                self.points.items[0],
-                self.initial_polygon.on.points.items[0],
-                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 2],
-                self.initial_polygon.on.points.items[self.initial_polygon.on.points.idx - 1],
+                self.points.first() orelse unreachable,
+                self.initial_polygon.on.points.first() orelse return InternalError.InvalidState,
+                self.initial_polygon.on.points.tail(2) orelse return InternalError.InvalidState,
+                self.initial_polygon.on.points.tail(1) orelse return InternalError.InvalidState,
             );
         }
 
         self.initial_polygon = .{ .none = {} };
         //  Reset the main polygon state as we don't do that above (the initial
-        //  gets cleared instead).
-        self.poly_outer = .{ .scale = self.opts.scale };
-        self.poly_inner = .{ .scale = self.opts.scale };
+        //  gets cleared instead). Note that we don't need to de-init any
+        //  corners here, as either they are all in the initial polygon (in the
+        //  simple case where there were no outstanding joins), or were moved
+        //  there (in the more complex case where there were).
+        self.outer = .{ .scale = self.opts.scale };
+        self.inner = .{ .scale = self.opts.scale };
         self.clockwise_ = null;
     }
 
