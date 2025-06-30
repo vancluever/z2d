@@ -17,7 +17,7 @@ const pixel = @import("pixel.zig");
 const pixel_vector = @import("internal/pixel_vector.zig");
 const surface = @import("surface.zig");
 
-const vector_length = @import("compositor.zig").vector_length;
+const vector_length = @import("z2d.zig").vector_length;
 
 const native_endian = builtin.cpu.arch.endian();
 

@@ -21,18 +21,7 @@ const vectorize = @import("internal/util.zig").vectorize;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
-/// The length of vector operations. This is CPU-dependent, with a minimum of 8
-/// to provide adequate scaling for CPU architectures that lack SIMD or
-/// extensions that Zig does not recognize. Architectures with SIMD registers
-/// smaller than 128 bits will just have the 8 vectors serialized into 2
-/// batches of 4.
-///
-/// Note that some packages outside of the compositor may use vectors wider
-/// than 16 bits, while still using this value. This is to ensure symmetry with
-/// the compositor to ensure those values can eventually flow to here. Care is
-/// taken to ensure optimal path on these values (e.g., completion of those
-/// operations before u16-aligned operations take place).
-pub const vector_length = @max(simd.suggestVectorLength(u16) orelse 8, 8); // TODO: scalar fallback?
+const vector_length = @import("z2d.zig").vector_length;
 
 /// Exposure of the lower-level dither interface. This is included so that
 /// these primitives can be passed along by consumers of the lower-level
