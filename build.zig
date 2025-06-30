@@ -125,6 +125,7 @@ pub fn build(b: *std.Build) void {
     const z2d = b.addModule("z2d", .{
         .root_source_file = b.path("src/z2d.zig"),
         .target = target,
+        .optimize = optimize,
     });
     z2d.addOptions("z2d_options", z2d_options);
 
