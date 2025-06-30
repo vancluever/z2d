@@ -5,7 +5,7 @@ const debug = @import("std").debug;
 
 const colorpkg = @import("../color.zig");
 
-const vector_length = @import("../compositor.zig").vector_length;
+const vector_length = @import("../z2d.zig").vector_length;
 
 /// Internal table test helper. Passes in an array of structs representing test
 /// cases. "name" is the only expected field, otherwise it's entirely handled

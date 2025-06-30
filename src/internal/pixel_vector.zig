@@ -3,7 +3,7 @@
 
 //! Internal vector types and helpers for pixel functionality.
 
-const vector_length = @import("../compositor.zig").vector_length;
+const vector_length = @import("../z2d.zig").vector_length;
 const splat = @import("util.zig").splat;
 
 /// Represents an RGBA value as a series of 16bpc vectors. Note that this is

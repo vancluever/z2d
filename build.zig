@@ -107,11 +107,26 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     /////////////////////////////////////////////////////////////////////////
+    // Module build options
+    //
+    // All module build options are documented in src/z2d.zig.
+    /////////////////////////////////////////////////////////////////////////
+    const z2d_options = b.addOptions();
+    const vector_length = b.option(
+        u8,
+        "vector_length",
+        "Length of vector operations (default=16)",
+    ) orelse 16;
+    z2d_options.addOption(u8, "vector_length", vector_length);
+
+    /////////////////////////////////////////////////////////////////////////
     // Main module
     /////////////////////////////////////////////////////////////////////////
     const z2d = b.addModule("z2d", .{
         .root_source_file = b.path("src/z2d.zig"),
+        .target = target,
     });
+    z2d.addOptions("z2d_options", z2d_options);
 
     /////////////////////////////////////////////////////////////////////////
     // Unit tests
@@ -122,7 +137,7 @@ pub fn build(b: *std.Build) void {
         "Test filter for \"test\" or \"spec\" target (repeat for multiple filters)",
     ) orelse &[0][]const u8{};
     const test_step = b.addTest(.{
-        .root_source_file = b.path("src/z2d.zig"),
+        .root_module = z2d,
         .target = target,
         .optimize = optimize,
         .filters = test_filters,

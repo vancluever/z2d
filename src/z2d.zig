@@ -110,6 +110,39 @@ pub const Surface = surface.Surface;
 pub const Font = @import("Font.zig");
 pub const Transformation = @import("Transformation.zig");
 
+/// The length of vector operations, based around the amount of 16-bit values
+/// that can fit in an SIMD register. The default is 16, suitable for 256-bit
+/// SIMD systems like AVX2, and systems where the register size is smaller as
+/// the single vector operations will be lowered to multiple (see last
+/// paragraph of the option's documentation).
+///
+/// Tuning of this value can be done by adding the `.vector_length` option to
+/// your build.zig file when adding the module to your project:
+///
+/// ```
+/// const z2d_dep = b.dependency("z2d", .{
+///     .target = target,
+///     .vector_length = 16,
+/// });
+/// ```
+///
+/// Only powers of two are allowed, and the range must be within 4-128.
+///
+/// Note that the true value of certain vector operations in z2d vary,
+/// generally between 16 and 32 bits. Note that in the event of operations of a
+/// width larger than what is supported in the target system, Zig automatically
+/// lowers down to multiple operations of the supported SIMD register length,
+/// so if modifying this value, a larger value is likely better than a lower.
+/// For production builds, it's suggested to pick a value that will accommodate
+/// most systems, such as 8 (Apple Silicon/ARM NEON), 16 (AVX2) or 32 (AVX512).
+pub const vector_length: usize = vector_length: {
+    const z2d_options = @import("z2d_options");
+    const vl = z2d_options.vector_length;
+    if (vl < 4 or vl > 128 or (vl & (vl - 1)) != 0)
+        @compileError("vector_length must be 4-128 as a power of 2");
+    break :vector_length vl;
+};
+
 test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("internal/fill_plotter.zig");
