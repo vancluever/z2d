@@ -26,6 +26,8 @@ ENHANCEMENTS:
 
 * The compositor now uses shuffling to transfer data into and out of vectors.
   [#126](https://github.com/vancluever/z2d/pull/126)
+* Vector length is now build-configurable (defaults to 16, suitable for 256-bit
+  SIMD or lower). [#127](https://github.com/vancluever/z2d/pull/127)
 
 BUG FIXES:
 

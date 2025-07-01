@@ -20,7 +20,7 @@ const vectorize = @import("util.zig").vectorize;
 const runCases = @import("util.zig").runCases;
 const TestingError = @import("util.zig").TestingError;
 
-const vector_length = @import("../compositor.zig").vector_length;
+const vector_length = @import("../z2d.zig").vector_length;
 const zero_float_vec = @import("util.zig").zero_float_vec;
 const zero_color_vec = @import("util.zig").zero_color_vec;
 const dither_blue_noise_64x64 = @import("blue_noise.zig").dither_blue_noise_64x64;
