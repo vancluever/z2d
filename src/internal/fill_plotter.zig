@@ -7,15 +7,14 @@ const debug = @import("std").debug;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-// const options = @import("../options.zig");
 const nodepkg = @import("path_nodes.zig");
 
 const Polygon = @import("Polygon.zig");
-const PolygonList = @import("PolygonList.zig");
 const Point = @import("Point.zig");
 const Spline = @import("Spline.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 const InternalError = @import("InternalError.zig").InternalError;
+const PointBuffer = @import("util.zig").PointBuffer(1, 3);
 
 pub const Error = InternalError || mem.Allocator.Error;
 
@@ -24,62 +23,41 @@ pub fn plot(
     nodes: []const nodepkg.PathNode,
     scale: f64,
     tolerance: f64,
-) Error!PolygonList {
-    var result: PolygonList = .{};
+) Error!Polygon {
+    var result: Polygon = .{ .scale = scale };
     errdefer result.deinit(alloc);
 
-    var initial_point: ?Point = null;
-    var current_point: ?Point = null;
-    var current_polygon: ?Polygon = null;
+    var points: PointBuffer = .{};
 
     for (nodes, 0..) |node, i| {
         switch (node) {
             .move_to => |n| {
-                if (current_polygon) |poly| {
-                    // Only append this polygon if it's useful (has more than 2
-                    // corners). Otherwise, get rid of it.
-                    if (poly.corners.len > 2) {
-                        try result.prepend(alloc, poly);
-                    } else {
-                        poly.deinit(alloc);
-                        current_polygon = null;
-                    }
-                }
-
                 // Check if this is the last node, and no-op if it is, as this
                 // is the auto-added move_to node that is given after
                 // close_path.
                 if (i == nodes.len - 1) {
                     break;
                 }
-
-                current_polygon = .{ .scale = scale };
-                try current_polygon.?.plot(alloc, n.point, null);
-                initial_point = n.point;
-                current_point = n.point;
+                points.reset();
+                points.add(n.point);
             },
             .line_to => |n| {
-                if (initial_point == null) return InternalError.InvalidState;
-                if (current_point == null) return InternalError.InvalidState;
-                if (current_polygon == null) return InternalError.InvalidState;
-
-                if (!current_point.?.equal(n.point)) {
-                    try current_polygon.?.plot(alloc, n.point, null);
-                    current_point = n.point;
-                }
+                if (points.last()) |last_point| {
+                    if (!last_point.equal(n.point)) {
+                        try result.addEdge(alloc, last_point, n.point);
+                        points.add(n.point);
+                    }
+                } else return InternalError.InvalidState;
             },
             .curve_to => |n| {
-                if (initial_point == null) return InternalError.InvalidState;
-                if (current_point == null) return InternalError.InvalidState;
-                if (current_polygon == null) return InternalError.InvalidState;
-
+                if (points.len == 0) return InternalError.InvalidState;
                 var ctx: SplinePlotterCtx = .{
-                    .polygon = &current_polygon.?,
-                    .current_point = &current_point,
+                    .polygon = &result,
+                    .points = &points,
                     .alloc = alloc,
                 };
                 var spline: Spline = .{
-                    .a = current_point.?,
+                    .a = points.last().?,
                     .b = n.p1,
                     .c = n.p2,
                     .d = n.p3,
@@ -92,15 +70,16 @@ pub fn plot(
                 try spline.decompose();
             },
             .close_path => {
-                if (initial_point == null) return InternalError.InvalidState;
-                if (current_point == null) return InternalError.InvalidState;
-                if (current_polygon == null) return InternalError.InvalidState;
+                if (points.len < 3) return InternalError.InvalidState;
 
                 // No-op if our initial and current points are equal
-                if (current_point.?.equal(initial_point.?)) continue;
+                if (points.last().?.equal(points.first().?)) continue;
+
+                // Plot from the current point to the initial point
+                try result.addEdge(alloc, points.last().?, points.first().?);
 
                 // Set the current point to the initial point.
-                current_point = initial_point;
+                points.add(points.first().?);
             },
         }
     }
@@ -110,16 +89,23 @@ pub fn plot(
 
 const SplinePlotterCtx = struct {
     polygon: *Polygon,
-    current_point: *?Point,
+    points: *PointBuffer,
     alloc: mem.Allocator,
 
     fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *SplinePlotterCtx = @ptrCast(@alignCast(ctx));
-        self.polygon.plot(self.alloc, node.point, null) catch |err| {
-            err_.* = err;
+        if (self.points.last()) |last_point| {
+            if (!last_point.equal(node.point)) {
+                self.polygon.addEdge(self.alloc, last_point, node.point) catch |err| {
+                    err_.* = err;
+                    return;
+                };
+                self.points.add(node.point);
+            }
+        } else {
+            err_.* = InternalError.InvalidState;
             return;
-        };
-        self.current_point.* = node.point;
+        }
     }
 };
 
@@ -134,22 +120,25 @@ test "degenerate line_to" {
     try nodes.append(alloc, .{ .close_path = .{} });
     try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
 
-    var result = try plot(alloc, nodes.items, 1, 0.1);
+    var result = try plot(alloc, nodes.items, 1, 1);
     defer result.deinit(alloc);
-    try testing.expectEqual(1, result.polygons.len());
-    var corners_len: i32 = 0;
-    var corners: std.ArrayListUnmanaged(Point) = .{};
-    defer corners.deinit(alloc);
-    var next_: ?*Polygon.CornerList.Node = result.polygons.first.?.findLast().data.corners.first;
-    while (next_) |n| {
-        try corners.append(alloc, n.data);
-        corners_len += 1;
-        next_ = n.next;
-    }
-    try testing.expectEqual(3, corners_len);
-    try testing.expectEqualSlices(Point, &.{
-        .{ .x = 5, .y = 0 },
-        .{ .x = 10, .y = 10 },
-        .{ .x = 0, .y = 10 },
-    }, corners.items);
+    // NOTE: only 2 edges should be here as there is a horizontal edge
+    // ((10,10) -> (0, 10)), this is now filtered out.
+    try testing.expectEqual(2, result.edges.items.len);
+    try testing.expectEqualSlices(Polygon.Edge, &.{
+        .{
+            .top = 0.0,
+            .bottom = 10.0,
+            .x_start = 5.0,
+            .x_inc = 0.5,
+            .dir = -1,
+        },
+        .{
+            .top = 0.0,
+            .bottom = 10.0,
+            .x_start = 5.0,
+            .x_inc = -0.5,
+            .dir = 1,
+        },
+    }, result.edges.items);
 }

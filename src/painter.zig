@@ -23,7 +23,6 @@ const SurfaceType = @import("surface.zig").SurfaceType;
 const Pattern = @import("pattern.zig").Pattern;
 const FillRule = @import("options.zig").FillRule;
 const Polygon = @import("internal/Polygon.zig");
-const PolygonList = @import("internal/PolygonList.zig");
 const Transformation = @import("Transformation.zig");
 const InternalError = @import("internal/InternalError.zig").InternalError;
 const supersample_scale = @import("surface.zig").supersample_scale;
@@ -276,7 +275,7 @@ fn paintDirect(
     alloc: mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
-    polygons: PolygonList,
+    polygons: Polygon,
     fill_rule: FillRule,
     operator: compositor.Operator,
     precision: compositor.Precision,
@@ -303,8 +302,8 @@ fn paintDirect(
     // This range has to accommodate the extents of the top and bottom of the
     // polygon rectangle, so it needs to be "pushed out"; floored on the top,
     // and ceilinged on the bottom.
-    const poly_start_y: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y)) else 0;
-    const poly_end_y: i32 = if (bounded) @intFromFloat(@ceil(polygons.end.y)) else sfc_height - 1;
+    const poly_start_y: i32 = if (bounded) @intFromFloat(@floor(polygons.extent_top)) else 0;
+    const poly_end_y: i32 = if (bounded) @intFromFloat(@ceil(polygons.extent_bottom)) else sfc_height - 1;
     // Clamp the scanlines to the surface
     const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
     const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
@@ -322,7 +321,7 @@ fn paintDirect(
         // blow up the stack.
         var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
         const edge_alloc = edge_stack_fallback.get();
-        var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y), fill_rule);
+        var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
 
         if (!bounded and edge_list.edges.len == 0) {
@@ -395,7 +394,7 @@ fn paintComposite(
     alloc: mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
-    polygons: PolygonList,
+    polygons: Polygon,
     fill_rule: FillRule,
     scale: f64,
     operator: compositor.Operator,
@@ -423,14 +422,14 @@ fn paintComposite(
     // polygon rectangle, so it needs to be "pushed out"; floored on the
     // top/left, and ceilinged on the bottom/right.
     const bounded = operator.isBounded();
-    const x0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.x / scale)) else 0;
-    const y0: i32 = if (bounded) @intFromFloat(@floor(polygons.start.y / scale)) else 0;
+    const x0: i32 = if (bounded) @intFromFloat(@floor(polygons.extent_left / scale)) else 0;
+    const y0: i32 = if (bounded) @intFromFloat(@floor(polygons.extent_top / scale)) else 0;
     const x1: i32 = if (bounded)
-        @intFromFloat(@ceil(polygons.end.x / scale))
+        @intFromFloat(@ceil(polygons.extent_right / scale))
     else
         surface.getWidth();
     const y1: i32 = if (bounded)
-        @intFromFloat(@ceil(polygons.end.y / scale))
+        @intFromFloat(@ceil(polygons.extent_bottom / scale))
     else
         surface.getHeight();
 
@@ -487,7 +486,7 @@ fn paintComposite(
             // Our polygon co-ordinates are in (scaled) device space, so when
             // we search for edges, we need to offset our mask-space scanline
             // to that.
-            var edge_list = try polygons.edgesForY(edge_alloc, @floatFromInt(y + box_y0), fill_rule);
+            var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y + box_y0), fill_rule);
             defer edge_list.deinit(edge_alloc);
             while (edge_list.next()) |edge_pair| {
                 // Inverse to the above; pull back our scaled device space
