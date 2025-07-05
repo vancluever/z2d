@@ -35,7 +35,7 @@ as division.
 This change has resulted in drastic speedups, anywhere from **20%-85%**,
 depending on the operation!
 
-For more details, see [#](https://github.com/vancluever/z2d/pull/128).
+For more details, see [#128](https://github.com/vancluever/z2d/pull/128).
 
 ENHANCEMENTS:
 
