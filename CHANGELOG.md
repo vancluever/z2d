@@ -22,12 +22,27 @@ To use text support, check out the new `setFontToFile`, `setFontToBuffer`,
 out the `Font` type and `text` package to work with text in the unmanaged
 interface.
 
+PATH RASTERIZER PERFORMANCE ENHANCEMENTS
+
+A new model has been implemented for plotting polygons during rasterization of
+paths during fill and stroke. This model actually plots edges, versus basing
+rasterization simply off contours/polylines (although these are still used as
+an intermediary step during stroke operations). This new model has allowed a
+number of steps that were not previously being calculated ahead of time to be
+done so, allowing us to avoid repeating a number of expensive operations such
+as division.
+
+This change has resulted in drastic speedups, anywhere from **20%-85%**,
+depending on the operation!
+
+For more details, see [#](https://github.com/vancluever/z2d/pull/128).
+
 ENHANCEMENTS:
 
-* The compositor now uses shuffling to transfer data into and out of vectors.
-  [#126](https://github.com/vancluever/z2d/pull/126)
 * Vector length is now build-configurable (defaults to 16, suitable for 256-bit
   SIMD or lower). [#127](https://github.com/vancluever/z2d/pull/127)
+* The compositor now uses shuffling to transfer data into and out of vectors.
+  [#126](https://github.com/vancluever/z2d/pull/126)
 
 BUG FIXES:
 
