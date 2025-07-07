@@ -17,10 +17,10 @@ const Pen = @import("Pen.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 const Point = @import("Point.zig");
 const Polygon = @import("Polygon.zig");
-const PolygonList = @import("PolygonList.zig");
 const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 const Transformation = @import("../Transformation.zig");
+const PointBuffer = @import("util.zig").PointBuffer(2, 5);
 
 const InternalError = @import("InternalError.zig").InternalError;
 pub const Error = InternalError || mem.Allocator.Error;
@@ -41,7 +41,7 @@ pub fn plot(
     alloc: mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: PlotterOptions,
-) Error!PolygonList {
+) Error!Polygon {
     if (Dasher.validate(opts.dashes)) {
         return dashed_plotter.plot(alloc, nodes, opts);
     }
@@ -57,14 +57,14 @@ pub fn plot(
             null,
 
         .result = .{},
-        .poly_outer = .{ .scale = opts.scale },
-        .poly_inner = .{ .scale = opts.scale },
+        .outer = .{ .scale = opts.scale },
+        .inner = .{ .scale = opts.scale },
     };
 
     errdefer {
         plotter.result.deinit(alloc);
-        plotter.poly_outer.deinit(alloc);
-        plotter.poly_inner.deinit(alloc);
+        plotter.outer.deinit(alloc);
+        plotter.inner.deinit(alloc);
     }
 
     defer if (plotter.pen) |*p| p.deinit(alloc);
@@ -84,9 +84,9 @@ const Plotter = struct {
     points: PointBuffer = .{}, // point buffer (initial and join points)
     clockwise_: ?bool = null, // clockwise state
 
-    result: PolygonList, // Result polygon
-    poly_outer: Polygon, // Current polygon (outer)
-    poly_inner: Polygon, // Current polygon (inner)
+    result: Polygon, // Result polygon
+    outer: Polygon.Contour, // Current polygon (outer)
+    inner: Polygon.Contour, // Current polygon (inner)
 
     fn run(self: *Plotter) Error!void {
         for (0..self.nodes.len) |idx| {
@@ -102,7 +102,7 @@ const Plotter = struct {
     }
 
     fn runMoveTo(self: *Plotter, node: nodepkg.PathMoveTo) Error!void {
-        if (self.points.idx > 0) try self.finish();
+        if (self.points.len > 0) try self.finish();
         self.points.reset();
         self.points.add(node.point);
     }
@@ -112,27 +112,27 @@ const Plotter = struct {
     }
 
     fn _runLineTo(self: *Plotter, join_mode: options.JoinMode, node: nodepkg.PathLineTo) Error!void {
-        if (self.points.idx <= 0) return InternalError.InvalidState;
-        if (node.point.equal(self.points.items[self.points.idx - 1])) {
+        const current_point = self.points.last() orelse return InternalError.InvalidState;
+        if (node.point.equal(current_point)) {
             // consume degenerate nodes
             return;
         }
         self.points.add(node.point);
-        if (self.points.idx > 2) {
+        if (self.points.len > 2) {
             try join(
                 Plotter,
                 self,
                 join_mode,
-                self.points.items[self.points.idx - 3],
-                self.points.items[self.points.idx - 2],
-                self.points.items[self.points.idx - 1],
+                self.points.tail(3) orelse unreachable,
+                self.points.tail(2) orelse unreachable,
+                self.points.tail(1) orelse unreachable,
                 null,
             );
         }
     }
 
     fn runCurveTo(self: *Plotter, node: nodepkg.PathCurveTo) Error!void {
-        if (self.points.idx <= 0) return InternalError.InvalidState;
+        const current_point = self.points.last() orelse return InternalError.InvalidState;
         // Lazy-init the pen if it has not been initialized. It
         // does not need to be de-initialized here (nor should it),
         // deinit on the plotter will take care of it.
@@ -144,7 +144,7 @@ const Plotter = struct {
         );
         var plotter_ctx: CurveToCtx = .{ .plotter = self };
         var spline: Spline = .{
-            .a = self.points.items[self.points.idx - 1],
+            .a = current_point,
             .b = node.p1,
             .c = node.p2,
             .d = node.p3,
@@ -158,43 +158,43 @@ const Plotter = struct {
     }
 
     fn runClosePath(self: *Plotter) Error!void {
-        switch (self.points.idx) {
+        switch (self.points.len) {
             0 => {}, //Nothing
-            1 => try self.plotDotted(self.points.items[0]),
+            1 => try self.plotDotted(self.points.first() orelse unreachable),
             2 => try plotSingle(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
             ),
             else => try plotClosedJoined(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
-                self.points.items[self.points.idx - 2],
-                self.points.items[self.points.idx - 1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
+                self.points.tail(2) orelse unreachable,
+                self.points.tail(1) orelse unreachable,
             ),
         }
         self.points.reset();
     }
 
     fn finish(self: *Plotter) Error!void {
-        switch (self.points.idx) {
+        switch (self.points.len) {
             0, 1 => {}, // Nothing
             2 => try plotSingle(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
             ),
             else => try plotOpenJoined(
                 Plotter,
                 self,
-                self.points.items[0],
-                self.points.items[1],
-                self.points.items[self.points.idx - 2],
-                self.points.items[self.points.idx - 1],
+                self.points.head(0) orelse unreachable,
+                self.points.head(1) orelse unreachable,
+                self.points.tail(2) orelse unreachable,
+                self.points.tail(1) orelse unreachable,
             ),
         }
     }
@@ -208,27 +208,30 @@ const Plotter = struct {
         //
         // Note that we draw rectangles/squares for dashed lines, see this
         // function in the dashed plotter for more details.
-        debug.assert(self.poly_inner.corners.len() == 0); // should have not been used
-        if (self.opts.cap_mode == .round) {
-            // Just plot off all of the pen's vertices, no need to
-            // determine a subset as we're doing a 360-degree plot.
-            debug.assert(self.pen != null);
-            for (self.pen.?.vertices.items) |v| {
-                try self.poly_outer.plot(
-                    self.alloc,
-                    .{
-                        .x = point.x + v.point.x,
-                        .y = point.y + v.point.y,
-                    },
-                    null,
-                );
-            }
-
-            // Done
-            try self.result.prepend(self.alloc, self.poly_outer);
-            self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
-            self.clockwise_ = null;
+        debug.assert(self.inner.len == 0); // should have not been used
+        // Just plot off all of the pen's vertices, no need to
+        // determine a subset as we're doing a 360-degree plot.
+        debug.assert(self.pen != null);
+        for (self.pen.?.vertices.items) |v| {
+            try self.outer.plot(
+                self.alloc,
+                .{
+                    .x = point.x + v.point.x,
+                    .y = point.y + v.point.y,
+                },
+                null,
+            );
         }
+
+        // Convert our contour to edges
+        try self.result.addEdgesFromContour(self.alloc, self.outer);
+
+        // Done, de-allocate our contour corners now that they have been
+        // converted to edges, and reset our states (only need to do outer,
+        // as inner was not touched).
+        self.outer.deinit(self.alloc);
+        self.outer = .{ .scale = self.opts.scale };
+        self.clockwise_ = null;
     }
 
     pub const CurveToCtx = struct {
@@ -246,7 +249,7 @@ const Plotter = struct {
 pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
     // Single-segment line. This can be drawn off of
     // our start line caps.
-    debug.assert(self.poly_inner.corners.len() == 0); // should have not been used
+    debug.assert(self.inner.len == 0); // should have not been used
     const cap_points = Face.init(
         start,
         end,
@@ -255,7 +258,7 @@ pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
     );
     var plotter_ctx: CapPlotterCtx = .{
         .alloc = self.alloc,
-        .polygon = &self.poly_outer,
+        .contour = &self.outer,
         .before = null,
     };
     try cap_points.cap_p0(
@@ -277,9 +280,14 @@ pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
         self.pen,
     );
 
-    // Done
-    try self.result.prepend(self.alloc, self.poly_outer);
-    self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
+    // Convert our contour to edges
+    try self.result.addEdgesFromContour(self.alloc, self.outer);
+
+    // Done, de-allocate our contour corners now that they have been converted
+    // to edges, and reset our states (only need to do outer, as inner was not
+    // touched).
+    self.outer.deinit(self.alloc);
+    self.outer = .{ .scale = self.opts.scale };
     self.clockwise_ = null;
 }
 
@@ -312,8 +320,8 @@ pub fn plotOpenJoined(
     // Start point
     var outer_start_ctx: CapPlotterCtx = .{
         .alloc = self.alloc,
-        .polygon = &self.poly_outer,
-        .before = self.poly_outer.corners.first,
+        .contour = &self.outer,
+        .before = self.outer.corners.first,
     };
     try cap_points_start.cap_p0(
         &.{
@@ -337,15 +345,19 @@ pub fn plotOpenJoined(
         self.pen,
     );
 
-    // Now, concat the end of the inner polygon to the
-    // end of the outer to give a single polygon
-    // representing the whole open stroke.
-    self.poly_outer.concat(self.poly_inner);
+    // Now, concat the end of the inner contour to the end of the outer to give
+    // a single contour (polyline) representing the whole open stroke.
+    self.outer.concat(&self.inner);
 
-    // Done
-    try self.result.prepend(self.alloc, self.poly_outer);
-    self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
-    self.poly_inner = .{ .scale = self.opts.scale }; // reset inner
+    // Convert our completed contour to edges
+    try self.result.addEdgesFromContour(self.alloc, self.outer);
+
+    // Deinit our contour now that it's converted, and reset the state. Note
+    // that we don't need to deinit the inner contour as all its corners were
+    // moved to the outer.
+    self.outer.deinit(self.alloc);
+    self.outer = .{ .scale = self.opts.scale };
+    self.inner = .{ .scale = self.opts.scale };
     self.clockwise_ = null;
 }
 
@@ -379,11 +391,17 @@ pub fn plotClosedJoined(
         try join(T, self, self.opts.join_mode, p1, initial0, initial1, null);
     }
 
-    // Done
-    try self.result.prepend(self.alloc, self.poly_outer);
-    try self.result.prepend(self.alloc, self.poly_inner);
-    self.poly_outer = .{ .scale = self.opts.scale }; // reset outer
-    self.poly_inner = .{ .scale = self.opts.scale }; // reset inner
+    // Convert both of our outer and inner contours to edges, as they both
+    // represent two different closed polygons.
+    try self.result.addEdgesFromContour(self.alloc, self.outer);
+    try self.result.addEdgesFromContour(self.alloc, self.inner);
+
+    // Done, de-allocate our contour corners now that they have been converted
+    // to edges, and reset our states.
+    self.outer.deinit(self.alloc);
+    self.inner.deinit(self.alloc);
+    self.outer = .{ .scale = self.opts.scale };
+    self.inner = .{ .scale = self.opts.scale };
     self.clockwise_ = null;
 }
 
@@ -423,7 +441,7 @@ pub fn join(
             point: Point,
             before: ?*std.DoublyLinkedList.Node,
         ) void {
-            this.plotter.poly_outer.plot(this.plotter.alloc, point, before) catch |err| {
+            this.plotter.outer.plot(this.plotter.alloc, point, before) catch |err| {
                 err_.* = err;
                 return;
             };
@@ -436,7 +454,7 @@ pub fn join(
             before: ?*std.DoublyLinkedList.Node,
         ) void {
             _ = before;
-            this.plotter.poly_inner.plotReverse(this.plotter.alloc, point) catch |err| {
+            this.plotter.inner.plotReverse(this.plotter.alloc, point) catch |err| {
                 err_.* = err;
                 return;
             };
@@ -540,35 +558,14 @@ pub fn join(
     if (self.clockwise_ == null) self.clockwise_ = poly_clockwise;
 }
 
-pub const PointBuffer = struct {
-    const split = 2;
-
-    items: [5]Point = undefined,
-    idx: usize = 0,
-
-    pub fn add(self: *PointBuffer, item: Point) void {
-        if (self.idx < self.items.len) {
-            self.items[self.idx] = item;
-            self.idx += 1;
-        } else {
-            for (split..self.items.len - 1) |idx| self.items[idx] = self.items[idx + 1];
-            self.items[self.items.len - 1] = item;
-        }
-    }
-
-    pub fn reset(self: *PointBuffer) void {
-        self.idx = 0;
-    }
-};
-
 const CapPlotterCtx = struct {
     alloc: mem.Allocator,
-    polygon: *Polygon,
+    contour: *Polygon.Contour,
     before: ?*std.DoublyLinkedList.Node,
 
     fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *CapPlotterCtx = @ptrCast(@alignCast(ctx));
-        self.polygon.plot(self.alloc, node.point, self.before) catch |err| {
+        self.contour.plot(self.alloc, node.point, self.before) catch |err| {
             err_.* = err;
             return;
         };
@@ -597,16 +594,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(1, result.polygons.len());
-        var corners_len: i32 = 0;
-        var next_: ?*std.DoublyLinkedList.Node = Polygon.fromNode(
-            result.polygons.first.?.findLast(),
-        ).corners.first;
-        while (next_) |n| {
-            corners_len += 1;
-            next_ = n.next;
-        }
-        try testing.expectEqual(4, corners_len);
+        try testing.expectEqual(4, result.edges.items.len);
     }
 
     {
@@ -630,16 +618,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(1, result.polygons.len());
-        var corners_len: i32 = 0;
-        var next_: ?*std.DoublyLinkedList.Node = Polygon.fromNode(
-            result.polygons.first.?.findLast(),
-        ).corners.first;
-        while (next_) |n| {
-            corners_len += 1;
-            next_ = n.next;
-        }
-        try testing.expectEqual(4, corners_len);
+        try testing.expectEqual(4, result.edges.items.len);
     }
 }
 
@@ -674,19 +653,16 @@ test "slope difference below epsilon does not produce NaN" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(1, result.polygons.len());
-        var idx: i32 = 0;
-        var next_: ?*std.DoublyLinkedList.Node = Polygon.fromNode(
-            result.polygons.first.?.findLast(),
-        ).corners.first;
-        while (next_) |n| {
-            const point = Polygon.Corner.fromNode(n).point;
-            if (!math.isFinite(point.x) or !math.isFinite(point.y)) {
-                debug.print("Non-finite value found at index {}, point: {}\n", .{ idx, point });
-                return error.TestExpectedFinite;
+        try testing.expectEqual(6, result.edges.items.len);
+        for (result.edges.items, 0..) |edge, idx| {
+            inline for (@typeInfo(Polygon.Edge).@"struct".fields) |f| {
+                if (@typeInfo(f.type) == .float) {
+                    if (!math.isFinite(@field(edge, f.name))) {
+                        debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, edge });
+                        return error.TestExpectedFinite;
+                    }
+                }
             }
-            idx += 1;
-            next_ = n.next;
         }
     }
 }
