@@ -248,8 +248,7 @@ pub fn xEdgesForY(
 ) mem.Allocator.Error!XEdgeListIterator {
     if (self.edges.items.len == 0) return .{};
 
-    const edge_list_capacity = edge_buffer_size / @sizeOf(XEdge);
-    var edge_list = try std.ArrayListUnmanaged(XEdge).initCapacity(alloc, edge_list_capacity);
+    var edge_list: std.ArrayListUnmanaged(XEdge) = .empty;
     defer edge_list.deinit(alloc);
 
     // We take our line measurements at the middle of the line; this helps

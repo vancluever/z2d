@@ -28,15 +28,6 @@ const InternalError = @import("internal/InternalError.zig").InternalError;
 const supersample_scale = @import("surface.zig").supersample_scale;
 const compositor = @import("compositor.zig");
 
-/// The size of the stack buffer portion of the allocator used to store
-/// discovered edges on a given scanline during rasterization. The value is in
-/// bytes and is reset per scanline. It is further divided up to various parts
-/// of the edge discovery process. If this is exhausted, allocation falls back
-/// to the heap (or whatever other allocator was passed into fill or stroke).
-///
-/// This value is not modifiable at this time.
-pub const edge_buffer_size = 512;
-
 pub const FillOpts = struct {
     /// The anti-aliasing mode to use with the fill operation.
     anti_aliasing_mode: options.AntiAliasMode = .default,
@@ -308,19 +299,22 @@ fn paintDirect(
     const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
     const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
 
+    // Make an ArenaAllocator for our edges, this allows us to re-use the same
+    // memory after every scanline by simply resetting the arena.
+    var edge_arena = heap.ArenaAllocator.init(alloc);
+    defer edge_arena.deinit();
+    const edge_alloc = edge_arena.allocator();
+
     // Note that we have to add 1 to the end scanline here as our start -> end
     // boundaries above only account for+clamp to the last line to be scanned,
     // so our len is end + 1. This helps correct for scenarios like small
     // polygons laying on edges, or very small surfaces (e.g., 1 pixel high).
     for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
+        defer {
+            _ = edge_arena.reset(.retain_capacity);
+        }
         const y: i32 = @intCast(y_u);
 
-        // Make a small FBA for edge caches, falling back to the passed in
-        // allocator if we need to. This should be more than enough to do most
-        // cases, but we can't guarantee it and we don't necessarily want to
-        // blow up the stack.
-        var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
-        const edge_alloc = edge_stack_fallback.get();
         var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
 
@@ -473,15 +467,17 @@ fn paintComposite(
         );
         errdefer mask_sfc_scaled.deinit(alloc);
 
-        for (0..@max(0, mask_height)) |y_u| {
-            const y: i32 = @intCast(y_u);
+        // Make an ArenaAllocator for our edges, this allows us to re-use the
+        // same memory after every scanline by simply resetting the arena.
+        var edge_arena = heap.ArenaAllocator.init(alloc);
+        defer edge_arena.deinit();
+        const edge_alloc = edge_arena.allocator();
 
-            // Make a small FBA for edge caches, falling back to the passed in
-            // allocator if we need to. This should be more than enough to do
-            // most cases, but we can't guarantee it and we don't necessarily
-            // want to blow up the stack.
-            var edge_stack_fallback = heap.stackFallback(edge_buffer_size, alloc);
-            const edge_alloc = edge_stack_fallback.get();
+        for (0..@max(0, mask_height)) |y_u| {
+            defer {
+                _ = edge_arena.reset(.retain_capacity);
+            }
+            const y: i32 = @intCast(y_u);
 
             // Our polygon co-ordinates are in (scaled) device space, so when
             // we search for edges, we need to offset our mask-space scanline
