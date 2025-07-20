@@ -261,9 +261,11 @@ pub fn xEdgesForY(
     for (self.edges.items) |current_edge| {
         if (current_edge.top < line_y_middle and current_edge.bottom >= line_y_middle) {
             try edge_list.append(alloc, .{
-                .x = @intFromFloat(
+                .x = @intFromFloat(math.clamp(
                     @round(current_edge.x_start + current_edge.x_inc * (line_y_middle - current_edge.top)),
-                ),
+                    0,
+                    math.maxInt(XEdge.X),
+                )),
                 .dir = current_edge.dir,
             });
         }
@@ -692,4 +694,15 @@ test "Polygon.inBox" {
         }
     };
     try runCases(name, cases, TestFn.f);
+}
+
+test "xEdgesForY, prevent i30 overflow" {
+    const alloc = testing.allocator;
+    var polygon: Polygon = .{};
+    defer polygon.deinit(alloc);
+    try polygon.addEdge(alloc, .{ .x = 600000100, .y = 600000100 }, .{ .x = 600000050, .y = 600000200 });
+    try polygon.addEdge(alloc, .{ .x = 600000050, .y = 600000200 }, .{ .x = 600000000, .y = 600000100 });
+    // Don't need a result here, just needs to actually work and not overflow
+    var x_edges = try polygon.xEdgesForY(alloc, 600000150, .non_zero);
+    defer x_edges.deinit(alloc);
 }
