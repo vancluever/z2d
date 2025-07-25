@@ -318,7 +318,7 @@ fn paintDirect(
         var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y), fill_rule);
         defer edge_list.deinit(edge_alloc);
 
-        if (!bounded and edge_list.edges.len == 0) {
+        if (!bounded and edge_list.items.len == 0) {
             // Empty line but we're not bounded, so we clear the whole line.
             const clear_stride = surface.getStride(0, y, @max(0, sfc_width));
             compositor.StrideCompositor.run(clear_stride, &.{.{
@@ -329,14 +329,15 @@ fn paintDirect(
             continue;
         }
 
-        while (edge_list.next()) |edge_pair| {
+        for (0..edge_list.items.len / 2) |edge_pair_idx| {
+            const edge_pair_start = edge_pair_idx * 2;
             const start_x: i32 = math.clamp(
-                edge_pair.start,
+                edge_list.items[edge_pair_start],
                 0,
                 sfc_width - 1,
             );
             const end_x: i32 = math.clamp(
-                edge_pair.end,
+                edge_list.items[edge_pair_start + 1],
                 start_x,
                 sfc_width,
             );
@@ -484,11 +485,14 @@ fn paintComposite(
             // to that.
             var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y + box_y0), fill_rule);
             defer edge_list.deinit(edge_alloc);
-            while (edge_list.next()) |edge_pair| {
+            for (0..edge_list.items.len / 2) |edge_pair_idx| {
                 // Inverse to the above; pull back our scaled device space
                 // co-ordinates to mask space.
-                const start_x: i32 = math.clamp(edge_pair.start - box_x0, 0, mask_width - 1);
-                const end_x: i32 = math.clamp(edge_pair.end - box_x0, start_x, mask_width);
+                const edge_pair_start = edge_pair_idx * 2;
+                const start_x: i32 =
+                    math.clamp(edge_list.items[edge_pair_start] - box_x0, 0, mask_width - 1);
+                const end_x: i32 =
+                    math.clamp(edge_list.items[edge_pair_start + 1] - box_x0, start_x, mask_width);
 
                 const fill_len: i32 = end_x - start_x;
                 if (fill_len > 0) {
