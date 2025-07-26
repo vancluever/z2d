@@ -172,86 +172,21 @@ pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) 
     return true;
 }
 
-/// Represents an x-edge on a polygon for a particular y-scanline.
-pub const XEdge = packed struct {
-    // The size of our x-edge.
-    //
-    // TODO: This ultimately places a limit on our edge size to i30 currently
-    // (approx. +/- 536870912). This is set up to ensure this struct fits in a
-    // u32 as this our edges are stored in a very small buffer.
-    //
-    // Note that our internal numerics are not 100% yet decided on, so this
-    // limit may change (and will likely decrease versus increase).
-    pub const X = i30;
-
-    x: X,
-    dir: i2,
-
-    pub fn sort_asc(_: void, a: XEdge, b: XEdge) bool {
-        return a.x < b.x;
-    }
-};
-
-pub const XEdgeListIterator = struct {
-    index: usize = 0,
-    edges: []XEdge = &.{},
-    fill_rule: FillRule = .non_zero,
-
-    pub const EdgePair = struct {
-        start: i32,
-        end: i32,
-    };
-
-    pub fn deinit(it: *XEdgeListIterator, alloc: mem.Allocator) void {
-        alloc.free(it.edges);
-        it.edges = undefined;
-    }
-
-    pub fn next(it: *XEdgeListIterator) ?EdgePair {
-        debug.assert(it.index <= it.edges.len);
-        if (it.edges.len == 0 or it.index >= it.edges.len - 1) return null;
-        if (it.fill_rule == .even_odd) {
-            const start = it.edges[it.index].x;
-            const end = it.edges[it.index + 1].x;
-            it.index += 2;
-            return .{
-                .start = start,
-                .end = end,
-            };
-        } else {
-            var winding_number: i32 = 0;
-            var start: i32 = undefined;
-            while (it.index < it.edges.len) : (it.index += 1) {
-                if (winding_number == 0) {
-                    start = it.edges[it.index].x;
-                }
-                winding_number += @intCast(it.edges[it.index].dir);
-                if (winding_number == 0) {
-                    const end = it.edges[it.index].x;
-                    it.index += 1;
-                    return .{
-                        .start = start,
-                        .end = end,
-                    };
-                }
-            }
-        }
-
-        return null;
-    }
-};
-
 pub fn xEdgesForY(
     self: *const Polygon,
     alloc: mem.Allocator,
     line_y: f64,
     fill_rule: FillRule,
-) mem.Allocator.Error!XEdgeListIterator {
+) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
     if (self.edges.items.len == 0) return .{};
 
-    const edge_list_capacity = edge_buffer_size / @sizeOf(XEdge);
-    var edge_list = try std.ArrayListUnmanaged(XEdge).initCapacity(alloc, edge_list_capacity);
-    defer edge_list.deinit(alloc);
+    const XEdge = struct {
+        x: i32,
+        dir: i2,
+    };
+
+    var edge_list: std.MultiArrayList(XEdge) = .empty;
+    errdefer edge_list.deinit(alloc);
 
     // We take our line measurements at the middle of the line; this helps
     // "break the tie" with lines that fall exactly on point boundaries.
@@ -264,7 +199,7 @@ pub fn xEdgesForY(
                 .x = @intFromFloat(math.clamp(
                     @round(current_edge.x_start + current_edge.x_inc * (line_y_middle - current_edge.top)),
                     0,
-                    math.maxInt(XEdge.X),
+                    math.maxInt(i32),
                 )),
                 .dir = current_edge.dir,
             });
@@ -272,17 +207,44 @@ pub fn xEdgesForY(
     }
 
     // Sort our edges
-    const edge_list_sorted = try edge_list.toOwnedSlice(alloc);
-    mem.sort(XEdge, edge_list_sorted, {}, XEdge.sort_asc);
+    const sliced = edge_list.slice();
+    edge_list.sortUnstable(struct {
+        x: []i32,
 
-    // Return the iterator directly from here. Previous versions of this would
-    // wrap this further into another set of individual polygons, but our new
-    // approach just deals in raw edges not associated with any particular
-    // polygon.
-    return .{
-        .edges = edge_list_sorted,
-        .fill_rule = fill_rule,
-    };
+        pub fn lessThan(ctx: @This(), a: usize, b: usize) bool {
+            return ctx.x[a] < ctx.x[b];
+        }
+    }{ .x = sliced.items(.x) });
+
+    switch (fill_rule) {
+        .even_odd => {},
+        .non_zero => {
+            // Before returning, filter in-place based on winding rule;
+            // consecutive edges in the same direction are filtered out after
+            // the first one, so that only one set of each direction happens
+            // one after the other.
+            var winding_number: i32 = 0;
+            var to: usize = 0;
+            for (0..edge_list.len) |from| {
+                edge_list.set(to, edge_list.get(from));
+                if (winding_number == 0) {
+                    winding_number += edge_list.get(to).dir;
+                    to += 1;
+                } else {
+                    winding_number += edge_list.get(to).dir;
+                    if (winding_number == 0) {
+                        to += 1;
+                    }
+                }
+            }
+
+            edge_list.shrinkRetainingCapacity(to);
+        },
+    }
+
+    var edge_list_raw = edge_list.toOwnedSlice();
+    alloc.free(edge_list_raw.items(.dir));
+    return std.ArrayListUnmanaged(i32).fromOwnedSlice(edge_list_raw.items(.x));
 }
 
 /// Represents a polyline (contour) that will be later assembled into a
@@ -694,15 +656,4 @@ test "Polygon.inBox" {
         }
     };
     try runCases(name, cases, TestFn.f);
-}
-
-test "xEdgesForY, prevent i30 overflow" {
-    const alloc = testing.allocator;
-    var polygon: Polygon = .{};
-    defer polygon.deinit(alloc);
-    try polygon.addEdge(alloc, .{ .x = 600000100, .y = 600000100 }, .{ .x = 600000050, .y = 600000200 });
-    try polygon.addEdge(alloc, .{ .x = 600000050, .y = 600000200 }, .{ .x = 600000000, .y = 600000100 });
-    // Don't need a result here, just needs to actually work and not overflow
-    var x_edges = try polygon.xEdgesForY(alloc, 600000150, .non_zero);
-    defer x_edges.deinit(alloc);
 }
