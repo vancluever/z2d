@@ -165,14 +165,14 @@ pub fn build(b: *std.Build) void {
         if (spec_update orelse false)
             break :spec b.addExecutable(.{
                 .name = "spec",
-                .root_source_file = b.path("spec/main.zig"),
+                .root_source_file = b.path("spec/main_spec.zig"),
                 .target = target,
                 .optimize = optimize,
             })
         else
             break :spec b.addTest(.{
                 .name = "spec",
-                .root_source_file = b.path("spec/main.zig"),
+                .root_source_file = b.path("spec/main_spec.zig"),
                 .target = target,
                 .optimize = optimize,
                 .filters = test_filters,

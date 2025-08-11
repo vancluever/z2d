@@ -47,7 +47,14 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     context.setFontSize(27);
     // Load the font using loadFile first, then we will do it with loadBuffer
     // to just test that deinit is running correctly.
-    try context.setFontToFile("spec/test-fonts/Inter-Regular.ttf");
+    context.setFontToFile("spec/test-fonts/Inter-Regular.ttf") catch |err| {
+        if (err == error.FileNotFound) {
+            // This is so that benchmarks pass
+            try context.setFontToFile("test-fonts/Inter-Regular.ttf");
+        } else {
+            return err;
+        }
+    };
     try context.showText("The quick brown fox jumps over the lázy dog", 10, 30);
 
     // Last test uses a buffer-loaded font
