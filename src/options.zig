@@ -74,7 +74,7 @@ pub const AntiAliasMode = enum {
     /// Do not use anti-aliasing.
     none,
 
-    /// Currently the same as `.supersample_4x`.
+    /// Currently the same as `.multisample_4x`.
     default,
 
     /// Multi-samples rasterization at 4x size to determine coverage, backed by
