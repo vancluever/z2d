@@ -80,8 +80,8 @@ pub fn fill(
 
     const scale: f64 = switch (aa_mode) {
         .none => 1,
-        .default, .supersample_4x => supersample_scale,
-        .multisample_4x => SparseCoverageBuffer.scale,
+        .supersample_4x => supersample_scale,
+        .default, .multisample_4x => SparseCoverageBuffer.scale,
     };
 
     var polygons = try fill_plotter.plot(
@@ -104,7 +104,7 @@ pub fn fill(
                 opts.precision,
             );
         },
-        .default, .supersample_4x => {
+        .supersample_4x => {
             try paintSuperSample(
                 alloc,
                 surface,
@@ -116,7 +116,7 @@ pub fn fill(
                 opts.precision,
             );
         },
-        .multisample_4x => {
+        .default, .multisample_4x => {
             try paintMultiSample(
                 alloc,
                 surface,
@@ -207,8 +207,8 @@ pub fn stroke(
 
     const scale: f64 = switch (aa_mode) {
         .none => 1,
-        .default, .supersample_4x => supersample_scale,
-        .multisample_4x => SparseCoverageBuffer.scale,
+        .supersample_4x => supersample_scale,
+        .default, .multisample_4x => SparseCoverageBuffer.scale,
     };
 
     // NOTE: for now, we set a minimum thickness for the following options:
@@ -259,7 +259,7 @@ pub fn stroke(
                 opts.precision,
             );
         },
-        .default, .supersample_4x => {
+        .supersample_4x => {
             try paintSuperSample(
                 alloc,
                 surface,
@@ -271,7 +271,7 @@ pub fn stroke(
                 opts.precision,
             );
         },
-        .multisample_4x => {
+        .default, .multisample_4x => {
             try paintMultiSample(
                 alloc,
                 surface,
