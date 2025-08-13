@@ -70,6 +70,9 @@ For more details, see [#133](https://github.com/vancluever/z2d/pull/133).
 
 ENHANCEMENTS:
 
+* The limit for co-ordinates when working with paths is now +/-8388608,
+  enforced when using path methods like `moveTo`, `lineTo`, etc. For background
+  and rationale, see [#136](https://github.com/vancluever/z2d/pull/136)
 * Vector length is now build-configurable (defaults to 16, suitable for 256-bit
   SIMD or lower). [#127](https://github.com/vancluever/z2d/pull/127)
 * The compositor now uses shuffling to transfer data into and out of vectors.
