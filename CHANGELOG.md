@@ -37,6 +37,35 @@ depending on the operation!
 
 For more details, see [#128](https://github.com/vancluever/z2d/pull/128).
 
+MULTISAMPLE ANTI-ALIASING
+
+0.7.0 also introduces a new default anti-aliasing method, termed *multi-sample
+anti-aliasing* (MSAA) to distinguish it from our existing
+super-sample (SSAA)/full-scene approach, even though the principle is the same.
+
+Under this new approach, co-ordinates are still super-sampled at 4x, however,
+rather than being rendered to an intermediate buffer which is then downsampled
+for the mask, coverage for a single real scanline's 4 sub-scanlines is recorded
+in a sparse, single-scanline buffer which is then used to write out values as
+needed to the surface.
+
+The immediate benefit to nearly every real-world rendering case is a massive
+memory savings. In fact, under our implementation, shapes with a draw area or
+255 pixels wide or less will only use *510 bytes* of memory for rendering going
+forward. In most scenarios, you will still only use 3/4 of the space needed for
+a single scanline under SSAA!
+
+Rendering times are also down, from about 1.1-2x, *on top of the previously
+mentioned performance savings under our new edge model*.
+
+No action is needed to start using MSAA as it is the new default anti-aliasing
+mode. Only under a very few amount of scenarios should images render slightly
+different (and even in those cases, possibly not perceptually). If for some
+reason you encounter issues using MSAA, you can revert to SSAA using
+`context.setAntiAliasingMode(.supersample_4x)` (but please also file an issue).
+
+For more details, see [#133](https://github.com/vancluever/z2d/pull/133).
+
 ENHANCEMENTS:
 
 * Vector length is now build-configurable (defaults to 16, suitable for 256-bit
