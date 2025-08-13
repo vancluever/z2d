@@ -51,9 +51,11 @@ needed to the surface.
 
 The immediate benefit to nearly every real-world rendering case is a massive
 memory savings. In fact, under our implementation, shapes with a draw area or
-255 pixels wide or less will only use *510 bytes* of memory for rendering going
-forward. In most scenarios, you will still only use 3/4 of the space needed for
-a single scanline under SSAA!
+255 pixels wide or less will only use *510 bytes* of memory (with a bit extra
+for the managing structure, and not withstanding edge memory required for
+rendering regardless of whether or not anti-aliasing is used) for rendering
+going forward. In most scenarios, you will still only use 3/4 of the space
+needed for a single scanline under SSAA!
 
 Rendering times are also down, from about 1.1-2x, *on top of the previously
 mentioned performance savings under our new edge model*.
