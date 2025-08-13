@@ -1,4 +1,4 @@
-## 0.7.0 (Unreleased)
+## 0.7.0 (August 13, 2025)
 
 TEXT SUPPORT
 
