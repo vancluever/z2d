@@ -500,10 +500,16 @@ fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
         .{ subject.filename, "_smooth", ".png" },
     );
     defer alloc.free(filename_smooth);
+    const filename_smooth_msaa = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_smooth_multisample", ".png" },
+    );
+    defer alloc.free(filename_smooth_msaa);
 
     var surface_pixelated = try subject.render(alloc, .none);
     defer surface_pixelated.deinit(alloc);
-    var surface_smooth = try subject.render(alloc, .default);
+    var surface_smooth = try subject.render(alloc, .supersample_4x);
     defer surface_smooth.deinit(alloc);
 
     try specExportPNG(
@@ -518,6 +524,35 @@ fn pathExportRun(alloc: mem.Allocator, subject: anytype) !void {
         filename_smooth,
         if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
     );
+
+    // Exports for MSAA tests technically just use the SSAA as a reference
+    // image, but there are a few files that have divergences. During update,
+    // we want to check if there's a difference, and only save a file if there
+    // is.
+    var surface_smooth_msaa = try subject.render(alloc, .multisample_4x);
+    defer surface_smooth_msaa.deinit(alloc);
+    const target_path = try fs.path.join(alloc, &.{ "spec/files", filename_smooth_msaa });
+    defer alloc.free(target_path);
+    fs.cwd().deleteFile(target_path) catch {};
+    var exported_file_smooth_msaa = try testExportPNG(
+        alloc,
+        surface_smooth_msaa,
+        filename_smooth_msaa,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
+    defer exported_file_smooth_msaa.cleanup();
+    compareFiles(alloc, exported_file_smooth_msaa.target_path, false) catch |err| {
+        if (err == error.SpecTestFileMismatch) {
+            try specExportPNG(
+                alloc,
+                surface_smooth_msaa,
+                filename_smooth_msaa,
+                if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+            );
+        } else {
+            return err;
+        }
+    };
 }
 
 fn specExportPNG(
@@ -553,7 +588,7 @@ fn compositorTestRun(alloc: mem.Allocator, subject: anytype) !void {
     );
     defer exported_file.cleanup();
 
-    try compareFiles(testing.allocator, exported_file.target_path);
+    try compareFiles(testing.allocator, exported_file.target_path, true);
 }
 
 fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
@@ -569,11 +604,19 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
         .{ subject.filename, "_smooth", ".png" },
     );
     defer alloc.free(filename_smooth);
+    const filename_smooth_msaa = try fmt.allocPrint(
+        alloc,
+        "{s}{s}{s}",
+        .{ subject.filename, "_smooth_multisample", ".png" },
+    );
+    defer alloc.free(filename_smooth_msaa);
 
     var surface_pixelated = try subject.render(alloc, .none);
     defer surface_pixelated.deinit(alloc);
-    var surface_smooth = try subject.render(alloc, .default);
+    var surface_smooth = try subject.render(alloc, .supersample_4x);
     defer surface_smooth.deinit(alloc);
+    var surface_smooth_msaa = try subject.render(alloc, .multisample_4x);
+    defer surface_smooth_msaa.deinit(alloc);
 
     var exported_file_pixelated = try testExportPNG(
         alloc,
@@ -587,11 +630,19 @@ fn pathTestRun(alloc: mem.Allocator, subject: anytype) !void {
         filename_smooth,
         if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
     );
+    var exported_file_smooth_msaa = try testExportPNG(
+        alloc,
+        surface_smooth_msaa,
+        filename_smooth_msaa,
+        if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
+    );
     defer exported_file_pixelated.cleanup();
     defer exported_file_smooth.cleanup();
+    defer exported_file_smooth_msaa.cleanup();
 
-    try compareFiles(testing.allocator, exported_file_pixelated.target_path);
-    try compareFiles(testing.allocator, exported_file_smooth.target_path);
+    try compareFiles(testing.allocator, exported_file_pixelated.target_path, true);
+    try compareFiles(testing.allocator, exported_file_smooth.target_path, true);
+    try compareFiles(testing.allocator, exported_file_smooth_msaa.target_path, true);
 }
 
 const testExportPNGDetails = struct {
@@ -631,14 +682,39 @@ fn testExportPNG(
     };
 }
 
-fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8) !void {
+fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output: bool) !void {
     const max_file_size = 10240000; // 10MB
 
     // We expect the file with the same name to be in spec/files
     const base_file = fs.path.basename(actual_filename);
     const expected_filename = try fs.path.join(alloc, &.{ "spec/files", base_file });
     defer alloc.free(expected_filename);
-    const expected_data = try fs.cwd().readFileAlloc(alloc, expected_filename, max_file_size);
+
+    var used_fallback: bool = false;
+    const expected_data = fs.cwd().readFileAlloc(
+        alloc,
+        expected_filename,
+        max_file_size,
+    ) catch |err| data: {
+        // In the event of our MSAA tests, there might be a file ending in
+        // "_smooth_multisample.png". Check that first, if that file isn't there,
+        // then our expected content is in just "_smooth.png".
+        if (mem.endsWith(u8, expected_filename, "_smooth_multisample.png")) {
+            used_fallback = true;
+            const expected_backup = try mem.replaceOwned(
+                u8,
+                alloc,
+                expected_filename,
+                "_smooth_multisample.png",
+                "_smooth.png",
+            );
+            defer alloc.free(expected_backup);
+            break :data try fs.cwd().readFileAlloc(alloc, expected_backup, max_file_size);
+        }
+
+        return err;
+    };
+
     defer alloc.free(expected_data);
     var expected_hash: [sha256.digest_length]u8 = undefined;
     sha256.hash(expected_data, &expected_hash, .{});
@@ -649,10 +725,18 @@ fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8) !void {
     sha256.hash(actual_data, &actual_hash, .{});
 
     if (!mem.eql(u8, &expected_hash, &actual_hash)) {
-        debug.print(
-            "files differ: {s} ({x}) vs {s} ({x})\n",
-            .{ expected_filename, expected_hash, actual_filename, actual_hash },
-        );
+        if (print_output) {
+            debug.print(
+                "files differ: {s}{s}({x}) vs {s} ({x})\n",
+                .{
+                    expected_filename,
+                    if (used_fallback) " (fell back to _smooth.png) " else " ",
+                    expected_hash,
+                    actual_filename,
+                    actual_hash,
+                },
+            );
+        }
         return error.SpecTestFileMismatch;
     }
 }

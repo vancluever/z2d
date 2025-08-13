@@ -71,6 +71,21 @@ pub const CapMode = enum {
 /// Represents the anti-aliasing mode used when drawing paths, which smoothes
 /// out jagged lines (aka "jaggies"). `none` represents no anti-aliasing.
 pub const AntiAliasMode = enum {
+    /// Do not use anti-aliasing.
     none,
+
+    /// Currently the same as `.supersample_4x`.
     default,
+
+    /// Multi-samples rasterization at 4x size to determine coverage, backed by
+    /// a sparse buffer sized for the real mask scanline size. Recommended for
+    /// most cases.
+    multisample_4x,
+
+    /// Super-samples the entire draw mask at 4x, which is then downsampled to
+    /// create the anti-aliased mask. This method is rudimentary and should be
+    /// highly accurate, but is slow and memory-intensive. It's recommended to
+    /// use `.multisample_4x` unless otherwise specifically needed for the
+    /// particular case.
+    supersample_4x,
 };
