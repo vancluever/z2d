@@ -1,3 +1,7 @@
+## 0.7.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.7.0 (August 13, 2025)
 
 TEXT SUPPORT
