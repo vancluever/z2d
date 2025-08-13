@@ -76,12 +76,6 @@ tolerance: f64 = options.default_tolerance,
 /// device space).
 transformation: Transformation = Transformation.identity,
 
-/// The limit for co-ordinates allowed in this path. Must be set to a signed
-/// integer type with an allowed maximum of i32.
-///
-/// This clamps all co-ordinates added using `moveTo`, `lineTo`, etc to the
-/// integer range. Note that changing this value has implications for
-/// anti-aliasing, and could
 /// Represents an empty `Path`.
 pub const empty: Path = .{};
 
