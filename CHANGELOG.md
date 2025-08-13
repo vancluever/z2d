@@ -39,9 +39,10 @@ For more details, see [#128](https://github.com/vancluever/z2d/pull/128).
 
 MULTISAMPLE ANTI-ALIASING
 
-0.7.0 also introduces a new default anti-aliasing method, termed *multi-sample
-anti-aliasing* (MSAA) to distinguish it from our existing
-super-sample (SSAA)/full-scene approach, even though the principle is the same.
+0.7.0 also introduces a new default anti-aliasing method, best defined as
+multi-sample anti-aliasing (MSAA) (and termed as such in the library) when
+distinguishing it from the pre-existing super-sample (SSAA)/full-scene
+approach, even though the principle is the same.
 
 Under this new approach, co-ordinates are still super-sampled at 4x, however,
 rather than being rendered to an intermediate buffer which is then downsampled
@@ -51,11 +52,11 @@ needed to the surface.
 
 The immediate benefit to nearly every real-world rendering case is a massive
 memory savings. In fact, under our implementation, shapes with a draw area or
-255 pixels wide or less will only use *510 bytes* of memory (with a bit extra
-for the managing structure, and not withstanding edge memory required for
-rendering regardless of whether or not anti-aliasing is used) for rendering
-going forward. In most scenarios, you will still only use 3/4 of the space
-needed for a single scanline under SSAA!
+255 pixels or less wide will only use a maximum of *510 bytes* of memory (with
+a bit extra for the managing structure, and not withstanding edge memory
+required for rendering regardless of whether or not anti-aliasing is used) for
+rendering going forward. In most scenarios, you will still only use 3/4 of the
+space needed for a single scanline under SSAA!
 
 Rendering times are also down, from about 1.1-2x, *on top of the previously
 mentioned performance savings under our new edge model*.
