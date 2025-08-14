@@ -148,5 +148,6 @@ test {
     _ = @import("internal/fill_plotter.zig");
     _ = @import("internal/stroke_plotter.zig");
     _ = @import("internal/compat/compress/zlib.zig");
+    _ = @import("internal/sparse_coverage.zig");
     _ = @import("static_path.zig");
 }

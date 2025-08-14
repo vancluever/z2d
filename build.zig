@@ -158,7 +158,7 @@ pub fn build(b: *std.Build) void {
     );
 
     const z2d_spec = b.addModule("z2d_spec", .{
-        .root_source_file = b.path("spec/main.zig"),
+        .root_source_file = b.path("spec/main_spec.zig"),
         .target = target,
         .optimize = optimize,
     });
