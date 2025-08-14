@@ -183,6 +183,9 @@ vector rasterization, suitable for UI design and other similar tasks.
 
 Zig 0.14.0 is required; those requiring Zig 0.13.0 should use v0.5.1.
 
+There is currently a `zig-0.15.0` branch that is currently being updated
+against the latest Zig 0.15.0.
+
 ## Documentation and examples
 
 View the documentation for the latest release at:
