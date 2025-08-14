@@ -9,7 +9,7 @@ const fs = @import("std").fs;
 const io = @import("std").io;
 const math = @import("std").math;
 const mem = @import("std").mem;
-const zlib = @import("std").compress.zlib;
+const zlib = @import("internal/compat/compress/zlib.zig");
 
 const color = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
@@ -33,7 +33,7 @@ pub const Error = error{
 pub const WriteToPNGFileError = Error ||
     fs.File.OpenError ||
     zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
-    fs.File.WriteError;
+    io.Writer.Error;
 
 pub const WriteToPNGFileOptions = struct {
     /// The RGB/color profile to use for exporting.
@@ -75,13 +75,16 @@ pub fn writeToPNGFile(
 }
 
 /// Writes the magic header for the PNG file.
-fn writePNGMagic(file: fs.File) fs.File.WriteError!void {
+fn writePNGMagic(file: fs.File) io.Writer.Error!void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
-    _ = try file.write(header);
+    var file_writer_buffer: [8]u8 = undefined;
+    var file_writer = file.writerStreaming(&file_writer_buffer);
+    _ = try file_writer.interface.write(header);
+    try file_writer.interface.flush();
 }
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: fs.File, sfc: surface.Surface) fs.File.WriteError!void {
+fn writePNGIHDR(file: fs.File, sfc: surface.Surface) io.Writer.Error!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
@@ -117,7 +120,7 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) fs.File.WriteError!void {
     );
 }
 
-fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) fs.File.WriteError!void {
+fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) io.Writer.Error!void {
     const gamma: u32 = @intFromFloat((switch (profile) {
         .linear => 1 / color.LinearRGB.gamma,
         .srgb => 1 / color.SRGB.gamma,
@@ -133,7 +136,7 @@ fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) fs.File.WriteError!voi
 
 const WritePNGIDATStreamError = Error ||
     zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
-    fs.File.WriteError;
+    io.Writer.Error;
 
 /// Write the IDAT stream (pixel data) for the PNG file.
 ///
@@ -358,28 +361,31 @@ fn encodeRGBAVec(
 
 /// Writes a single IDAT chunk. The data should be part of the zlib
 /// stream. See writePNG_IDAT_stream et al.
-fn writePNGIDATSingle(file: fs.File, data: []const u8) fs.File.WriteError!void {
+fn writePNGIDATSingle(file: fs.File, data: []const u8) io.Writer.Error!void {
     try writePNGWriteChunk(file, "IDAT".*, data);
 }
 
 /// Write the IEND chunk.
-fn writePNGIEND(file: fs.File) fs.File.WriteError!void {
+fn writePNGIEND(file: fs.File) io.Writer.Error!void {
     try writePNGWriteChunk(file, "IEND".*, "");
 }
 
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
-fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) fs.File.WriteError!void {
+fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) io.Writer.Error!void {
     if (data.len > math.maxInt(u32)) {
         @panic("bad PNG chunk data length (larger than 4GB). this is a bug, please report it");
     }
     const len: u32 = @intCast(data.len);
     const checksum = writePNGChunkCRC(chunk_type, data);
 
-    _ = try file.writer().writeInt(u32, len, .big);
-    _ = try file.write(&chunk_type);
-    _ = try file.write(data);
-    _ = try file.writer().writeInt(u32, checksum, .big);
+    var file_writer_buffer: [16384]u8 = undefined;
+    var file_writer = file.writerStreaming(&file_writer_buffer);
+    _ = try file_writer.interface.writeInt(u32, len, .big);
+    _ = try file_writer.interface.write(&chunk_type);
+    _ = try file_writer.interface.write(data);
+    _ = try file_writer.interface.writeInt(u32, checksum, .big);
+    try file_writer.interface.flush();
 }
 
 /// Calculates the CRC32 checksum for the chunk.

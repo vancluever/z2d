@@ -9,14 +9,12 @@ const std = @import("std");
 /// gets better, I'd love to move this to pure Zig.
 pub fn docsStep(
     b: *std.Build,
-    target: std.Build.ResolvedTarget,
+    mod: *std.Build.Module,
 ) *std.Build.Step {
     const dir = b.addInstallDirectory(.{
         .source_dir = b.addObject(.{
             .name = "z2d",
-            .root_source_file = b.path("src/z2d.zig"),
-            .target = target,
-            .optimize = .Debug,
+            .root_module = mod,
         }).getEmittedDocs(),
         .install_dir = .prefix,
         .install_subdir = "docs",
@@ -139,8 +137,6 @@ pub fn build(b: *std.Build) void {
     ) orelse &[0][]const u8{};
     const test_step = b.addTest(.{
         .root_module = z2d,
-        .target = target,
-        .optimize = optimize,
         .filters = test_filters,
     });
     const test_run = b.addRunArtifact(test_step);
@@ -161,21 +157,23 @@ pub fn build(b: *std.Build) void {
         "Update spec (E2E) tests (needs to be run with the \"spec\" target)",
     );
 
+    const z2d_spec = b.addModule("z2d_spec", .{
+        .root_source_file = b.path("spec/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const spec_test = spec: {
         if (spec_update orelse false)
             break :spec b.addExecutable(.{
                 .name = "spec",
-                .root_source_file = b.path("spec/main.zig"),
-                .target = target,
-                .optimize = optimize,
+                .root_module = z2d_spec,
                 .use_llvm = true,
             })
         else
             break :spec b.addTest(.{
                 .name = "spec",
-                .root_source_file = b.path("spec/main.zig"),
-                .target = target,
-                .optimize = optimize,
+                .root_module = z2d_spec,
                 .filters = test_filters,
                 .use_llvm = true,
             });
@@ -196,7 +194,7 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Docs
     /////////////////////////////////////////////////////////////////////////
-    const docs_step = docsStep(b, target);
+    const docs_step = docsStep(b, z2d);
     b.step("docs", "Generate documentation").dependOn(docs_step);
     b.step("docs-serve", "Serve documentation").dependOn(docsServeStep(b, docs_step));
     b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step));

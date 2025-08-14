@@ -10,7 +10,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.0-dev.919+044ccf413
+          version: 0.15.0-dev.1509+b9a6dae2a
 
       - name: Run unit tests
         run: zig build test --summary all
