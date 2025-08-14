@@ -6,7 +6,6 @@ const debug = @import("std").debug;
 const fs = @import("std").fs;
 const fmt = @import("std").fmt;
 const heap = @import("std").heap;
-const io = @import("std").io;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
@@ -116,7 +115,7 @@ pub fn main() !void {
         _ = debug_allocator.deinit();
     };
 
-    const stdout = io.getStdOut().writer();
+    var stdout = fs.File.stdout().writerStreaming(&.{});
     var bench = zbench.Benchmark.init(alloc, .{ .track_allocations = switch (builtin.mode) {
         .Debug, .ReleaseSafe => false,
         .ReleaseFast, .ReleaseSmall => true,
@@ -200,7 +199,7 @@ pub fn main() !void {
     // unless it's actually using 16 PiB, which something tells me it's not. ;)
     try addPathBenchmark(&bench, _074_text);
 
-    try bench.run(stdout);
+    try bench.run(&stdout.interface);
 }
 
 fn addCompositorBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
