@@ -610,9 +610,6 @@ fn paintMultiSample(
         0,
         sfc_width - 1,
     );
-    // NOTE: The end clamping here has to be properly synced with the (scaled)
-    // end_x in the individual sub-scanline loop (which is clamped to
-    // sfc_width_scaled).
     const scanline_end_x: i32 = math.clamp(
         @as(i32, @intFromFloat(@ceil(polygons.extent_right / scale))),
         scanline_start_x,
@@ -702,10 +699,11 @@ fn paintMultiSample(
                     break;
                 }
 
-                // NOTE: The end clamping here has to be properly synced with
-                // the (unscaled) scanline_end_x, found closer to coverage
-                // buffer initialization (used to calculate the buffer length,
-                // and clamped to sfc_width).
+                // Clamping here is done to the length of the scanline coverage
+                // buffer with the supersampled co-ordinate scale applied. In
+                // principle, this is similar to the clamping we do in SSAA
+                // (i.e., clamping to the width of the mask, not the width of
+                // the final target surface).
                 const end_x: i32 = math.clamp(
                     edge_list.items[edge_pair_start + 1] - scanline_start_x_scaled,
                     start_x,
