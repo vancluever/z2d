@@ -1,6 +1,11 @@
 ## 0.7.1-pre (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Corrected a couple of issues with out-of-bounds or partially out-of-bounds
+  drawing: one when using multi-sample AA that was leading out out-of-bounds
+  buffer accesses, and another that was causing drawing artifacts on the right
+  side of the surface. [#137](https://github.com/vancluever/z2d/pull/137)
 
 ## 0.7.0 (August 13, 2025)
 
