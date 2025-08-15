@@ -1,7 +1,12 @@
-## 0.7.1-pre (Unreleased)
+## 0.7.1 (Unreleased)
 
 BUG FIXES:
 
+* Fill operations now allow for duplicate closes and degenerate `lineTo` calls
+  (sub-paths with only a single `moveTo` -> `lineTo`). In the former case, it
+  is a no-op, but in the single-line sub-path case, odd polygons may be
+  rasterized, but the operation should succeed.
+  [#138](https://github.com/vancluever/z2d/pull/137)
 * Corrected a couple of issues with out-of-bounds or partially out-of-bounds
   drawing: one when using multi-sample AA that was leading out out-of-bounds
   buffer accesses, and another that was causing drawing artifacts on the right
