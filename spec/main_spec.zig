@@ -88,6 +88,8 @@ const _074_text = @import("074_text.zig");
 const _075_oob_draw_corners = @import("075_oob_draw_corners.zig");
 const _076_oob_draw_sides = @import("076_oob_draw_sides.zig");
 const _077_oob_draw_full_outside = @import("077_oob_draw_full_outside.zig");
+const _078_double_close = @import("078_double_close.zig");
+const _079_fill_degenerate_lineto = @import("079_fill_degenerate_lineto.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -172,6 +174,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _075_oob_draw_corners);
     try pathExportRun(alloc, _076_oob_draw_sides);
     try pathExportRun(alloc, _077_oob_draw_full_outside);
+    try pathExportRun(alloc, _078_double_close);
+    try pathExportRun(alloc, _079_fill_degenerate_lineto);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -482,6 +486,14 @@ test "076_oob_draw_sides" {
 
 test "077_oob_draw_full_outside" {
     try pathTestRun(testing.allocator, _077_oob_draw_full_outside);
+}
+
+test "078_double_close" {
+    try pathTestRun(testing.allocator, _078_double_close);
+}
+
+test "079_fill_degenerate_lineto" {
+    try pathTestRun(testing.allocator, _079_fill_degenerate_lineto);
 }
 
 //////////////////////////////////////////////////////////////////////////////

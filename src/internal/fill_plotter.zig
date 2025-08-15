@@ -70,16 +70,25 @@ pub fn plot(
                 try spline.decompose();
             },
             .close_path => {
-                if (points.len < 3) return InternalError.InvalidState;
+                // Only proceed if we have 3 points in the buffer; anything
+                // else is a degenerate line (e.g., move_to -> line_to (2) or
+                // move_to -> close_path (1)). These scenarios will be cleared
+                // on the next move_to (which happens right after this).
+                //
+                // Note on the move_to -> line_to scenario, an edge will be
+                // generated. While this will produce a broken image, it should
+                // be fine as far as rasterization goes, as the rasterizer
+                // works on edge pairs, with trailing odd edges discarded.
+                if (points.len >= 3) {
+                    // No-op if our initial and current points are equal
+                    if (points.last().?.equal(points.first().?)) continue;
 
-                // No-op if our initial and current points are equal
-                if (points.last().?.equal(points.first().?)) continue;
+                    // Plot from the current point to the initial point
+                    try result.addEdge(alloc, points.last().?, points.first().?);
 
-                // Plot from the current point to the initial point
-                try result.addEdge(alloc, points.last().?, points.first().?);
-
-                // Set the current point to the initial point.
-                points.add(points.first().?);
+                    // Set the current point to the initial point.
+                    points.add(points.first().?);
+                }
             },
         }
     }
@@ -141,4 +150,65 @@ test "degenerate line_to" {
             .dir = 1,
         },
     }, result.edges.items);
+}
+
+test "degenerate close" {
+    {
+        // move_to -> line_to
+        const alloc = testing.allocator;
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        defer nodes.deinit(alloc);
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(alloc, .{ .close_path = .{} });
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+
+        var result = try plot(alloc, nodes.items, 1, 1);
+        defer result.deinit(alloc);
+        try testing.expectEqual(1, result.edges.items.len);
+        try testing.expectEqualSlices(Polygon.Edge, &.{
+            .{
+                .top = 0.0,
+                .bottom = 10.0,
+                .x_start = 5.0,
+                .x_inc = 0.5,
+                .dir = -1,
+            },
+        }, result.edges.items);
+    }
+    {
+        // double close
+        const alloc = testing.allocator;
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        defer nodes.deinit(alloc);
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
+        try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 0, .y = 10 } } });
+        try nodes.append(alloc, .{ .close_path = .{} });
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+        try nodes.append(alloc, .{ .close_path = .{} });
+        try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
+
+        var result = try plot(alloc, nodes.items, 1, 1);
+        defer result.deinit(alloc);
+        // NOTE: only 2 edges should be here as there is a horizontal edge
+        // ((10,10) -> (0, 10)), this is now filtered out.
+        try testing.expectEqual(2, result.edges.items.len);
+        try testing.expectEqualSlices(Polygon.Edge, &.{
+            .{
+                .top = 0.0,
+                .bottom = 10.0,
+                .x_start = 5.0,
+                .x_inc = 0.5,
+                .dir = -1,
+            },
+            .{
+                .top = 0.0,
+                .bottom = 10.0,
+                .x_start = 5.0,
+                .x_inc = -0.5,
+                .dir = 1,
+            },
+        }, result.edges.items);
+    }
 }
