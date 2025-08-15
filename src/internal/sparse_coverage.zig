@@ -85,7 +85,8 @@ pub const SparseCoverageBuffer = struct {
         }
     }
 
-    /// Adds a span at x, running for len. Assumes that co-ordinates have
+    /// Adds a span at `x`, running for `len`. Both `x` and `len` must be
+    /// supplied in super-sampled co-ordinates. Assumes that co-ordinates have
     /// already been appropriately clamped correctly to be non-negative and
     /// cropped for length (e.g., x=-5, len=10 should be clamped and clipped to
     /// x=0, len=5).
@@ -93,6 +94,10 @@ pub const SparseCoverageBuffer = struct {
     /// Will extend the coverage set if necessary by adding space and/or
     /// splitting spans, before adding the coverage for the span.
     pub fn addSpan(self: *SparseCoverageBuffer, x: u32, len: u32) void {
+        if (x + len > self.capacity * scale) {
+            @panic("attempt to add span beyond capacity. this is a bug, please report it");
+        }
+
         if (len == 0) return;
 
         // Start co-ordinates and coverage

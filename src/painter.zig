@@ -356,11 +356,11 @@ fn paintDirect(
 
         for (0..edge_list.items.len / 2) |edge_pair_idx| {
             const edge_pair_start = edge_pair_idx * 2;
-            const start_x: i32 = math.clamp(
-                edge_list.items[edge_pair_start],
-                0,
-                sfc_width - 1,
-            );
+            const start_x: i32 = @max(0, edge_list.items[edge_pair_start]);
+            if (start_x >= sfc_width) {
+                // We're past the end of the draw area and can stop drawing.
+                break;
+            }
             const end_x: i32 = math.clamp(
                 edge_list.items[edge_pair_start + 1],
                 start_x,
@@ -514,8 +514,11 @@ fn paintSuperSample(
                 // Inverse to the above; pull back our scaled device space
                 // co-ordinates to mask space.
                 const edge_pair_start = edge_pair_idx * 2;
-                const start_x: i32 =
-                    math.clamp(edge_list.items[edge_pair_start] - box_x0, 0, mask_width - 1);
+                const start_x: i32 = @max(0, edge_list.items[edge_pair_start] - box_x0);
+                if (start_x >= mask_width) {
+                    // We're past the mask draw area and can stop drawing.
+                    break;
+                }
                 const end_x: i32 =
                     math.clamp(edge_list.items[edge_pair_start + 1] - box_x0, start_x, mask_width);
 
@@ -568,7 +571,6 @@ fn paintMultiSample(
     const alpha_scale: i32 = 256 / coverage_full;
 
     const sfc_width: i32 = surface.getWidth();
-    const sfc_width_scaled: i32 = sfc_width * scale;
     const sfc_height: i32 = surface.getHeight();
     const _precision = if (operator.requiresFloat()) .float else precision;
     if (!polygons.inBox(scale, surface.getWidth(), surface.getHeight())) {
@@ -627,8 +629,9 @@ fn paintMultiSample(
 
     // We need a scaled x-offset that we need to use when adding spans
     // (subtracting/pulling back) or drawing out spans (adding/pushing
-    // forward).
+    // forward), and a scaled draw width to clamp to.
     const scanline_start_x_scaled = scanline_start_x * scale;
+    const scanline_draw_width_scaled = scanline_draw_width * scale;
 
     // Make an ArenaAllocator for our edges, this allows us to re-use the
     // same memory after every scanline by simply resetting the arena.
@@ -692,11 +695,13 @@ fn paintMultiSample(
                 const edge_pair_start = edge_pair_idx * 2;
                 // Pull back the scaled device space co-ordinates (similar to
                 // supersample).
-                const start_x: i32 = math.clamp(
-                    edge_list.items[edge_pair_start] - scanline_start_x_scaled,
-                    x_min,
-                    sfc_width_scaled - 1,
-                );
+                const start_x: i32 = @max(x_min, edge_list.items[edge_pair_start] - scanline_start_x_scaled);
+                if (start_x >= scanline_draw_width_scaled) {
+                    // We're past the end of the draw area and can stop
+                    // drawing.
+                    break;
+                }
+
                 // NOTE: The end clamping here has to be properly synced with
                 // the (unscaled) scanline_end_x, found closer to coverage
                 // buffer initialization (used to calculate the buffer length,
@@ -704,7 +709,7 @@ fn paintMultiSample(
                 const end_x: i32 = math.clamp(
                     edge_list.items[edge_pair_start + 1] - scanline_start_x_scaled,
                     start_x,
-                    sfc_width_scaled,
+                    scanline_draw_width_scaled,
                 );
                 const fill_len: i32 = end_x - start_x;
 

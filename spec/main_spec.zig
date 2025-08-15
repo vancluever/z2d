@@ -85,6 +85,9 @@ const _071_gamma_linear = @import("071_gamma_linear.zig");
 const _072_gamma_srgb = @import("072_gamma_srgb.zig");
 const _073_stroke_sameclose = @import("073_stroke_sameclose.zig");
 const _074_text = @import("074_text.zig");
+const _075_oob_draw_corners = @import("075_oob_draw_corners.zig");
+const _076_oob_draw_sides = @import("076_oob_draw_sides.zig");
+const _077_oob_draw_full_outside = @import("077_oob_draw_full_outside.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -166,6 +169,9 @@ pub fn main() !void {
     try compositorExportRun(alloc, _072_gamma_srgb);
     try pathExportRun(alloc, _073_stroke_sameclose);
     try pathExportRun(alloc, _074_text);
+    try pathExportRun(alloc, _075_oob_draw_corners);
+    try pathExportRun(alloc, _076_oob_draw_sides);
+    try pathExportRun(alloc, _077_oob_draw_full_outside);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -464,6 +470,18 @@ test "073_stroke_sameclose" {
 
 test "074_text" {
     try pathTestRun(testing.allocator, _074_text);
+}
+
+test "075_oob_draw_corners" {
+    try pathTestRun(testing.allocator, _075_oob_draw_corners);
+}
+
+test "076_oob_draw_sides" {
+    try pathTestRun(testing.allocator, _076_oob_draw_sides);
+}
+
+test "077_oob_draw_full_outside" {
+    try pathTestRun(testing.allocator, _077_oob_draw_full_outside);
 }
 
 //////////////////////////////////////////////////////////////////////////////
