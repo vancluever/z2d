@@ -89,6 +89,9 @@ const _071_gamma_linear = @import("071_gamma_linear.zig");
 const _072_gamma_srgb = @import("072_gamma_srgb.zig");
 const _073_stroke_sameclose = @import("073_stroke_sameclose.zig");
 const _074_text = @import("074_text.zig");
+const _075_oob_draw_corners = @import("075_oob_draw_corners.zig");
+const _076_oob_draw_sides = @import("076_oob_draw_sides.zig");
+const _077_oob_draw_full_outside = @import("077_oob_draw_full_outside.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -196,9 +199,14 @@ pub fn main() !void {
     try addCompositorBenchmark(&bench, _071_gamma_linear);
     try addCompositorBenchmark(&bench, _072_gamma_srgb);
     try addPathBenchmark(&bench, _073_stroke_sameclose);
+
     // NOTE: something completely breaks memory tracking for the text test -
     // unless it's actually using 16 PiB, which something tells me it's not. ;)
     try addPathBenchmark(&bench, _074_text);
+
+    try addPathBenchmark(&bench, _075_oob_draw_corners);
+    try addPathBenchmark(&bench, _076_oob_draw_sides);
+    try addPathBenchmark(&bench, _077_oob_draw_full_outside);
 
     try bench.run(stdout);
 }
