@@ -209,29 +209,31 @@ const Plotter = struct {
         // Note that we draw rectangles/squares for dashed lines, see this
         // function in the dashed plotter for more details.
         debug.assert(self.inner.len == 0); // should have not been used
-        // Just plot off all of the pen's vertices, no need to
-        // determine a subset as we're doing a 360-degree plot.
-        debug.assert(self.pen != null);
-        for (self.pen.?.vertices.items) |v| {
-            try self.outer.plot(
-                self.alloc,
-                .{
-                    .x = point.x + v.point.x,
-                    .y = point.y + v.point.y,
-                },
-                null,
-            );
+        if (self.opts.cap_mode == .round) {
+            // Just plot off all of the pen's vertices, no need to
+            // determine a subset as we're doing a 360-degree plot.
+            debug.assert(self.pen != null);
+            for (self.pen.?.vertices.items) |v| {
+                try self.outer.plot(
+                    self.alloc,
+                    .{
+                        .x = point.x + v.point.x,
+                        .y = point.y + v.point.y,
+                    },
+                    null,
+                );
+            }
+
+            // Convert our contour to edges
+            try self.result.addEdgesFromContour(self.alloc, self.outer);
+
+            // Done, de-allocate our contour corners now that they have been
+            // converted to edges, and reset our states (only need to do outer,
+            // as inner was not touched).
+            self.outer.deinit(self.alloc);
+            self.outer = .{ .scale = self.opts.scale };
+            self.clockwise_ = null;
         }
-
-        // Convert our contour to edges
-        try self.result.addEdgesFromContour(self.alloc, self.outer);
-
-        // Done, de-allocate our contour corners now that they have been
-        // converted to edges, and reset our states (only need to do outer,
-        // as inner was not touched).
-        self.outer.deinit(self.alloc);
-        self.outer = .{ .scale = self.opts.scale };
-        self.clockwise_ = null;
     }
 
     pub const CurveToCtx = struct {
