@@ -1,4 +1,8 @@
-## 0.7.1 (Unreleased)
+## 0.7.2-pre (Unreleased)
+
+Bumped version for dev.
+
+## 0.7.1 (August 14, 2025)
 
 BUG FIXES:
 
@@ -11,6 +15,16 @@ BUG FIXES:
   drawing: one when using multi-sample AA that was leading out out-of-bounds
   buffer accesses, and another that was causing drawing artifacts on the right
   side of the surface. [#137](https://github.com/vancluever/z2d/pull/137)
+
+SECURITY:
+
+* The out-of-bounds MSAA buffer access part of
+  [#137](https://github.com/vancluever/z2d/pull/137) has been marked as a
+  security vulnerability due to its potential for invalid memory access or
+  corruption in unsafe release modes. More detail in
+  [GHSA-2vq8-cp8r-vcf3](https://github.com/vancluever/z2d/security/advisories/GHSA-2vq8-cp8r-vcf3).
+  Given the short period of time v0.7.0 has been out, it's recommended to just
+  upgrade to v0.7.1, skipping v0.7.0.
 
 ## 0.7.0 (August 13, 2025)
 
