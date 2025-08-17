@@ -10,6 +10,7 @@
 const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
+const debug = @import("std").debug;
 
 const runCases = @import("util.zig").runCases;
 const TestingError = @import("util.zig").TestingError;
@@ -241,12 +242,10 @@ pub const SparseCoverageBuffer = struct {
     }
 
     fn put(self: *SparseCoverageBuffer, x: u32, value: u8, len: u32) void {
+        debug.assert(x + len <= self.capacity);
         self.values[x] = value;
         switch (self.lengths) {
-            inline else => |l| l[x] = @min(
-                len,
-                math.maxInt(@typeInfo(@TypeOf(l)).pointer.child),
-            ),
+            inline else => |l| l[x] = @intCast(len),
         }
     }
 
@@ -509,4 +508,52 @@ test "addSpan, capacity tests/checks" {
         }
     };
     try runCases(name, cases, TestFn.f);
+}
+
+// Uncomment this to test (expect assertion failure or intCast safety check)
+//
+// test "extend, split over underlying type max" {
+//     const alloc = testing.allocator;
+//     var coverage: SparseCoverageBuffer = try .init(alloc, 255);
+//     defer coverage.deinit(alloc);
+//     coverage.extend(192, 500);
+//     var idx: u32 = 0;
+//     while (idx < coverage.len) {
+//         const x_val, const x_inc = coverage.get(idx);
+//         debug.print("(idx: {d:>3}) x_val: {d}, x_inc: {d}, next: {d}\n", .{
+//             idx,
+//             x_val,
+//             x_inc,
+//             idx + x_inc,
+//         });
+//         idx += x_inc;
+//     }
+// }
+
+test "extend, split up to exactly capacity" {
+    const alloc = testing.allocator;
+    var coverage: SparseCoverageBuffer = try .init(alloc, 255);
+    defer coverage.deinit(alloc);
+
+    // Just a note to get past morning brain, since we're working on the bit
+    // boundaries here, remember that our capacity is 255, which means an
+    // allowable index range of 0-254, *not* 0-255 (you're thinking of a
+    // capacity of 256 here ;p).
+    coverage.extend(192, 63);
+
+    var got_val, var got_len = coverage.get(0);
+    try testing.expectEqual(0, got_val);
+    try testing.expectEqual(192, got_len);
+    got_val, got_len = coverage.get(192);
+    try testing.expectEqual(0, got_val);
+    try testing.expectEqual(63, got_len);
+
+    var idx: u32 = 0;
+    var tracked_span_len: usize = 0;
+    while (idx < coverage.len) {
+        _, const x_inc = coverage.get(idx);
+        idx += x_inc;
+        tracked_span_len += 1;
+    }
+    try testing.expectEqual(2, tracked_span_len);
 }
