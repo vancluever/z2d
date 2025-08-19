@@ -77,8 +77,7 @@ pub fn writeToPNGFile(
 /// Writes the magic header for the PNG file.
 fn writePNGMagic(file: fs.File) io.Writer.Error!void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
-    var file_writer_buffer: [8]u8 = undefined;
-    var file_writer = file.writerStreaming(&file_writer_buffer);
+    var file_writer = file.writerStreaming(&.{});
     _ = try file_writer.interface.write(header);
     try file_writer.interface.flush();
 }
@@ -379,8 +378,7 @@ fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) io.Wri
     const len: u32 = @intCast(data.len);
     const checksum = writePNGChunkCRC(chunk_type, data);
 
-    var file_writer_buffer: [16384]u8 = undefined;
-    var file_writer = file.writerStreaming(&file_writer_buffer);
+    var file_writer = file.writerStreaming(&.{});
     _ = try file_writer.interface.writeInt(u32, len, .big);
     _ = try file_writer.interface.write(&chunk_type);
     _ = try file_writer.interface.write(data);

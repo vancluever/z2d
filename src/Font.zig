@@ -63,13 +63,9 @@ pub fn loadFile(alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
     const file = try fs.cwd().openFile(filename, .{});
     defer file.close();
 
-    // New I/O framework is bring-your-own-buffer, so we have to define one
-    // here temporarily.
-    var reader_buffer: [16384]u8 = undefined;
-
     const buffer = try alloc.alloc(u8, size);
     errdefer alloc.free(buffer);
-    var file_reader = file.reader(&reader_buffer);
+    var file_reader = file.readerStreaming(&.{});
     const len_read = try file_reader.read(buffer);
     if (len_read != size) {
         return error.BytesReadMismatch;
