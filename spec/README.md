@@ -4,9 +4,35 @@ The following is the acceptance test suite for z2d. The purpose of this
 directory is to robustly test the library with "real-world" test cases. It also
 serves as a set of usage examples (usefulness may vary).
 
+## Extracting individual examples
+
+With some possible exceptions, most of the acceptance tests can be extracted
+and used standalone by adding the following code to any individual test file:
+
+```zig
+const heap = @import("std").heap;
+var debug_allocator: heap.DebugAllocator(.{}) = .init;
+
+pub fn main() !void {
+    const alloc, const is_debug = switch (builtin.mode) {
+        .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+        .ReleaseFast, .ReleaseSmall => .{ heap.smp_allocator, false },
+    };
+
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
+
+    // Remove `.default` if exporting a compositor-only test (see below)
+    var sfc = try render(alloc, .default);
+    defer sfc.deinit(alloc);
+    try z2d.png_exporter.writeToPNGFile(sfc, "output.png", .{});
+}
+```
+
 ## Structure of this directory
 
-The tests are numbered (e.g., 001_smile_rgba.zig) and generally fall within two
+The tests are numbered (e.g., `001_smile_rgba.zig`) and generally fall within two
 categories:
 
 * *Compositor tests*, which are only run once.

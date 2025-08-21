@@ -75,7 +75,7 @@ pub fn deinit(self: *Context) void {
 }
 
 /// Releases any font data held on by the context.
-fn deinitFont(self: *Context) void {
+pub fn deinitFont(self: *Context) void {
     switch (self.font) {
         .file => self.font.file.deinit(self.alloc),
         else => {},
@@ -323,7 +323,7 @@ pub fn setFontToFile(self: *Context, filename: []const u8) Font.LoadFileError!vo
 /// managed memory.
 pub fn setFontToBuffer(self: *Context, buffer: []const u8) Font.LoadBufferError!void {
     self.deinitFont();
-    self.font = .{ .file = try Font.loadBuffer(buffer) };
+    self.font = .{ .buffer = try Font.loadBuffer(buffer) };
 }
 
 /// Returns the font size set with `setFont`.
