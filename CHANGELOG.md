@@ -10,8 +10,8 @@ BUG FIXES:
   [#140](https://github.com/vancluever/z2d/pull/140)
 * Fixed an issue where fonts loaded through the use of
   `Context.setFontToBuffer` were being incorrectly classified as files, leading
-  to the context incorrectly attempting to free the buffer's memory.
-  [#140](https://github.com/vancluever/z2d/pull/140)
+  to the context incorrectly attempting to free the buffer's memory when
+  switching fonts. [#140](https://github.com/vancluever/z2d/pull/140)
 
 ## 0.7.1 (August 14, 2025)
 
