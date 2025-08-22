@@ -1,4 +1,8 @@
-## 0.7.2 (Unreleased)
+## 0.7.3-pre (Unreleased)
+
+Bumped version for dev.
+
+## 0.7.2 (August 22, 2025)
 
 BUG FIXES:
 
@@ -19,6 +23,18 @@ BUG FIXES:
   [#143](https://github.com/vancluever/z2d/pull/143)
 * Removed the unused `SetFontSource` struct from `Context`.
   [#144](https://github.com/vancluever/z2d/pull/144)
+* Additional minor safety-related change to MSAA.
+  [#139](https://github.com/vancluever/z2d/pull/139),
+
+SECURITY:
+
+* The invalid free part of [#140](https://github.com/vancluever/z2d/pull/140)
+  has been marked as a security vulnerability due to its potential to cause
+  crashes, double-free, or use-after-free scenarios in unsafe release modes.
+  More detail in
+  [GHSA-v7f4-f3hm-282w](https://github.com/vancluever/z2d/security/advisories/GHSA-v7f4-f3hm-282w).
+  Upgrading to v0.7.2 is recommended, especially for those who or are, or plan
+  on, using the new text rendering functionality.
 
 ## 0.7.1 (August 14, 2025)
 
