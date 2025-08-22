@@ -129,6 +129,7 @@ pub fn init(
 
 pub fn deinit(self: *Pen, alloc: mem.Allocator) void {
     self.vertices.deinit(alloc);
+    self.* = undefined;
 }
 
 /// Returns an iterator for the vertex range from one face to the other,
