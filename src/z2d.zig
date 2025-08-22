@@ -150,6 +150,5 @@ test {
     _ = @import("internal/Glyph.zig");
     _ = @import("internal/sparse_coverage.zig");
     _ = @import("internal/stroke_plotter.zig");
-    _ = @import("internal/stroke_plotter.zig");
     _ = @import("static_path.zig");
 }
