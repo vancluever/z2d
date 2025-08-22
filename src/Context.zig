@@ -302,17 +302,6 @@ pub fn setTolerance(self: *Context, tolerance: f64) void {
     self.path.tolerance = t;
 }
 
-/// Determines the source type to use when setting the font.
-pub const SetFontSource = union(enum) {
-    /// Load from a file at the supplied path. The contents of the file are
-    /// read into memory using the context's allocator and freed when `deinit`
-    /// is called, or if the font is switched via another `setFont` call.
-    file: []const u8,
-
-    /// Load from a supplied buffer of externally managed memory.
-    buffer: []const u8,
-};
-
 /// Sets the font to use with `showText`, loading the file form the supplied
 /// path. The contents of the file are read into memory using the context's
 /// allocator and freed when `deinit` is called, or if the font is switched via
