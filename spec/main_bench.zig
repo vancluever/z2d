@@ -93,6 +93,7 @@ const _076_oob_draw_sides = @import("076_oob_draw_sides.zig");
 const _077_oob_draw_full_outside = @import("077_oob_draw_full_outside.zig");
 const _078_double_close = @import("078_double_close.zig");
 const _079_fill_degenerate_lineto = @import("079_fill_degenerate_lineto.zig");
+const _080_fill_z2d_logo = @import("080_fill_z2d_logo.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -210,6 +211,7 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _077_oob_draw_full_outside);
     try addPathBenchmark(&bench, _078_double_close);
     try addPathBenchmark(&bench, _079_fill_degenerate_lineto);
+    try addPathBenchmark(&bench, _080_fill_z2d_logo);
 
     try bench.run(&stdout.interface);
 }

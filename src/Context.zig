@@ -13,6 +13,7 @@
 const Context = @This();
 
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 const compositor = @import("compositor.zig");
 const options = @import("options.zig");
@@ -63,19 +64,21 @@ pub fn init(alloc: mem.Allocator, surface: *Surface) Context {
     return .{
         .alloc = alloc,
         .surface = surface,
-        .path = .{},
+        .path = .empty,
     };
 }
 
 /// Releases all resources associated with this particular context, such as the
-/// managed `Path`.
+/// managed path and any loaded font. Also invalidates the context, meaning it
+/// must not be used after this call.
 pub fn deinit(self: *Context) void {
+    self.deinitFont();
     self.path.deinit(self.alloc);
-    self.path = undefined;
+    self.* = undefined;
 }
 
 /// Releases any font data held on by the context.
-fn deinitFont(self: *Context) void {
+pub fn deinitFont(self: *Context) void {
     switch (self.font) {
         .file => self.font.file.deinit(self.alloc),
         else => {},
@@ -299,17 +302,6 @@ pub fn setTolerance(self: *Context, tolerance: f64) void {
     self.path.tolerance = t;
 }
 
-/// Determines the source type to use when setting the font.
-pub const SetFontSource = union(enum) {
-    /// Load from a file at the supplied path. The contents of the file are
-    /// read into memory using the context's allocator and freed when `deinit`
-    /// is called, or if the font is switched via another `setFont` call.
-    file: []const u8,
-
-    /// Load from a supplied buffer of externally managed memory.
-    buffer: []const u8,
-};
-
 /// Sets the font to use with `showText`, loading the file form the supplied
 /// path. The contents of the file are read into memory using the context's
 /// allocator and freed when `deinit` is called, or if the font is switched via
@@ -323,7 +315,7 @@ pub fn setFontToFile(self: *Context, filename: []const u8) Font.LoadFileError!vo
 /// managed memory.
 pub fn setFontToBuffer(self: *Context, buffer: []const u8) Font.LoadBufferError!void {
     self.deinitFont();
-    self.font = .{ .file = try Font.loadBuffer(buffer) };
+    self.font = .{ .buffer = try Font.loadBuffer(buffer) };
 }
 
 /// Returns the font size set with `setFont`.
@@ -643,4 +635,66 @@ fn wrapDither(self: *Context) Pattern {
             },
         },
     };
+}
+
+test "deinit after allocating path elements" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try context.moveTo(10, 10);
+    try context.lineTo(20, 20);
+    try testing.expectEqual(2, context.path.nodes.items.len);
+    context.deinit();
+}
+
+test "setFontToFile, deinit" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
+    try testing.expect(context.font == .file);
+    context.deinit();
+}
+
+test "setFontToBuffer, deinit" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
+    try testing.expect(context.font == .buffer);
+    context.deinit();
+}
+
+test "setFontToFile, deinitFont" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    // NOTE: No deinit here for the context. We want to test deinitFont
+    // exclusively. Nothing else should leak as a result from this as we are
+    // de-allocating our surface and nothing is being added to the path.
+    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
+    try testing.expect(context.font == .file);
+    context.deinitFont();
+    try testing.expect(context.font == .none);
+}
+
+test "setFontToBuffer, deinitFont" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    // NOTE: No deinit here for the context. We want to test deinitFont
+    // exclusively. Nothing else should leak as a result from this as we are
+    // de-allocating our surface and nothing is being added to the path.
+    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
+    try testing.expect(context.font == .buffer);
+    context.deinitFont();
+    try testing.expect(context.font == .none);
 }

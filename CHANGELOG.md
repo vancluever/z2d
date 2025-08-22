@@ -1,6 +1,24 @@
-## 0.7.2-pre (Unreleased)
+## 0.7.2 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* The context now correctly releases fonts on `deinit`.
+  [#142](https://github.com/vancluever/z2d/pull/142)
+* `Context.deinitFont` is now exported.
+  [#140](https://github.com/vancluever/z2d/pull/140)
+* Some bugfixes were applied to text rendering that were causing overflows when
+  reading glyph data; this may have manifested a failure to read glyph data, or
+  incorrect rendering of outlines.
+  [#140](https://github.com/vancluever/z2d/pull/140)
+* Fixed an issue where fonts loaded through the use of
+  `Context.setFontToBuffer` were being incorrectly classified as files, leading
+  to the context incorrectly attempting to free the buffer's memory when
+  switching fonts. [#140](https://github.com/vancluever/z2d/pull/140)
+* Several `deinit` calls in both public and private API have been updated to be
+  more strict about invalidation.
+  [#143](https://github.com/vancluever/z2d/pull/143)
+* Removed the unused `SetFontSource` struct from `Context`.
+  [#144](https://github.com/vancluever/z2d/pull/144)
 
 ## 0.7.1 (August 14, 2025)
 

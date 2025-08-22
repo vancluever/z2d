@@ -139,15 +139,18 @@ of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 ---
 
-The Inter font is included in various parts of this software for testing
-purposes, used under the terms of the Open Font License (OFL) v1.1. Below is
-the text of the Inter license.
+The fonts included in various parts of this software for testing purposes are
+under the terms of the SIL Open Font License (OFL) v1.1. These fonts are:
 
-Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+Inter:
+  Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
 
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
+Montserrat:
+ Copyright 2024 The Montserrat.Git Project Authors
+ (https://github.com/JulietaUla/Montserrat.git)
+
+Below is the text of the SIL Open Font License (OFL) v1.1. It is also available
+with a FAQ at: http://scripts.sil.org/OFL
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007

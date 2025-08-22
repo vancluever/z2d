@@ -97,6 +97,7 @@ pub fn loadBuffer(buffer: []const u8) LoadBufferError!Font {
 /// to use this with `loadBuffer`.
 pub fn deinit(self: *Font, alloc: mem.Allocator) void {
     alloc.free(self.file.buffer);
+    self.* = undefined;
 }
 
 /// Errors associated with reading font file data, generally an alias for file

@@ -100,6 +100,7 @@ pub fn initBuffer(nodes: []PathNode) Path {
 /// after this call.
 pub fn deinit(self: *Path, alloc: mem.Allocator) void {
     self.nodes.deinit(alloc);
+    self.* = undefined;
 }
 
 /// Rests the path set, clearing all nodes and state.

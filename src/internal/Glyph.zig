@@ -67,7 +67,7 @@ pub fn byIndex(font: *Font, index: u32) Font.FileError!Glyph {
             };
             try font.file.seekTo(loca_offset);
             result[i] = font.dir.glyf + (switch (font.meta.index_to_loc_format) {
-                .short => try font.file.reader().readInt(u16, .big) * 2,
+                .short => @as(u32, try font.file.reader().readInt(u16, .big)) * 2,
                 .long => try font.file.reader().readInt(u32, .big),
             });
         }
@@ -573,8 +573,8 @@ pub const Outline = struct {
                     x_offset = try font.file.reader().readInt(i16, .big);
                     y_offset = try font.file.reader().readInt(i16, .big);
                 } else {
-                    x_offset = @as(i8, @intCast(try font.file.reader().readByte()));
-                    y_offset = @as(i8, @intCast(try font.file.reader().readByte()));
+                    x_offset = try font.file.reader().readByteSigned();
+                    y_offset = try font.file.reader().readByteSigned();
                 }
 
                 // Process the transformation
@@ -802,6 +802,7 @@ pub const Outline = struct {
 
     pub fn deinit(self: *Outline, alloc: mem.Allocator) void {
         self.path.deinit(alloc);
+        self.* = undefined;
     }
 
     /// "Appends", or replays, the stored path within the outline on the path supplied.
@@ -860,7 +861,7 @@ pub const Outline = struct {
 };
 
 test "Glyph.init" {
-    const data = @embedFile("./internal/test-fonts/Inter-Regular.subset.ttf");
+    const data = @embedFile("./test-fonts/Inter-Regular.subset.ttf");
     const name = "Glyph.init";
     const cases = [_]struct {
         name: []const u8,
@@ -920,7 +921,7 @@ test "Glyph.Outline.parseF2Dot14" {
 }
 
 test "Glyph.Outline.init" {
-    const data = @embedFile("./internal/test-fonts/Inter-Regular.subset.ttf");
+    const data = @embedFile("./test-fonts/Inter-Regular.subset.ttf");
     const name = "Glyph.Outline.init";
     const cases = [_]struct {
         name: []const u8,
@@ -971,4 +972,23 @@ test "Glyph.Outline.init" {
         }
     };
     try runCases(name, cases, TestFn.f);
+}
+
+test "outline, composite processing, ensure no int overflow" {
+    // Happens on the Inter semibold "i".
+    const data = @embedFile("./test-fonts/Inter-SemiBold.subset.ttf");
+    var font: Font = Font.loadBuffer(data) catch |err| {
+        debug.print("unexpected error from loadInternal: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    const glyph: Glyph = Glyph.init(&font, 'i') catch |err| {
+        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph) catch |err| {
+        debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    defer outline.deinit(testing.allocator);
+    try testing.expect(outline.path.isClosed());
 }

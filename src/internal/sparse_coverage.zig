@@ -71,12 +71,10 @@ pub const SparseCoverageBuffer = struct {
 
     pub fn deinit(self: *SparseCoverageBuffer, alloc: mem.Allocator) void {
         alloc.free(self.values);
-        self.values = undefined;
         switch (self.lengths) {
             inline else => |l| alloc.free(l),
         }
-        self.lengths = undefined;
-        self.len = undefined;
+        self.* = undefined;
     }
 
     pub fn reset(self: *SparseCoverageBuffer) void {
