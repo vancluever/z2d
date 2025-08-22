@@ -13,6 +13,7 @@
 const Context = @This();
 
 const mem = @import("std").mem;
+const testing = @import("std").testing;
 
 const compositor = @import("compositor.zig");
 const options = @import("options.zig");
@@ -63,15 +64,20 @@ pub fn init(alloc: mem.Allocator, surface: *Surface) Context {
     return .{
         .alloc = alloc,
         .surface = surface,
-        .path = .{},
+        .path = .empty,
     };
 }
 
 /// Releases all resources associated with this particular context, such as the
-/// managed `Path`.
+/// managed `Path` and any loaded font. The context is valid for use after this
+/// with a fresh path or font, and retains all other settings (surface,
+/// pattern, transformation matrices, etc).
 pub fn deinit(self: *Context) void {
+    self.deinitFont();
     self.path.deinit(self.alloc);
-    self.path = undefined;
+    self.path = .empty;
+    self.path.tolerance = self.tolerance;
+    self.path.transformation = self.transformation;
 }
 
 /// Releases any font data held on by the context.
@@ -643,4 +649,108 @@ fn wrapDither(self: *Context) Pattern {
             },
         },
     };
+}
+
+test "deinit after allocating path elements" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try testing.expectEqual(Path.empty, context.path);
+    context.setTolerance(10);
+    context.translate(1, 2);
+    try testing.expectEqual(10, context.tolerance);
+    try testing.expectEqual(10, context.path.tolerance);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.transformation);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.path.transformation);
+    try context.moveTo(10, 10);
+    try context.lineTo(20, 20);
+    try testing.expectEqual(2, context.path.nodes.items.len);
+    context.deinit();
+    try testing.expectEqual(0, context.path.nodes.items.len);
+    try testing.expectEqual(10, context.tolerance);
+    try testing.expectEqual(10, context.path.tolerance);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.transformation);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.path.transformation);
+}
+
+test "setFontToFile, deinit" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
+    try testing.expect(context.font == .file);
+    context.deinit();
+    try testing.expect(context.font == .none);
+}
+
+test "setFontToBuffer, deinit" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
+    try testing.expect(context.font == .buffer);
+    context.deinit();
+    try testing.expect(context.font == .none);
+}
+
+test "setFontToFile, deinitFont" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    // NOTE: No deinit here for the context. We want to test deinitFont
+    // exclusively. Nothing else should leak as a result from this as we are
+    // de-allocating our surface and nothing is being added to the path.
+    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
+    try testing.expect(context.font == .file);
+    context.deinitFont();
+    try testing.expect(context.font == .none);
+}
+
+test "setFontToBuffer, deinitFont" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    // NOTE: No deinit here for the context. We want to test deinitFont
+    // exclusively. Nothing else should leak as a result from this as we are
+    // de-allocating our surface and nothing is being added to the path.
+    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
+    try testing.expect(context.font == .buffer);
+    context.deinitFont();
+    try testing.expect(context.font == .none);
+}
+
+test "double deinit should function OK" {
+    const alloc = testing.allocator;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(alloc, &sfc);
+    errdefer context.deinit();
+    try testing.expectEqual(Path.empty, context.path);
+    context.setTolerance(10);
+    context.translate(1, 2);
+    try testing.expectEqual(10, context.tolerance);
+    try testing.expectEqual(10, context.path.tolerance);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.transformation);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.path.transformation);
+    try context.moveTo(10, 10);
+    try context.lineTo(20, 20);
+    try testing.expectEqual(2, context.path.nodes.items.len);
+    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
+    try testing.expect(context.font == .file);
+    context.deinit();
+    context.deinit(); // Should be a no-op
+    try testing.expect(context.font == .none);
+    try testing.expectEqual(0, context.path.nodes.items.len);
+    try testing.expectEqual(10, context.tolerance);
+    try testing.expectEqual(10, context.path.tolerance);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.transformation);
+    try testing.expectEqualDeep(Transformation.identity.translate(1, 2), context.path.transformation);
 }
