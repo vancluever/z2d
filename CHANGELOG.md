@@ -2,6 +2,8 @@
 
 BUG FIXES:
 
+* The context now correctly releases fonts on `deinit`.
+  [#142](https://github.com/vancluever/z2d/pull/142)
 * `Context.deinitFont` is now exported.
   [#140](https://github.com/vancluever/z2d/pull/140)
 * Some bugfixes were applied to text rendering that were causing overflows when
