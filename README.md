@@ -47,6 +47,9 @@ Currently:
    - Butt, square, and round caps supported for stroking.
    - Dashed lines supported along with offsets for tweaking alignment of
      patterns to shapes, and zero-length dash stops to draw dotted lines.
+ * Text rendering: Latin left-to-right text rendering, kerning/GPOS support,
+   diacritics and composite glyphs supported. Fonts can be supplied either on
+   the file system or via external buffer.
  * Transformations: rotate, scale, translate, and other operations via direct
    manipulations of the affine matrix.
  * Composition:
