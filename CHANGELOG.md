@@ -14,6 +14,9 @@ BUG FIXES:
   `Context.setFontToBuffer` were being incorrectly classified as files, leading
   to the context incorrectly attempting to free the buffer's memory when
   switching fonts. [#140](https://github.com/vancluever/z2d/pull/140)
+* Several `deinit` calls in both public and private API have been updated to be
+  more strict about invalidation.
+  [#143](https://github.com/vancluever/z2d/pull/143)
 
 ## 0.7.1 (August 14, 2025)
 
