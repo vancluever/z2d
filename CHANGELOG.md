@@ -19,6 +19,8 @@ BUG FIXES:
   [#143](https://github.com/vancluever/z2d/pull/143)
 * Removed the unused `SetFontSource` struct from `Context`.
   [#144](https://github.com/vancluever/z2d/pull/144)
+* Additional minor safety-related change to MSAA.
+  [#139](https://github.com/vancluever/z2d/pull/139),
 
 ## 0.7.1 (August 14, 2025)
 
