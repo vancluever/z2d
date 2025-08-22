@@ -31,7 +31,7 @@ extent_right: f64 = 0.0,
 
 pub fn deinit(self: *Polygon, alloc: mem.Allocator) void {
     self.edges.deinit(alloc);
-    self.edges = .{};
+    self.* = undefined;
 }
 
 pub fn addEdge(
@@ -261,7 +261,7 @@ pub const Contour = struct {
             node_ = node.next;
             alloc.destroy(node);
         }
-        self.corners = .{};
+        self.* = undefined;
     }
 
     /// Plots a point on the contour. If before is specified, the point is

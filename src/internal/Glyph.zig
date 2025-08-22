@@ -802,6 +802,7 @@ pub const Outline = struct {
 
     pub fn deinit(self: *Outline, alloc: mem.Allocator) void {
         self.path.deinit(alloc);
+        self.* = undefined;
     }
 
     /// "Appends", or replays, the stored path within the outline on the path supplied.

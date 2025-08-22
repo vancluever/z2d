@@ -181,6 +181,7 @@ pub const Surface = union(SurfaceType) {
                 s.deinit(alloc);
             },
         }
+        self.* = undefined;
     }
 
     /// Downsamples the image, using simple pixel averaging. The surface is
@@ -387,6 +388,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// this is called.
         pub fn deinit(self: *ImageSurface(T), alloc: mem.Allocator) void {
             alloc.free(self.buf);
+            self.* = undefined;
         }
 
         /// Downsamples the image, using simple pixel averaging. The surface is
@@ -599,6 +601,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// this is called.
         pub fn deinit(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
             alloc.free(self.buf);
+            self.* = undefined;
         }
 
         /// Downsamples the image, using simple pixel averaging. The surface is

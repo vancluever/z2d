@@ -154,6 +154,7 @@ pub const Gradient = union(GradientType) {
         switch (self.*) {
             inline else => |*g| g.deinit(alloc),
         }
+        self.* = undefined;
     }
 
     /// Shorthand for returning the gradient as a pattern.
@@ -298,6 +299,7 @@ pub const Linear = struct {
     /// the same allocator that was used there.
     pub fn deinit(self: *Linear, alloc: mem.Allocator) void {
         self.stops.deinit(alloc);
+        self.* = undefined;
     }
 
     /// Returns this gradient as a higher-level gradient interface.
@@ -439,6 +441,7 @@ pub const Radial = struct {
     /// the same allocator that was used there.
     pub fn deinit(self: *Radial, alloc: mem.Allocator) void {
         self.stops.deinit(alloc);
+        self.* = undefined;
     }
 
     /// Returns this gradient as a higher-level gradient interface.
@@ -681,6 +684,7 @@ pub const Conic = struct {
     /// the same allocator that was used there.
     pub fn deinit(self: *Conic, alloc: mem.Allocator) void {
         self.stops.deinit(alloc);
+        self.* = undefined;
     }
 
     /// Returns this gradient as a higher-level gradient interface.
@@ -757,6 +761,7 @@ pub const Stop = struct {
         /// Releases any memory allocated using `add`.
         fn deinit(self: *List, alloc: mem.Allocator) void {
             self.l.deinit(alloc);
+            self.* = undefined;
         }
 
         /// Adds a stop with the specified offset and color. The offset will be
