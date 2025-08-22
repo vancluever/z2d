@@ -17,6 +17,8 @@ BUG FIXES:
 * Several `deinit` calls in both public and private API have been updated to be
   more strict about invalidation.
   [#143](https://github.com/vancluever/z2d/pull/143)
+* Removed the unused `SetFontSource` struct from `Context`.
+  [#144](https://github.com/vancluever/z2d/pull/144)
 
 ## 0.7.1 (August 14, 2025)
 
