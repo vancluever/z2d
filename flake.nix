@@ -35,7 +35,7 @@
           in
           pkgs.mkShell {
             packages = with pkgs; [
-              zig-overlay.packages.${system}.master
+              zig-overlay.packages.${system}."0.15.1"
               zls.packages.${system}.zls
               python3
             ];
