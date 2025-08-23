@@ -33,15 +33,15 @@ meta: Meta,
 pub const LoadFileError = LoadBufferError ||
     fs.File.OpenError ||
     mem.Allocator.Error ||
-    std.Io.Reader.Error ||
+    fs.File.ReadError ||
     error{
         /// The amount of bytes read did not match the size of the file.
         BytesReadMismatch,
 
-        /// The file is larger than 4GB and cannot be used with `loadFile`.
-        /// Note that this is a hard limit on the size we can allocate, but you
-        /// are likely going to break due to other reasons if you hit this
-        /// limit.
+        /// The file is larger than ~2GB (exactly 0x7FFFF000 bytes) and cannot
+        /// be used with `loadFile`. Note that this is a hard limit on the size
+        /// we can allocate, but you are likely going to break due to other
+        /// reasons if you hit this limit.
         FileTooLarge,
     };
 
@@ -51,12 +51,9 @@ pub const LoadFileError = LoadBufferError ||
 /// free the memory when you are finished with the font data.
 pub fn loadFile(alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
     const size_raw = (try fs.cwd().statFile(filename)).size;
-    if (size_raw > math.maxInt(u32)) {
-        // A larger than 4 GB font file? o_O
-        // You probably want to get that checked out, but we have to reject
-        // this otherwise so that we can allocate the buffer ahead of time if
-        // this is used on platforms like WASM, so we need to coerce this down
-        // to a 32-bit usize for allocation.
+    if (size_raw > 0x7FFFF000) {
+        // Our size limit here is a Linux limitation on the maximum size of
+        // read (2147479552 bytes).
         return error.FileTooLarge;
     }
     const size: usize = @intCast(size_raw);
@@ -65,8 +62,7 @@ pub fn loadFile(alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
 
     const buffer = try alloc.alloc(u8, size);
     errdefer alloc.free(buffer);
-    var file_reader = file.readerStreaming(&.{});
-    const len_read = try file_reader.read(buffer);
+    const len_read = try file.read(buffer);
     if (len_read != size) {
         return error.BytesReadMismatch;
     }
