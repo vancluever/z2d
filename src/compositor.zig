@@ -682,7 +682,7 @@ const RGBA16Vec = struct {
     fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
         if (limit) debug.assert(limit_len < vector_length);
         switch (src) {
-            inline .rgb, .rgba, .alpha8 => |_src| {
+            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_src| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
                 return .{ .underlying = transposeToVec(_src[idx..end], limit) };
             },
@@ -776,7 +776,7 @@ const RGBA16Vec = struct {
     ) void {
         if (limit) debug.assert(limit_len < vector_length);
         switch (dst) {
-            inline .rgb, .rgba, .alpha8 => |_dst| {
+            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_dst| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
                 transposeFromVec(_dst[idx..end], self.underlying, limit);
             },
@@ -806,10 +806,16 @@ const RGBA16Vec = struct {
         return result;
     }
 
-    const transpose_to_mask_r = genTransposeToShuffleMask(4, 0);
-    const transpose_to_mask_g = genTransposeToShuffleMask(4, 1);
-    const transpose_to_mask_b = genTransposeToShuffleMask(4, 2);
-    const transpose_to_mask_a = genTransposeToShuffleMask(4, 3);
+    fn transposeToMask(T: type, field: []const u8) [vector_length]i32 {
+        debug.assert(@typeInfo(T).@"struct".fields.len == 4);
+        inline for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
+            if (mem.eql(u8, f.name, field)) {
+                return genTransposeToShuffleMask(4, i);
+            }
+        }
+
+        @compileError("could not find field: " ++ field);
+    }
 
     /// Transposes a contiguous area of 32-bit RGBA (or RGB with dummied alpha
     /// channel), or 8-bit alpha channel into a vector. `limit` controls
@@ -819,8 +825,14 @@ const RGBA16Vec = struct {
     fn transposeToVec(src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
         // Get some details about our source.
         const src_t = @typeInfo(@TypeOf(src)).pointer.child;
-        const has_color = src_t == pixel.RGB or src_t == pixel.RGBA;
-        const has_alpha = src_t == pixel.RGBA or src_t == pixel.Alpha8;
+        const has_color = switch (src_t) {
+            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA => true,
+            else => false,
+        };
+        const has_alpha = switch (src_t) {
+            pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
+            else => false,
+        };
         const src_scale = @sizeOf(src_t);
 
         // This is the byte size of our raw u8 vector that we load the memory
@@ -864,12 +876,21 @@ const RGBA16Vec = struct {
         // case as well, we actually don't need to shuffle at all, so we just
         // coerce our raw vector into the alpha field and call it a day.
         return .{
-            .r = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_r) else zero_int_vec,
-            .g = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_g) else zero_int_vec,
-            .b = if (has_color) @shuffle(u8, src_vec, undefined, transpose_to_mask_b) else zero_int_vec,
+            .r = if (has_color)
+                @shuffle(u8, src_vec, undefined, transposeToMask(src_t, "r"))
+            else
+                zero_int_vec,
+            .g = if (has_color)
+                @shuffle(u8, src_vec, undefined, transposeToMask(src_t, "g"))
+            else
+                zero_int_vec,
+            .b = if (has_color)
+                @shuffle(u8, src_vec, undefined, transposeToMask(src_t, "b"))
+            else
+                zero_int_vec,
             .a = if (has_color) has_color: {
                 if (has_alpha)
-                    break :has_color @shuffle(u8, src_vec, undefined, transpose_to_mask_a)
+                    break :has_color @shuffle(u8, src_vec, undefined, transposeToMask(src_t, "a"))
                 else
                     break :has_color max_u8_vec;
             } else src_vec,
@@ -886,10 +907,16 @@ const RGBA16Vec = struct {
         return result;
     }
 
-    const transpose_from_mask_r = genTransposeFromShuffleMask(4, 0);
-    const transpose_from_mask_g = genTransposeFromShuffleMask(4, 1);
-    const transpose_from_mask_b = genTransposeFromShuffleMask(4, 2);
-    const transpose_from_mask_a = genTransposeFromShuffleMask(4, 3);
+    fn transposeFromMask(T: type, field: []const u8) [vector_length * 4]i32 {
+        debug.assert(@typeInfo(T).@"struct".fields.len == 4);
+        inline for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
+            if (mem.eql(u8, f.name, field)) {
+                return genTransposeFromShuffleMask(4, i);
+            }
+        }
+
+        @compileError("could not find field: " ++ field);
+    }
 
     /// Transposes our 16-bit RGBA vector into a contiguous area of 32-bit RGBA
     /// (or RGB with dummied alpha channel), or 8-bit alpha channel.
@@ -899,8 +926,14 @@ const RGBA16Vec = struct {
     fn transposeFromVec(dst: anytype, src: pixel_vector.RGBA16, comptime limit: bool) void {
         // Get some info about our destination.
         const dst_t = @typeInfo(@TypeOf(dst)).pointer.child;
-        const has_color = dst_t == pixel.RGB or dst_t == pixel.RGBA;
-        const has_alpha = dst_t == pixel.RGBA or dst_t == pixel.Alpha8;
+        const has_color = switch (dst_t) {
+            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA => true,
+            else => false,
+        };
+        const has_alpha = switch (dst_t) {
+            pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
+            else => false,
+        };
         const dst_scale = @sizeOf(dst_t);
 
         // Raw vector size
@@ -936,26 +969,26 @@ const RGBA16Vec = struct {
                 u8,
                 @as(@Vector(vector_length, u8), @intCast(src.r)),
                 src_vec,
-                transpose_from_mask_r,
+                transposeFromMask(dst_t, "r"),
             );
             src_vec = @shuffle(
                 u8,
                 @as(@Vector(vector_length, u8), @intCast(src.g)),
                 src_vec,
-                transpose_from_mask_g,
+                transposeFromMask(dst_t, "g"),
             );
             src_vec = @shuffle(
                 u8,
                 @as(@Vector(vector_length, u8), @intCast(src.b)),
                 src_vec,
-                transpose_from_mask_b,
+                transposeFromMask(dst_t, "b"),
             );
             if (has_alpha) {
                 src_vec = @shuffle(
                     u8,
                     @as(@Vector(vector_length, u8), @intCast(src.a)),
                     src_vec,
-                    transpose_from_mask_a,
+                    transposeFromMask(dst_t, "a"),
                 );
             }
 
@@ -3785,4 +3818,194 @@ test "out-of-bounds compositor testing" {
             }, .{});
         }
     }
+}
+
+test "fromStride" {
+    const name = "fromStride";
+    const cases = [_]struct {
+        name: []const u8,
+        in: pixel.Pixel,
+    }{
+        .{
+            .name = "argb",
+            .in = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
+            .name = "xrgb",
+            .in = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+        },
+        .{
+            .name = "rgb",
+            .in = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+        },
+        .{
+            .name = "rgba",
+            .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
+            .name = "alpha8",
+            .in = .{ .alpha8 = .{ .a = 0xDD } },
+        },
+        .{
+            .name = "alpha4",
+            .in = .{ .alpha4 = .{ .a = 0xD } },
+        },
+        .{
+            .name = "alpha2",
+            .in = .{ .alpha2 = .{ .a = 2 } },
+        },
+        .{
+            .name = "alpha1",
+            .in = .{ .alpha1 = .{ .a = 1 } },
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            switch (tc.in) {
+                inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |px, t| {
+                    const src_T = @TypeOf(px);
+                    var src_stride_raw: [vector_length]src_T = @splat(px);
+                    const src_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &src_stride_raw);
+                    const expected_scalar = pixel.RGBA.fromPixel(tc.in);
+                    const expected_vector: RGBA16Vec = .{ .underlying = .{
+                        .r = @splat(expected_scalar.r),
+                        .g = @splat(expected_scalar.g),
+                        .b = @splat(expected_scalar.b),
+                        .a = @splat(expected_scalar.a),
+                    } };
+                    const got_vector = RGBA16Vec.fromStride(src_stride, 0, false, 0);
+                    try testing.expectEqualDeep(expected_vector, got_vector);
+                },
+                inline .alpha4, .alpha2, .alpha1 => |px, t| {
+                    const src_T = @TypeOf(px);
+                    var src_stride_raw: [8 * (8 / @bitSizeOf(src_T))]u8 = undefined;
+                    for (0..vector_length) |i| {
+                        src_T.setInPacked(&src_stride_raw, i, px);
+                    }
+                    const src_stride: pixel.Stride = @unionInit(
+                        pixel.Stride,
+                        @tagName(t),
+                        .{
+                            .buf = &src_stride_raw,
+                            .px_offset = 0,
+                            .px_len = vector_length,
+                        },
+                    );
+                    const expected_scalar = pixel.RGBA.fromPixel(tc.in);
+                    const expected_vector: RGBA16Vec = .{ .underlying = .{
+                        .r = @splat(expected_scalar.r),
+                        .g = @splat(expected_scalar.g),
+                        .b = @splat(expected_scalar.b),
+                        .a = @splat(expected_scalar.a),
+                    } };
+                    const got_vector = RGBA16Vec.fromStride(src_stride, 0, false, 0);
+                    try testing.expectEqualDeep(expected_vector, got_vector);
+                },
+            }
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "toStride" {
+    const name = "toStride";
+    const cases = [_]struct {
+        name: []const u8,
+        in: pixel.Pixel,
+    }{
+        .{
+            .name = "argb",
+            .in = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
+            .name = "xrgb",
+            .in = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+        },
+        .{
+            .name = "rgb",
+            .in = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+        },
+        .{
+            .name = "rgba",
+            .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
+            .name = "alpha8",
+            .in = .{ .alpha8 = .{ .a = 0xDD } },
+        },
+        .{
+            .name = "alpha4",
+            .in = .{ .alpha4 = .{ .a = 0xD } },
+        },
+        .{
+            .name = "alpha2",
+            .in = .{ .alpha2 = .{ .a = 2 } },
+        },
+        .{
+            .name = "alpha1",
+            .in = .{ .alpha1 = .{ .a = 1 } },
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            switch (tc.in) {
+                inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |px, t| {
+                    const dst_T = @TypeOf(px);
+                    var expected_stride_raw: [vector_length]dst_T = @splat(px);
+                    const expected_stride: pixel.Stride = @unionInit(
+                        pixel.Stride,
+                        @tagName(t),
+                        &expected_stride_raw,
+                    );
+                    var got_stride_raw: [vector_length]dst_T = undefined;
+                    const got_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &got_stride_raw);
+                    const src_scalar = pixel.RGBA.fromPixel(tc.in);
+                    const src_vector: RGBA16Vec = .{ .underlying = .{
+                        .r = @splat(src_scalar.r),
+                        .g = @splat(src_scalar.g),
+                        .b = @splat(src_scalar.b),
+                        .a = @splat(src_scalar.a),
+                    } };
+                    src_vector.toStride(got_stride, 0, false, 0);
+                    try testing.expectEqualDeep(expected_stride, got_stride);
+                },
+                inline .alpha4, .alpha2, .alpha1 => |px, t| {
+                    const dst_T = @TypeOf(px);
+                    var expected_stride_raw: [8 * (8 / @bitSizeOf(dst_T))]u8 = undefined;
+                    for (0..vector_length) |i| {
+                        dst_T.setInPacked(&expected_stride_raw, i, px);
+                    }
+                    const expected_stride: pixel.Stride = @unionInit(
+                        pixel.Stride,
+                        @tagName(t),
+                        .{
+                            .buf = &expected_stride_raw,
+                            .px_offset = 0,
+                            .px_len = vector_length,
+                        },
+                    );
+                    var got_stride_raw: [8 * (8 / @bitSizeOf(dst_T))]u8 = undefined;
+                    const got_stride: pixel.Stride = @unionInit(
+                        pixel.Stride,
+                        @tagName(t),
+                        .{
+                            .buf = &got_stride_raw,
+                            .px_offset = 0,
+                            .px_len = vector_length,
+                        },
+                    );
+                    const src_scalar = pixel.RGBA.fromPixel(tc.in);
+                    const src_vector: RGBA16Vec = .{ .underlying = .{
+                        .r = @splat(src_scalar.r),
+                        .g = @splat(src_scalar.g),
+                        .b = @splat(src_scalar.b),
+                        .a = @splat(src_scalar.a),
+                    } };
+                    src_vector.toStride(got_stride, 0, false, 0);
+                    try testing.expectEqualDeep(expected_stride, got_stride);
+                },
+            }
+        }
+    };
+    try runCases(name, cases, TestFn.f);
 }
