@@ -1,6 +1,13 @@
-## 0.7.3-pre (Unreleased)
+## 0.8.0 (Unreleased)
 
-Bumped version for dev.
+ENHANCEMENTS:
+
+* New pixel formats: `ARGB` and `XRGB`. These pixel formats are designed to be
+  directly passed to windowing systems and other related constructs that expect
+  their image/pixmap data oriented in a little-endian fashion; so the blue
+  channel in the least-significant byte, and the alpha channel (dummied out in
+  the event of XRGB) in the most-significant byte, in both integer and memory
+  layout. [#145](https://github.com/vancluever/z2d/pull/145).
 
 ## 0.7.2 (August 22, 2025)
 
