@@ -30,6 +30,8 @@ pub const supersample_scale = 4;
 
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
+    image_surface_argb,
+    image_surface_xrgb,
     image_surface_rgb,
     image_surface_rgba,
     image_surface_alpha8,
@@ -39,6 +41,8 @@ pub const SurfaceType = enum {
 
     pub fn toPixelType(self: SurfaceType) type {
         return switch (self) {
+            .image_surface_argb => pixel.ARGB,
+            .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
             .image_surface_alpha8 => pixel.Alpha8,
@@ -50,6 +54,8 @@ pub const SurfaceType = enum {
 
     fn toBufferType(self: SurfaceType) type {
         return switch (self) {
+            .image_surface_argb => pixel.ARGB,
+            .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
             .image_surface_alpha8 => pixel.Alpha8,
@@ -64,6 +70,8 @@ pub const SurfaceType = enum {
 /// require an allocator must use the same allocator for the life of the
 /// surface.
 pub const Surface = union(SurfaceType) {
+    image_surface_argb: ImageSurface(pixel.ARGB),
+    image_surface_xrgb: ImageSurface(pixel.XRGB),
     image_surface_rgb: ImageSurface(pixel.RGB),
     image_surface_rgba: ImageSurface(pixel.RGBA),
     image_surface_alpha8: ImageSurface(pixel.Alpha8),
@@ -281,18 +289,6 @@ pub const Surface = union(SurfaceType) {
         };
     }
 
-    /// Puts the supplied stride at `(x, y)`, proceeding for its full length.
-    ///
-    /// Out-of-range start co-ordinates cause a no-op.
-    ///
-    /// It's expected that src will fit; overruns are safety-checked undefined
-    /// behavior.
-    pub fn putStride(self: *Surface, x: i32, y: i32, src: pixel.Stride) void {
-        return switch (self.*) {
-            inline else => |*s| s.putStride(x, y, src),
-        };
-    }
-
     /// Replaces the surface with the supplied pixel.
     pub fn paintPixel(self: *Surface, px: pixel.Pixel) void {
         return switch (self.*) {
@@ -447,6 +443,8 @@ pub fn ImageSurface(comptime T: type) type {
         /// Returns a `Surface` interface for this surface.
         pub fn asSurfaceInterface(self: ImageSurface(T)) Surface {
             return switch (T.format) {
+                .argb => .{ .image_surface_argb = self },
+                .xrgb => .{ .image_surface_xrgb = self },
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
                 .alpha8 => .{ .image_surface_alpha8 = self },
@@ -482,18 +480,6 @@ pub fn ImageSurface(comptime T: type) type {
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
             self.buf[@max(0, @as(isize, self.width) * y + x)] = T.fromPixel(px);
-        }
-
-        /// Puts the supplied stride at `(x, y)`, proceeding for its full
-        /// length.
-        ///
-        /// Out-of-range start co-ordinates cause a no-op.
-        ///
-        /// It's expected that src will fit; overruns are
-        /// safety-checked undefined behavior.
-        pub fn putStride(self: *ImageSurface(T), x: i32, y: i32, src: pixel.Stride) void {
-            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.getStride(x, y, src.pxLen()).copy(src);
         }
 
         /// Replaces the surface with the supplied pixel.
@@ -707,18 +693,6 @@ pub fn PackedImageSurface(comptime T: type) type {
         pub fn putPixel(self: *PackedImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
             self._set(@max(0, @as(isize, self.width) * y + x), T.fromPixel(px));
-        }
-
-        /// Puts the supplied stride at `(x, y)`, proceeding for its full
-        /// length.
-        ///
-        /// Out-of-range start co-ordinates cause a no-op.
-        ///
-        /// It's expected that src will fit; overruns are safety-checked
-        /// undefined behavior.
-        pub fn putStride(self: *PackedImageSurface(T), x: i32, y: i32, src: pixel.Stride) void {
-            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.getStride(x, y, src.pxLen()).copy(src);
         }
 
         /// Replaces the surface with the supplied pixel.
@@ -1590,5 +1564,29 @@ test "PackedImageSurface.downsample, edge cases" {
         try testing.expectEqual(4, sfc.width);
         try testing.expectEqual(3, sfc.height);
         try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+    }
+}
+
+test "getStride, OOB" {
+    const alloc = testing.allocator;
+    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
+        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+        defer sfc.deinit(alloc);
+        inline for (.{ -10, 5, 20 }) |x| {
+            inline for (.{ -10, 5, 20 }) |y| {
+                const got = sfc.getStride(x, y, 2);
+                if (x < 0 or y < 0 or x >= 10 or y >= 10) {
+                    testing.expectEqual(0, got.pxLen()) catch |err| {
+                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        return err;
+                    };
+                } else {
+                    testing.expectEqual(2, got.pxLen()) catch |err| {
+                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        return err;
+                    };
+                }
+            }
+        }
     }
 }

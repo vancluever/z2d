@@ -5,10 +5,14 @@
 
 const builtin = @import("std").builtin;
 const crc32 = @import("std").hash.Crc32;
+const debug = @import("std").debug;
+const fmt = @import("std").fmt;
 const fs = @import("std").fs;
 const io = @import("std").io;
 const math = @import("std").math;
 const mem = @import("std").mem;
+const sha256 = @import("std").crypto.hash.sha2.Sha256;
+const testing = @import("std").testing;
 const zlib = @import("internal/compat/compress/zlib.zig");
 
 const color = @import("color.zig");
@@ -88,16 +92,14 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (fs.File.WriteError || Erro
     mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
     mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
-        .rgba => 8,
-        .rgb => 8,
-        .alpha8 => 8,
+        .argb, .xrgb, .rgb, .rgba, .alpha8 => 8,
         .alpha4 => 4,
         .alpha2 => 2,
         .alpha1 => 1,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
-        .rgba => 6,
-        .rgb => 2,
+        .argb, .rgba => 6,
+        .xrgb, .rgb => 2,
         .alpha8, .alpha4, .alpha2, .alpha1 => 0,
     };
     const compression: u8 = 0;
@@ -209,10 +211,15 @@ fn writePNGIDATStream(
                 }
 
                 switch (stride) {
-                    .rgb => |s| {
+                    inline .xrgb, .rgb => |s| {
                         var stride_vec = [_]u32{0} ** vector_length;
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
-                        stride_vec = encodeRGBAVec(stride_vec, profile, false);
+                        stride_vec = encodeRGBAVec(
+                            stride_vec,
+                            profile,
+                            @typeInfo(@TypeOf(s)).pointer.child == pixel.XRGB,
+                            false,
+                        );
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
                         for (0..stride_len) |i| {
                             const j = i * 3;
@@ -221,10 +228,15 @@ fn writePNGIDATStream(
                         }
                         break :written stride_len * 3;
                     },
-                    .rgba => |s| {
+                    inline .argb, .rgba => |s| {
                         var stride_vec = [_]u32{0} ** vector_length;
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
-                        stride_vec = encodeRGBAVec(stride_vec, profile, true);
+                        stride_vec = encodeRGBAVec(
+                            stride_vec,
+                            profile,
+                            @typeInfo(@TypeOf(s)).pointer.child == pixel.ARGB,
+                            true,
+                        );
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
                         for (0..stride_len) |i| {
                             const j = i * 4;
@@ -307,11 +319,12 @@ fn u32PixelToBytesLittleVec(value: [vector_length]u32) [vector_length * 4]u8 {
 fn encodeRGBAVec(
     value: [vector_length]u32,
     profile: ?color.RGBProfile,
+    comptime in_argb: bool,
     comptime use_alpha: bool,
 ) [vector_length]u32 {
     var rgba_vector: pixel_vector.RGBA16 = undefined;
     for (0..vector_length) |i| {
-        const rgba_scalar: pixel.RGBA = @bitCast(value[i]);
+        const rgba_scalar: if (in_argb) pixel.ARGB else pixel.RGBA = @bitCast(value[i]);
         rgba_vector.r[i] = rgba_scalar.r;
         rgba_vector.g[i] = rgba_scalar.g;
         rgba_vector.b[i] = rgba_scalar.b;
@@ -411,4 +424,72 @@ fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
     hasher.update(chunk_type[0..chunk_type.len]);
     hasher.update(data);
     return hasher.final();
+}
+
+test "RGB/ARGB formats all export to same image" {
+    const Context = @import("Context.zig");
+    const hash_bytes_int_T = @Type(.{ .int = .{ .signedness = .unsigned, .bits = sha256.digest_length * 8 } });
+    const alloc = testing.allocator;
+    const width = 300;
+    const height = 300;
+
+    // Two groups, one for ARGB/RGBA, and one for XRGB/RGB.
+    const TestFn = struct {
+        fn run(sfc_type: surface.SurfaceType) !void {
+            var expected_hash_: ?[sha256.digest_length]u8 = null;
+
+            var sfc = try surface.Surface.init(sfc_type, alloc, width, height);
+            defer sfc.deinit(alloc);
+            var context = Context.init(alloc, &sfc);
+            defer context.deinit();
+            context.setSourceToPixel(.{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } });
+            context.setAntiAliasingMode(.default);
+            const margin = 10;
+            try context.moveTo(0 + margin, 0 + margin);
+            try context.lineTo(width - margin - 1, 0 + margin);
+            try context.lineTo(width / 2 - 1, height - margin - 1);
+            try context.closePath();
+            try context.fill();
+
+            var tmp_dir = testing.tmpDir(.{});
+            defer tmp_dir.cleanup();
+            const parent_path = try tmp_dir.dir.realpathAlloc(alloc, ".");
+            defer alloc.free(parent_path);
+            const target_path = try fs.path.join(alloc, &.{ parent_path, "z2d_test.png" });
+            defer alloc.free(target_path);
+            try writeToPNGFile(
+                sfc,
+                target_path,
+                .{},
+            );
+
+            const actual_data = try fs.cwd().readFileAlloc(alloc, target_path, 10240000);
+            defer alloc.free(actual_data);
+            if (expected_hash_) |expected_hash| {
+                var actual_hash: [sha256.digest_length]u8 = undefined;
+                sha256.hash(actual_data, &actual_hash, .{});
+                if (!mem.eql(u8, &expected_hash, &actual_hash)) {
+                    debug.print(
+                        "output mismatch: {s} vs {s}\n",
+                        .{
+                            fmt.hex(mem.bytesToValue(hash_bytes_int_T, &expected_hash)),
+                            fmt.hex(mem.bytesToValue(hash_bytes_int_T, &actual_hash)),
+                        },
+                    );
+                    return error.OutputDoesNotMatch;
+                }
+            } else {
+                expected_hash_ = undefined;
+                expected_hash_.? = @splat(0);
+                sha256.hash(actual_data, &expected_hash_.?, .{});
+            }
+        }
+    };
+
+    inline for (.{ .image_surface_argb, .image_surface_rgba }) |sfc_type| {
+        try TestFn.run(sfc_type);
+    }
+    inline for (.{ .image_surface_xrgb, .image_surface_rgb }) |sfc_type| {
+        try TestFn.run(sfc_type);
+    }
 }

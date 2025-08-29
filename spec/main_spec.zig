@@ -719,6 +719,7 @@ fn testExportPNG(
 }
 
 fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output: bool) !void {
+    const hash_bytes_int_T = @Type(.{ .int = .{ .signedness = .unsigned, .bits = sha256.digest_length * 8 } });
     const max_file_size = 10240000; // 10MB
 
     // We expect the file with the same name to be in spec/files
@@ -763,13 +764,13 @@ fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output:
     if (!mem.eql(u8, &expected_hash, &actual_hash)) {
         if (print_output) {
             debug.print(
-                "files differ: {s}{s}({x}) vs {s} ({x})\n",
+                "files differ: {s}{s}({s}) vs {s} ({s})\n",
                 .{
                     expected_filename,
                     if (used_fallback) " (fell back to _smooth.png) " else " ",
-                    expected_hash,
+                    fmt.hex(mem.bytesToValue(hash_bytes_int_T, &expected_hash)),
                     actual_filename,
-                    actual_hash,
+                    fmt.hex(mem.bytesToValue(hash_bytes_int_T, &actual_hash)),
                 },
             );
         }
