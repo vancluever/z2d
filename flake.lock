@@ -57,11 +57,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1755615617,
-        "narHash": "sha256-HMwfAJBdrr8wXAkbGhtcby1zGFvs+StOp19xNsbqdOg=",
+        "lastModified": 1756386758,
+        "narHash": "sha256-1wxxznpW2CKvI9VdniaUnTT2Os6rdRJcRUf65ZK9OtE=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "20075955deac2583bb12f07151c2df830ef346b4",
+        "rev": "dfb2f12e899db4876308eba6d93455ab7da304cd",
         "type": "github"
       },
       "original": {
@@ -74,7 +74,6 @@
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
-        "zig-overlay": "zig-overlay",
         "zls": "zls"
       }
     },
@@ -98,15 +97,16 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nixpkgs": [
+          "zls",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1755909141,
-        "narHash": "sha256-dogbHGpLmwfu0qkM/vntqMYazfi66DXWSQiCR1rxC4M=",
+        "lastModified": 1755864794,
+        "narHash": "sha256-hgnov6RLA+DD4Uocs/vCbiH3/3sKvqiJOKHpdhGyVAI=",
         "owner": "mitchellh",
         "repo": "zig-overlay",
-        "rev": "e010faa4eb9271b81cb6c30c828d972028465deb",
+        "rev": "5cd601f8760d2383210b7b8c8a45fc79388f3ddf",
         "type": "github"
       },
       "original": {
@@ -121,20 +121,19 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "zig-overlay": [
-          "zig-overlay"
-        ]
+        "zig-overlay": "zig-overlay"
       },
       "locked": {
-        "lastModified": 1755883070,
-        "narHash": "sha256-M7+Hbf+0MMNVPgdkdBkQN7COKH5yB4MnStKoAv6IeMM=",
+        "lastModified": 1756048867,
+        "narHash": "sha256-GFzSHUljcxy7sM1PaabbkQUdUnLwpherekPWJFxXtnk=",
         "owner": "zigtools",
         "repo": "zls",
-        "rev": "e0ae13c5152a079ce12a70881b40d733b6d87aca",
+        "rev": "ce6c8f02c78e622421cfc2405c67c5222819ec03",
         "type": "github"
       },
       "original": {
         "owner": "zigtools",
+        "ref": "0.15.0",
         "repo": "zls",
         "type": "github"
       }
