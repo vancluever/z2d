@@ -421,8 +421,8 @@ test "tokenization" {
     for (cases) |c| {
         inline for (Container.list) |container| { // for each wrapping
 
-            var cw = io.countingWriter(io.null_writer);
-            const cww = cw.writer();
+            var cw: std.Io.Writer.Discarding = .init(&.{});
+            const cww = &cw.writer;
             var df = try Deflate(container, @TypeOf(cww), TestTokenWriter).init(cww, .{});
 
             _ = try df.write(c.data);
@@ -432,9 +432,9 @@ test "tokenization" {
             try expect(df.block_writer.pos == c.tokens.len); // number of tokens written
             try testing.expectEqualSlices(Token, df.block_writer.get(), c.tokens); // tokens match
 
-            try testing.expectEqual(container.headerSize(), cw.bytes_written);
+            try testing.expectEqual(container.headerSize(), cw.count);
             try df.finish();
-            try testing.expectEqual(container.size(), cw.bytes_written);
+            try testing.expectEqual(container.size(), cw.count);
         }
     }
 }
@@ -513,7 +513,7 @@ test "file tokenization" {
             var original = io.fixedBufferStream(data);
 
             // buffer for decompressed data
-            var al = std.ArrayList(u8).init(testing.allocator);
+            var al = std.array_list.Managed(u8).init(testing.allocator);
             defer al.deinit();
             const writer = al.writer();
 

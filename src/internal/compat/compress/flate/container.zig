@@ -37,7 +37,7 @@ pub const Container = enum {
         };
     }
 
-    pub const list = [_]Container{ .raw, .gzip, .zlib };
+    pub const list = [_]Container{ .raw, .zlib };
 
     pub const Error = error{
         BadZlibHeader,
