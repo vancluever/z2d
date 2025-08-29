@@ -95,27 +95,6 @@ pub const Stride = union(Format) {
             inline .alpha4, .alpha2, .alpha1 => |d| d.px_len,
         };
     }
-
-    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-    /// expected to be greater than or equal to `src`.
-    pub fn copy(dst: Stride, src: Stride) void {
-        switch (dst) {
-            inline .argb,
-            .xrgb,
-            .rgb,
-            .rgba,
-            .alpha8,
-            => |d| @typeInfo(@TypeOf(d)).pointer.child.copyStride(d, src),
-            inline .alpha4, .alpha2, .alpha1 => |d| @TypeOf(d).T.copyStride(d, src),
-        }
-    }
-
-    /// Runs the single compositor operation described by `operator` with the
-    /// supplied `dst` and `src` . `src` must be as long or longer than `dst`;
-    /// shorter strides will cause safety-checked undefined behavior.
-    pub fn composite(dst: Stride, src: Stride, operator: compositor.Operator) void {
-        compositor.StrideCompositor.run(dst, &.{ .operator = operator, .src = .{ .surface = src } });
-    }
 };
 
 /// Represents an interface as a union of the pixel formats.
@@ -134,12 +113,6 @@ pub const Pixel = union(Format) {
         return switch (self) {
             inline else => |px| px.equal(other),
         };
-    }
-
-    /// Runs a single compositor operation described by `operator` against the
-    /// supplied pixels.
-    pub fn composite(dst: Pixel, src: Pixel, operator: compositor.Operator) Pixel {
-        return compositor.runPixel(dst, src, operator);
     }
 
     /// Initializes a wrapped RGBA pixel from the supplied color verb.
@@ -167,12 +140,6 @@ pub const XRGB = packed struct(u32) {
     /// Returns the pixel translated to XRGB.
     pub fn fromPixel(p: Pixel) XRGB {
         return RGBA_T(@This()).fromPixel(p);
-    }
-
-    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-    /// expected to be greater than or equal to `src`.
-    pub fn copyStride(dst: []XRGB, src: Stride) void {
-        return RGBA_T(@This()).copyStride(dst, src);
     }
 
     /// Returns an average of the pixels in the supplied slice. The average of
@@ -214,12 +181,6 @@ pub const RGB = packed struct(u32) {
     /// Returns the pixel translated to RGB.
     pub fn fromPixel(p: Pixel) RGB {
         return RGBA_T(@This()).fromPixel(p);
-    }
-
-    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-    /// expected to be greater than or equal to `src`.
-    pub fn copyStride(dst: []RGB, src: Stride) void {
-        return RGBA_T(@This()).copyStride(dst, src);
     }
 
     /// Returns an average of the pixels in the supplied slice. The average of
@@ -265,12 +226,6 @@ pub const ARGB = packed struct(u32) {
     /// Returns the pixel translated to ARGB.
     pub fn fromPixel(p: Pixel) ARGB {
         return RGBA_T(@This()).fromPixel(p);
-    }
-
-    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-    /// expected to be greater than or equal to `src`.
-    pub fn copyStride(dst: []ARGB, src: Stride) void {
-        return RGBA_T(@This()).copyStride(dst, src);
     }
 
     /// Returns an average of the pixels in the supplied slice. The average of
@@ -334,12 +289,6 @@ pub const RGBA = packed struct(u32) {
     /// Returns the pixel translated to RGBA.
     pub fn fromPixel(p: Pixel) RGBA {
         return RGBA_T(@This()).fromPixel(p);
-    }
-
-    /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-    /// expected to be greater than or equal to `src`.
-    pub fn copyStride(dst: []RGBA, src: Stride) void {
-        return RGBA_T(@This()).copyStride(dst, src);
     }
 
     /// Returns an average of the pixels in the supplied slice. The average of
@@ -449,65 +398,6 @@ fn RGBA_T(T: type) type {
                     .b = 0,
                 },
             };
-        }
-
-        fn copyStride(dst: []T, src: Stride) void {
-            if (src == T.format) return @memcpy(dst, @field(src, @tagName(T.format)));
-            switch (src) {
-                inline .xrgb, .rgb => |_src| if (is_rgba) {
-                    for (0.._src.len) |i| dst[i] = .{
-                        .r = _src[i].r,
-                        .g = _src[i].g,
-                        .b = _src[i].b,
-                        .a = 255,
-                    };
-                } else {
-                    for (0.._src.len) |i| dst[i] = .{
-                        .r = _src[i].r,
-                        .g = _src[i].g,
-                        .b = _src[i].b,
-                    };
-                },
-                inline .argb, .rgba => |_src| if (is_rgba) {
-                    for (0.._src.len) |i| dst[i] = .{
-                        .r = _src[i].r,
-                        .g = _src[i].g,
-                        .b = _src[i].b,
-                        .a = _src[i].a,
-                    };
-                } else {
-                    for (0.._src.len) |i| dst[i] = .{
-                        .r = _src[i].r,
-                        .g = _src[i].g,
-                        .b = _src[i].b,
-                    };
-                },
-                .alpha8 => |_src| if (is_rgba) {
-                    for (0.._src.len) |i| dst[i] = .{
-                        .r = 0,
-                        .g = 0,
-                        .b = 0,
-                        .a = _src[i].a,
-                    };
-                } else {
-                    @memset(dst, @bitCast(@as(u32, 0)));
-                },
-                inline .alpha4, .alpha2, .alpha1 => |_src| if (is_rgba) {
-                    for (0.._src.px_len) |i| {
-                        const s = Alpha8.fromPixel(
-                            @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
-                        );
-                        dst[i] = .{
-                            .r = 0,
-                            .g = 0,
-                            .b = 0,
-                            .a = s.a,
-                        };
-                    }
-                } else {
-                    @memset(dst, @bitCast(@as(u32, 0)));
-                },
-            }
         }
 
         fn average(ps: []const T) T {
@@ -646,54 +536,6 @@ fn Alpha(comptime fmt: Format) type {
             };
         }
 
-        /// Copies the `src` stride into `dst`. The pixel length of `dst` is
-        /// expected to be greater than or equal to `src`.
-        pub fn copyStride(dst: anytype, src: Stride) void {
-            if (@TypeOf(dst) == []Self) return copyStride_unpacked(dst, src);
-            copyStride_packed(dst, src);
-        }
-
-        fn copyStride_unpacked(dst: []Self, src: Stride) void {
-            comptime debug.assert(NumBits == 8);
-            switch (src) {
-                .xrgb, .rgb => @memset(dst, @bitCast(MaxInt)),
-                inline .argb, .rgba => |_src| {
-                    for (0.._src.len) |i| dst[i] = .{ .a = _src[i].a };
-                },
-                .alpha8 => |_src| @memcpy(dst, _src),
-                inline .alpha4, .alpha2, .alpha1 => |_src| {
-                    for (0.._src.px_len) |i| {
-                        const s = fromPixel(
-                            @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
-                        );
-                        dst[i] = .{ .a = s.a };
-                    }
-                },
-            }
-        }
-
-        fn copyStride_packed(dst: anytype, src: Stride) void {
-            comptime debug.assert(NumBits < 8);
-            comptime debug.assert(@TypeOf(dst).T == Self);
-            switch (src) {
-                .xrgb, .rgb => paintPackedStride(dst.buf, dst.px_offset, dst.px_len, Opaque),
-                inline .argb, .rgba, .alpha8 => |_src| {
-                    for (0.._src.len) |i| {
-                        const s = fromPixel(_src[i].asPixel());
-                        setInPacked(dst.buf, i + dst.px_offset, s);
-                    }
-                },
-                inline .alpha4, .alpha2, .alpha1 => |_src| {
-                    for (0.._src.px_len) |i| {
-                        const s = fromPixel(
-                            @TypeOf(_src).T.getFromPacked(_src.buf, i + _src.px_offset).asPixel(),
-                        );
-                        setInPacked(dst.buf, i + dst.px_offset, s);
-                    }
-                },
-            }
-        }
-
         fn shlr(
             comptime target_T: type,
             val: anytype,
@@ -784,70 +626,6 @@ fn Alpha(comptime fmt: Format) type {
             comptime debug.assert(NumBits < 8);
             const px_int = @as(IntType, @bitCast(value));
             mem.writePackedInt(IntType, buf, index * @bitSizeOf(IntType), px_int, .little);
-        }
-
-        /// Copies a single pixel to the range starting at `index` and
-        /// proceeding for `len`.
-        ///
-        /// `len` is unbounded; going past the length of the buffer is
-        /// safety-checked undefined behavior.
-        ///
-        /// This function is only available for packed types, for non-packed
-        /// types (e.g., `Alpha8`), use standard indexing.
-        fn paintPackedStride(
-            buf: []u8,
-            index: usize,
-            len: usize,
-            value: Self,
-        ) void {
-            // This code has been ported from PackedImageSurface and trimmed
-            // down; they serve similar purposes but this is designed for
-            // utility behavior for packed alpha types.
-            comptime debug.assert(NumBits < 8);
-            const scale = 8 / NumBits;
-            const end = (index + len);
-            const slice_start: usize = index / scale;
-            const slice_end: usize = end / scale;
-            if (slice_start >= slice_end) {
-                // There's nothing we can memset, just set the range individually.
-                for (index..end) |idx| setInPacked(buf, idx, value);
-                return;
-            }
-            const start_rem = index % scale;
-            const slice_offset = @intFromBool(start_rem > 0);
-            // Set our contiguous range
-            paintPackedPixel(buf[slice_start + slice_offset .. slice_end], value);
-            // Set the ends
-            for (index..index + (scale - start_rem)) |idx| setInPacked(buf, idx, value);
-            for (end - end % scale..end) |idx| setInPacked(buf, idx, value);
-        }
-
-        /// Paints the entire buffer with px in a packed fashion.
-        ///
-        /// This function is only available for packed types, for non-packed
-        /// types (e.g., `Alpha8`), use standard indexing.
-        fn paintPackedPixel(buf: []u8, px: Self) void {
-            // This code has been ported from PackedImageSurface and trimmed
-            // down; they serve similar purposes but this is designed for
-            // utility behavior for packed alpha types.
-            comptime debug.assert(NumBits < 8);
-            if (meta.eql(px, mem.zeroes(Self))) {
-                // Short-circuit to writing zeroes if the pixel we're setting is zero
-                @memset(buf, 0);
-                return;
-            }
-
-            const px_u8: u8 = px_u8: {
-                const px_int = @as(IntType, @bitCast(px));
-                break :px_u8 px_int;
-            };
-            var packed_px: u8 = 0;
-            var sh: usize = 0;
-            while (sh <= 8 - NumBits) : (sh += NumBits) {
-                packed_px |= px_u8 << @intCast(sh);
-            }
-
-            @memset(buf, packed_px);
         }
     };
 }
@@ -1016,7 +794,7 @@ test "ARGB/RGBA, fromClamped" {
     }
 }
 
-test "fromPixel, copyStride" {
+test "fromPixel" {
     const Pair = struct {
         a: Pixel,
         b: Pixel,
@@ -1330,115 +1108,6 @@ test "fromPixel, copyStride" {
                 switch (pair.a) {
                     inline else => |expected| {
                         testing.expectEqualDeep(expected, @TypeOf(expected).fromPixel(pair.b)) catch |err| {
-                            debug.print("index {d}: mismatch detected.\n", .{idx});
-                            return err;
-                        };
-                    },
-                }
-            }
-
-            // copyStride (via Stride.copy)
-            //
-            // This is just a rudimentary test, where we splat the source pixel
-            // into an 8-length stride, and try copying it into a destination
-            // stride of the expected pixel.
-            //
-            // TODO: we don't use copyStride anywhere in higher-level API
-            // currently. I am probably removing this function for a later
-            // release. However, as a low-level compositor helper for upstream
-            // consumption, it could have value. This is why I've added this
-            // test in for the time being (with these comments as commentary
-            // for the deletion diff), but it's existed for this long without a
-            // bug report (even though some fixes were required to make it
-            // compile), so we might remove it and relegate any its functions
-            // to the compositor instead.
-            for (tc.pairs, 0..) |pair, idx| {
-                switch (pair.a) {
-                    inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |a, t| {
-                        const dst_T = @TypeOf(a);
-                        const expected_pixels: [8]dst_T = @splat(a);
-                        var dst_pixels: [8]dst_T = undefined;
-                        var dst: Stride = @unionInit(Stride, @tagName(t), &dst_pixels);
-                        switch (pair.b) {
-                            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |b, u| {
-                                const src_T = @TypeOf(b);
-                                var src_pixels: [8]src_T = @splat(b);
-                                const src: Stride = @unionInit(Stride, @tagName(u), &src_pixels);
-                                dst.copy(src);
-                            },
-                            inline .alpha4, .alpha2, .alpha1 => |b, u| {
-                                const src_T = @TypeOf(b);
-                                var src_pixels: [8 * (8 / @bitSizeOf(src_T))]u8 = undefined;
-                                for (0..8) |i| {
-                                    src_T.setInPacked(&src_pixels, i, b);
-                                }
-                                const src: Stride = @unionInit(
-                                    Stride,
-                                    @tagName(u),
-                                    .{
-                                        .buf = &src_pixels,
-                                        .px_offset = 0,
-                                        .px_len = 8,
-                                    },
-                                );
-                                dst.copy(src);
-                            },
-                        }
-                        testing.expectEqualSlices(
-                            dst_T,
-                            &expected_pixels,
-                            @field(dst, @tagName(t)),
-                        ) catch |err| {
-                            debug.print("index {d}: mismatch detected.\n", .{idx});
-                            return err;
-                        };
-                    },
-                    inline .alpha4, .alpha2, .alpha1 => |a, t| {
-                        const dst_T = @TypeOf(a);
-                        var dst_pixels: [8 * (8 / @bitSizeOf(dst_T))]u8 = undefined;
-                        var expected_pixels: [8 * (8 / @bitSizeOf(dst_T))]u8 = undefined;
-                        for (0..8) |i| {
-                            dst_T.setInPacked(&expected_pixels, i, a);
-                        }
-                        var dst: Stride = @unionInit(
-                            Stride,
-                            @tagName(t),
-                            .{
-                                .buf = &dst_pixels,
-                                .px_offset = 0,
-                                .px_len = 8,
-                            },
-                        );
-                        switch (pair.b) {
-                            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |b, u| {
-                                const src_T = @TypeOf(b);
-                                var src_pixels: [8]src_T = @splat(b);
-                                const src: Stride = @unionInit(Stride, @tagName(u), &src_pixels);
-                                dst.copy(src);
-                            },
-                            inline .alpha4, .alpha2, .alpha1 => |b, u| {
-                                const src_T = @TypeOf(b);
-                                var src_pixels: [8 * (8 / @bitSizeOf(src_T))]u8 = undefined;
-                                for (0..8) |i| {
-                                    src_T.setInPacked(&src_pixels, i, b);
-                                }
-                                const src: Stride = @unionInit(
-                                    Stride,
-                                    @tagName(u),
-                                    .{
-                                        .buf = &src_pixels,
-                                        .px_offset = 0,
-                                        .px_len = 8,
-                                    },
-                                );
-                                dst.copy(src);
-                            },
-                        }
-                        testing.expectEqualSlices(
-                            u8,
-                            &expected_pixels,
-                            &dst_pixels,
-                        ) catch |err| {
                             debug.print("index {d}: mismatch detected.\n", .{idx});
                             return err;
                         };
