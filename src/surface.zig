@@ -30,6 +30,8 @@ pub const supersample_scale = 4;
 
 /// Interface tags for surface types.
 pub const SurfaceType = enum {
+    image_surface_argb,
+    image_surface_xrgb,
     image_surface_rgb,
     image_surface_rgba,
     image_surface_alpha8,
@@ -39,6 +41,8 @@ pub const SurfaceType = enum {
 
     pub fn toPixelType(self: SurfaceType) type {
         return switch (self) {
+            .image_surface_argb => pixel.ARGB,
+            .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
             .image_surface_alpha8 => pixel.Alpha8,
@@ -50,6 +54,8 @@ pub const SurfaceType = enum {
 
     fn toBufferType(self: SurfaceType) type {
         return switch (self) {
+            .image_surface_argb => pixel.ARGB,
+            .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
             .image_surface_alpha8 => pixel.Alpha8,
@@ -64,6 +70,8 @@ pub const SurfaceType = enum {
 /// require an allocator must use the same allocator for the life of the
 /// surface.
 pub const Surface = union(SurfaceType) {
+    image_surface_argb: ImageSurface(pixel.ARGB),
+    image_surface_xrgb: ImageSurface(pixel.XRGB),
     image_surface_rgb: ImageSurface(pixel.RGB),
     image_surface_rgba: ImageSurface(pixel.RGBA),
     image_surface_alpha8: ImageSurface(pixel.Alpha8),
@@ -447,6 +455,8 @@ pub fn ImageSurface(comptime T: type) type {
         /// Returns a `Surface` interface for this surface.
         pub fn asSurfaceInterface(self: ImageSurface(T)) Surface {
             return switch (T.format) {
+                .argb => .{ .image_surface_argb = self },
+                .xrgb => .{ .image_surface_xrgb = self },
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
                 .alpha8 => .{ .image_surface_alpha8 = self },
