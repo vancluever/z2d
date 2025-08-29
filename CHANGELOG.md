@@ -8,6 +8,10 @@ ENHANCEMENTS:
   channel in the least-significant byte, and the alpha channel (dummied out in
   the event of XRGB) in the most-significant byte, in both integer and memory
   layout. [#145](https://github.com/vancluever/z2d/pull/145).
+* Removed unused stride-related functionality in the `pixel` package, namely
+  having to do with `copyStride` and compositor-related functionality that can
+  be found by using the `compositor` package directly.
+  [#146](https://github.com/vancluever/z2d/pull/146)
 
 ## 0.7.2 (August 22, 2025)
 
