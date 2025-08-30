@@ -256,7 +256,7 @@ pub const Contour = struct {
         node: std.DoublyLinkedList.Node = .{},
 
         pub fn fromNode(n: *std.DoublyLinkedList.Node) *Corner {
-            return @fieldParentPtr("node", n);
+            return @alignCast(@fieldParentPtr("node", n));
         }
     };
 
