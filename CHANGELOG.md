@@ -1,4 +1,4 @@
-## 0.8.0 (Unreleased)
+## 0.8.0 (September 8, 2025)
 
 ENHANCEMENTS:
 
