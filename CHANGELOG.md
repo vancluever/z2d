@@ -1,4 +1,8 @@
-## 0.8.0 (Unreleased)
+## 0.8.1-pre (Unreleased)
+
+Bumped version for dev.
+
+## 0.8.0 (September 8, 2025)
 
 ENHANCEMENTS:
 
@@ -8,9 +12,14 @@ ENHANCEMENTS:
   channel in the least-significant byte, and the alpha channel (dummied out in
   the event of XRGB) in the most-significant byte, in both integer and memory
   layout. [#145](https://github.com/vancluever/z2d/pull/145).
+
+MISC:
+
 * Removed unused stride-related functionality in the `pixel` package, namely
-  having to do with `copyStride` and compositor-related functionality that can
-  be found by using the `compositor` package directly.
+  having to do with `copyStride` and compositor-related functionality. Note
+  that prior to [#145](https://github.com/vancluever/z2d/pull/145), there were
+  compile errors that would have prevented use of at least some of the removed
+  code, so it's unlikely that the code was being used at all.
   [#146](https://github.com/vancluever/z2d/pull/146)
 
 ## 0.7.2 (August 22, 2025)
