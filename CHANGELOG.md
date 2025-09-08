@@ -1,3 +1,7 @@
+## 0.8.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.8.0 (September 8, 2025)
 
 ENHANCEMENTS:
