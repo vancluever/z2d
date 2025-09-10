@@ -50,10 +50,15 @@ pub fn byIndex(font: *Font, index: u32) Font.FileError!Glyph {
         advance = try font.file.reader().readInt(u16, .big);
         lsb = try font.file.reader().readInt(i16, .big);
     } else {
-        // LSB only
-        const h_metric_offset = font.dir.hmtx + font.meta.number_of_hmetrics * 4 + index * 2;
-        try font.file.seekTo(h_metric_offset);
-        advance = 0;
+        // Get advance from last full LongHorMetric entry
+        const advance_offset = font.dir.hmtx + (font.meta.number_of_hmetrics - 1) * 4;
+        try font.file.seekTo(advance_offset);
+        advance = try font.file.reader().readInt(u16, .big);
+
+        // LSB from abridged entry past last full LongHorMetric entry
+        const lsb_index = (index - font.meta.number_of_hmetrics) * 2;
+        const lsb_offset = font.dir.hmtx + font.meta.number_of_hmetrics * 4 + lsb_index;
+        try font.file.seekTo(lsb_offset);
         lsb = try font.file.reader().readInt(i16, .big);
     }
 
@@ -991,4 +996,39 @@ test "outline, composite processing, ensure no int overflow" {
     };
     defer outline.deinit(testing.allocator);
     try testing.expect(outline.path.isClosed());
+}
+
+test "init correctly loads advance for glyph past max hmetrics" {
+    // Happens on Annotation Mono "u", and plenty of others, but "u" has an
+    // index that will go past the num of long hmetric entries for sure.
+    //
+    // Using full, un-subsetted font here as subsetting can repack the entries
+    // in a way that the long hmetric entry does exist, breaking the test.
+    const data = @embedFile("./test-fonts/AnnotationMono-Regular.ttf");
+    var font: Font = Font.loadBuffer(data) catch |err| {
+        debug.print("unexpected error from loadInternal: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    const glyph: Glyph = Glyph.init(&font, 'u') catch |err| {
+        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    try testing.expectEqual(676, glyph.index);
+    try testing.expectEqual(500, glyph.advance);
+    try testing.expectEqual(85, glyph.lsb);
+}
+
+test "init correctly loads advance/lsb for last glyph" {
+    const data = @embedFile("./test-fonts/AnnotationMono-Regular.ttf");
+    var font: Font = Font.loadBuffer(data) catch |err| {
+        debug.print("unexpected error from loadInternal: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    const glyph: Glyph = Glyph.init(&font, 0x1E95) catch |err| {
+        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
+    try testing.expectEqual(765, glyph.index);
+    try testing.expectEqual(500, glyph.advance);
+    try testing.expectEqual(64, glyph.lsb);
 }
