@@ -1,6 +1,10 @@
-## 0.8.1-pre (Unreleased)
+## 0.8.1 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Font horizontal metrics will now load correctly for glyph indexes beyond the
+  last full (long) horizontal metric entry in the font's `hmtx` table.
+  [#148](https://github.com/vancluever/z2d/pull/148)
 
 ## 0.8.0 (September 8, 2025)
 
