@@ -1,4 +1,8 @@
-## 0.8.1 (Unreleased)
+## 0.8.2-pre (Unreleased)
+
+Bumped version for dev.
+
+## 0.8.1 (September 11, 2025)
 
 BUG FIXES:
 
