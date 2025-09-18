@@ -2,24 +2,48 @@ const Polygon = @This();
 
 const std = @import("std");
 const debug = @import("std").debug;
+const heap = @import("std").heap;
 const math = @import("std").math;
 const mem = @import("std").mem;
+const stdSort = @import("std").sort;
 const testing = @import("std").testing;
 
 const FillRule = @import("../options.zig").FillRule;
 const Point = @import("Point.zig");
 const InternalError = @import("InternalError.zig").InternalError;
-const edge_buffer_size = @import("../painter.zig").edge_buffer_size;
 
 const runCases = @import("util.zig").runCases;
 const TestingError = @import("util.zig").TestingError;
 
 pub const Edge = struct {
-    top: f64,
-    bottom: f64,
+    y0: f64,
+    y1: f64,
     x_start: f64,
     x_inc: f64,
-    dir: i2,
+
+    fn dir(self: *const Edge) i2 {
+        if (self.y0 < self.y1) {
+            return -1;
+        }
+
+        return 1;
+    }
+
+    fn top(self: *const Edge) f64 {
+        if (self.y0 < self.y1) {
+            return self.y0;
+        }
+
+        return self.y1;
+    }
+
+    fn bottom(self: *const Edge) f64 {
+        if (self.y0 < self.y1) {
+            return self.y1;
+        }
+
+        return self.y0;
+    }
 };
 
 edges: std.ArrayListUnmanaged(Edge) = .empty,
@@ -48,25 +72,23 @@ pub fn addEdge(
 
     const edge: Edge = if (p0_scaled.y < p1_scaled.y) .{
         // Down edge
-        .top = p0_scaled.y,
-        .bottom = p1_scaled.y,
+        .y0 = p0_scaled.y,
+        .y1 = p1_scaled.y,
         .x_start = p0_scaled.x,
         .x_inc = (p1_scaled.x - p0_scaled.x) / (p1_scaled.y - p0_scaled.y),
-        .dir = -1,
     } else if (p0_scaled.y > p1_scaled.y) .{
         // Up edge
-        .top = p1_scaled.y,
-        .bottom = p0_scaled.y,
+        .y0 = p0_scaled.y,
+        .y1 = p1_scaled.y,
         .x_start = p1_scaled.x,
         .x_inc = (p0_scaled.x - p1_scaled.x) / (p0_scaled.y - p1_scaled.y),
-        .dir = 1,
     } else {
         return; // Filter out horizontal edges
     };
 
     // Check extents
-    const extent_top = edge.top;
-    const extent_bottom = edge.bottom;
+    const extent_top = edge.top();
+    const extent_bottom = edge.bottom();
     const extent_left, const extent_right = if (p0_scaled.x < p1_scaled.x)
         .{ p0_scaled.x, p1_scaled.x }
     else
@@ -171,79 +193,143 @@ pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) 
     return true;
 }
 
+pub fn yBreakPoints(
+    self: *const Polygon,
+    alloc: mem.Allocator,
+) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
+    var result: std.ArrayListUnmanaged(i32) = try .initCapacity(alloc, self.edges.items.len * 2);
+    errdefer result.deinit(alloc);
+    for (self.edges.items) |e| {
+        result.appendAssumeCapacity(@intFromFloat(@round(e.top())));
+        result.appendAssumeCapacity(@intFromFloat(@round(e.bottom())));
+    }
+
+    stdSort.pdq(i32, result.items, {}, stdSort.asc(i32));
+
+    // De-duplicate
+    var to: usize = 0;
+    for (0..result.items.len) |from| {
+        result.items[to] = result.items[from];
+        if (from == result.items.len - 1) {
+            to += 1;
+            break;
+        }
+
+        if (result.items[from] != result.items[from + 1]) {
+            to += 1;
+        }
+    }
+
+    result.shrinkAndFree(alloc, to);
+
+    return result;
+}
+
+pub const WorkingEdgeSet = struct {
+    edges: []*Edge,
+    x_values: []i32,
+    dirs: []i2,
+    len: usize,
+
+    pub const empty: WorkingEdgeSet = .{ .edges = &.{}, .x_values = &.{}, .dirs = &.{}, .len = 0 };
+
+    pub fn inc(self: *WorkingEdgeSet, y: i32) void {
+        const y_mid: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        for (self.edges, 0..) |edge, idx| {
+            self.x_values[idx] = @intFromFloat(@round(edge.x_start + (edge.x_inc * (y_mid - edge.top()))));
+        }
+    }
+
+    pub fn sort(self: *WorkingEdgeSet) void {
+        const Context = struct {
+            s: *WorkingEdgeSet,
+
+            pub fn lessThan(ctx: @This(), a: usize, b: usize) bool {
+                return ctx.s.x_values[a] < ctx.s.x_values[b];
+            }
+
+            pub fn swap(ctx: @This(), a: usize, b: usize) void {
+                mem.swap(*Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
+                mem.swap(i32, &ctx.s.x_values[a], &ctx.s.x_values[b]);
+                mem.swap(i2, &ctx.s.dirs[a], &ctx.s.dirs[b]);
+            }
+        };
+
+        stdSort.pdqContext(0, self.len, Context{ .s = self });
+    }
+
+    pub fn filter(self: *WorkingEdgeSet, fill_rule: FillRule) []i32 {
+        // In-place filter depending on the fill rule (even-odd is just pass-thru).
+        switch (fill_rule) {
+            .even_odd => return self.x_values,
+            .non_zero => {
+                // Before returning, filter in-place based on winding rule;
+                // consecutive edges in the same direction are filtered out after
+                // the first one, so that only one set of each direction happens
+                // one after the other.
+                var winding_number: i32 = 0;
+                var to: usize = 0;
+                for (0..self.len) |from| {
+                    self.x_values[to] = self.x_values[from];
+                    if (winding_number == 0) {
+                        winding_number += self.dirs[from];
+                        to += 1;
+                    } else {
+                        winding_number += self.dirs[from];
+                        if (winding_number == 0) {
+                            to += 1;
+                        }
+                    }
+                }
+
+                return self.x_values[0..to];
+            },
+        }
+    }
+};
+
+/// Caller is responsible for freeing the WorkingEdgeSet.
 pub fn xEdgesForY(
     self: *const Polygon,
     alloc: mem.Allocator,
-    line_y: f64,
-    fill_rule: FillRule,
-) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
-    if (self.edges.items.len == 0) return .{};
+    line_y: i32,
+) mem.Allocator.Error!WorkingEdgeSet {
+    if (self.edges.items.len == 0) return .empty;
 
-    const XEdge = struct {
-        x: i32,
-        dir: i2,
-    };
-
-    var edge_list: std.MultiArrayList(XEdge) = .empty;
-    errdefer edge_list.deinit(alloc);
+    var result_edges: std.ArrayListUnmanaged(*Edge) = .empty;
+    errdefer result_edges.deinit(alloc);
 
     // We take our line measurements at the middle of the line; this helps
     // "break the tie" with lines that fall exactly on point boundaries.
-    debug.assert(@floor(line_y) == line_y);
-    const line_y_middle = line_y + 0.5;
+    const line_y_middle = @as(f64, @floatFromInt(line_y)) + 0.5;
 
-    for (self.edges.items) |current_edge| {
-        if (current_edge.top < line_y_middle and current_edge.bottom >= line_y_middle) {
-            try edge_list.append(alloc, .{
-                .x = @intFromFloat(math.clamp(
-                    @round(current_edge.x_start + current_edge.x_inc * (line_y_middle - current_edge.top)),
-                    0,
-                    math.maxInt(i32),
-                )),
-                .dir = current_edge.dir,
-            });
+    for (self.edges.items) |*current_edge| {
+        if (current_edge.top() < line_y_middle and current_edge.bottom() >= line_y_middle) {
+            try result_edges.append(alloc, current_edge);
         }
     }
 
-    // Sort our edges
-    const sliced = edge_list.slice();
-    edge_list.sortUnstable(struct {
-        x: []i32,
+    // Final slice for result edges
+    const result_edges_s = try result_edges.toOwnedSlice(alloc);
+    errdefer alloc.free(result_edges_s);
 
-        pub fn lessThan(ctx: @This(), a: usize, b: usize) bool {
-            return ctx.x[a] < ctx.x[b];
-        }
-    }{ .x = sliced.items(.x) });
+    // Reserve memory for our x-values
+    const x_values_s = try alloc.alloc(i32, result_edges_s.len);
+    errdefer alloc.free(x_values_s);
 
-    switch (fill_rule) {
-        .even_odd => {},
-        .non_zero => {
-            // Before returning, filter in-place based on winding rule;
-            // consecutive edges in the same direction are filtered out after
-            // the first one, so that only one set of each direction happens
-            // one after the other.
-            var winding_number: i32 = 0;
-            var to: usize = 0;
-            for (0..edge_list.len) |from| {
-                edge_list.set(to, edge_list.get(from));
-                if (winding_number == 0) {
-                    winding_number += edge_list.get(to).dir;
-                    to += 1;
-                } else {
-                    winding_number += edge_list.get(to).dir;
-                    if (winding_number == 0) {
-                        to += 1;
-                    }
-                }
-            }
+    // Reserve memory and cache directions for each edge
+    const dirs_s = try alloc.alloc(i2, result_edges_s.len);
+    errdefer alloc.free(dirs_s);
+    for (result_edges_s, 0..) |edge, idx| dirs_s[idx] = edge.dir();
 
-            edge_list.shrinkRetainingCapacity(to);
-        },
-    }
+    debug.assert(result_edges_s.len == x_values_s.len and result_edges_s.len == dirs_s.len);
 
-    var edge_list_raw = edge_list.toOwnedSlice();
-    alloc.free(edge_list_raw.items(.dir));
-    return std.ArrayListUnmanaged(i32).fromOwnedSlice(edge_list_raw.items(.x));
+    return .{
+        .edges = result_edges_s,
+        .x_values = x_values_s,
+        .dirs = dirs_s,
+        .len = result_edges_s.len,
+    };
 }
 
 /// Represents a polyline (contour) that will be later assembled into a
