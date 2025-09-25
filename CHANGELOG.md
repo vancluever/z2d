@@ -3,7 +3,7 @@
 ENHANCEMENTS:
 
 * More performance enhancements:
-  - Working edge sets [#149](https://github.com/vancluever/z2d/pull/149)
+  - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149))
 
 ## 0.8.1 (September 11, 2025)
 
