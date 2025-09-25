@@ -16,6 +16,7 @@ const pixel_vector = @import("internal/pixel_vector.zig");
 const Gradient = @import("gradient.zig").Gradient;
 const Surface = @import("surface.zig").Surface;
 
+const hasField = @import("internal/util.zig").hasField;
 const splat = @import("internal/util.zig").splat;
 const vectorize = @import("internal/util.zig").vectorize;
 const runCases = @import("internal/util.zig").runCases;
@@ -633,6 +634,22 @@ pub fn runPixel(
     };
 }
 
+/// Like `runPixel`, but operates on underlying pixel types directly.
+///
+/// This function currently only supports integer operators.
+pub fn runPixelT(
+    dst_T: type,
+    dst: dst_T,
+    src_T: type,
+    src: src_T,
+    operator: Operator,
+) dst_T {
+    var _dst = RGBA16.fromPixelT(dst_T, dst);
+    const _src = RGBA16.fromPixelT(src_T, src);
+    _dst = _dst.runOperator(_src, operator);
+    return _dst.toPixelT(dst_T);
+}
+
 /// Represents an RGBA value as 16bpc. Note that this is only for intermediary
 /// calculations, no channel should be bigger than an u8 after any particular
 /// compositor step.
@@ -644,21 +661,32 @@ const RGBA16 = struct {
 
     fn fromPixel(src: pixel.Pixel) RGBA16 {
         const _src = pixel.RGBA.fromPixel(src);
+        return fromPixelT(pixel.RGBA, _src);
+    }
+
+    fn fromPixelT(comptime T: type, src: T) RGBA16 {
         return .{
-            .r = _src.r,
-            .g = _src.g,
-            .b = _src.b,
-            .a = _src.a,
+            .r = if (comptime hasField(T, "r")) src.r else 0,
+            .g = if (comptime hasField(T, "g")) src.g else 0,
+            .b = if (comptime hasField(T, "b")) src.b else 0,
+            .a = if (comptime hasField(T, "a")) pixel.Alpha8.scaleIntoIntAlpha(src.a) else 255,
         };
     }
 
     fn toPixel(src: RGBA16) pixel.Pixel {
-        return .{ .rgba = .{
-            .r = @intCast(src.r),
-            .g = @intCast(src.g),
-            .b = @intCast(src.b),
-            .a = @intCast(src.a),
-        } };
+        return .{ .rgba = src.toPixelT(pixel.RGBA) };
+    }
+
+    fn toPixelT(src: RGBA16, comptime T: type) T {
+        var dst: T = undefined;
+        if (comptime hasField(T, "r")) dst.r = @intCast(src.r);
+        if (comptime hasField(T, "g")) dst.g = @intCast(src.g);
+        if (comptime hasField(T, "b")) dst.b = @intCast(src.b);
+        if (comptime hasField(T, "a")) dst.a = switch (T) {
+            pixel.Alpha4, pixel.Alpha2, pixel.Alpha1 => T.scaleIntoIntAlpha(@as(u8, @intCast(src.a))),
+            else => @intCast(src.a),
+        };
+        return dst;
     }
 
     fn runOperator(dst: RGBA16, src: RGBA16, op: Operator) RGBA16 {
@@ -3375,12 +3403,32 @@ test "composite, all operators (integer)" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
+            const bg = pixel.Pixel.fromColor(tc.bg);
+            const fg = pixel.Pixel.fromColor(tc.fg);
             try testing.expectEqualDeep(tc.expected, runPixel(
                 .integer,
-                pixel.Pixel.fromColor(tc.bg),
-                pixel.Pixel.fromColor(tc.fg),
+                bg,
+                fg,
                 tc.operator,
             ));
+            {
+                switch (bg) {
+                    inline else => |dst| {
+                        switch (fg) {
+                            inline else => |src| {
+                                const expected: @TypeOf(dst) = .fromPixel(tc.expected);
+                                try testing.expectEqualDeep(expected, runPixelT(
+                                    @TypeOf(dst),
+                                    dst,
+                                    @TypeOf(src),
+                                    src,
+                                    tc.operator,
+                                ));
+                            },
+                        }
+                    },
+                }
+            }
         }
     };
     try runCases(name, cases, TestFn.f);
