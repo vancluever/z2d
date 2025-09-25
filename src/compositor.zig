@@ -193,6 +193,17 @@ pub const Operator = enum {
             else => true,
         };
     }
+
+    /// Returns true if the operator can be fast-pathed on the source if the
+    /// source is opaque by writing the source pixel directly to the surface.
+    pub fn canFastPathSrc(op: Operator) bool {
+        return switch (op) {
+            .src,
+            .src_over,
+            => true,
+            else => false,
+        };
+    }
 };
 
 /// List of the supported compositor precision types.

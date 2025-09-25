@@ -409,23 +409,29 @@ fn paintDirect(
             }
 
             if (fill_len > 0) {
-                const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
-                compositor.StrideCompositor.run(dst_stride, &.{.{
-                    .operator = operator,
-                    .src = switch (pattern.*) {
-                        .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                        .gradient => |g| .{ .gradient = .{
-                            .underlying = g,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                        .dither => .{ .dither = .{
-                            .underlying = pattern.dither,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                    },
-                }}, .{ .precision = _precision });
+                if (pattern.* == .opaque_pattern and operator.canFastPathSrc() and
+                    pattern.opaque_pattern.pixel.isOpaque())
+                {
+                    surface.paintStride(start_x, y, @max(0, fill_len), pattern.opaque_pattern.pixel);
+                } else {
+                    const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
+                    compositor.StrideCompositor.run(dst_stride, &.{.{
+                        .operator = operator,
+                        .src = switch (pattern.*) {
+                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                            .gradient => |g| .{ .gradient = .{
+                                .underlying = g,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                            .dither => .{ .dither = .{
+                                .underlying = pattern.dither,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                        },
+                    }}, .{ .precision = _precision });
+                }
             }
 
             if (!bounded and end_clear_len > 0) {
@@ -824,23 +830,29 @@ fn paintMultiSample(
                 0 => {}, // Skip zero entries
                 coverage_full => {
                     // Fully opaque span, so we can just composite directly (no alpha).
-                    const dst_stride = surface.getStride(x, y, coverage_len);
-                    compositor.StrideCompositor.run(dst_stride, &.{.{
-                        .operator = operator,
-                        .src = switch (pattern.*) {
-                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                            .gradient => |g| .{ .gradient = .{
-                                .underlying = g,
-                                .x = x,
-                                .y = y,
-                            } },
-                            .dither => .{ .dither = .{
-                                .underlying = pattern.dither,
-                                .x = x,
-                                .y = y,
-                            } },
-                        },
-                    }}, .{ .precision = _precision });
+                    if (pattern.* == .opaque_pattern and operator.canFastPathSrc() and
+                        pattern.opaque_pattern.pixel.isOpaque())
+                    {
+                        surface.paintStride(x, y, coverage_len, pattern.opaque_pattern.pixel);
+                    } else {
+                        const dst_stride = surface.getStride(x, y, coverage_len);
+                        compositor.StrideCompositor.run(dst_stride, &.{.{
+                            .operator = operator,
+                            .src = switch (pattern.*) {
+                                .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                                .gradient => |g| .{ .gradient = .{
+                                    .underlying = g,
+                                    .x = x,
+                                    .y = y,
+                                } },
+                                .dither => .{ .dither = .{
+                                    .underlying = pattern.dither,
+                                    .x = x,
+                                    .y = y,
+                                } },
+                            },
+                        }}, .{ .precision = _precision });
+                    }
                 },
                 else => {
                     // Span with some degree of (> 0, < max) opacity, so we

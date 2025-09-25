@@ -119,6 +119,26 @@ pub const Pixel = union(Format) {
     pub fn fromColor(color: Color.InitArgs) Pixel {
         return colorpkg.LinearRGB.fromColor(Color.init(color)).encodeRGBA().asPixel();
     }
+
+    /// Convenience method that returns true if the pixel is full-opacity.
+    ///
+    /// Note that:
+    ///
+    ///  * Any pixel type lacking an alpha channel (e.g., `RGB`) is always
+    ///    considered opaque.
+    ///  * Alpha types (e.g., `Alpha8` or the sub-8-bit versions) follow the
+    ///    same opacity rules as RGBA types (full opacity is max alpha channel
+    ///    value). Keep this in mind when using alpha-only pixel types to
+    ///    represent grayscale.
+    pub fn isOpaque(self: Pixel) bool {
+        return switch (self) {
+            inline .xrgb, .rgb => true,
+            inline .argb, .rgba, .alpha8 => |px| px.a == 255,
+            .alpha4 => |px| px.a == 15,
+            .alpha2 => |px| px.a == 3,
+            .alpha1 => |px| px.a == 1,
+        };
+    }
 };
 
 /// Describes a 32-bit little-endian xRGB format (can also be thought of as
