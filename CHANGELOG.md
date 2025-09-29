@@ -3,6 +3,8 @@
 ENHANCEMENTS:
 
 * More performance enhancements:
+  - Fast-pathing for source-exclusive operations (2-3x speedup!)
+    ([#150](https://github.com/vancluever/z2d/pull/150))
   - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149))
 
 ## 0.8.1 (September 11, 2025)
