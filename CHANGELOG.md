@@ -3,7 +3,7 @@
 ENHANCEMENTS:
 
 * More performance enhancements:
-  - Fast-pathing for source-exclusive operations (2-3x speedup!)
+  - Fast-pathing for source-exclusive operations
     ([#150](https://github.com/vancluever/z2d/pull/150))
   - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149))
 
