@@ -372,12 +372,7 @@ fn paintDirect(
 
         if (!bounded and filtered_edge_set.len == 0) {
             // Empty line but we're not bounded, so we clear the whole line.
-            const clear_stride = surface.getStride(0, y, @max(0, sfc_width));
-            compositor.StrideCompositor.run(clear_stride, &.{.{
-                .operator = .clear,
-                .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-            }}, .{ .precision = .integer });
-
+            surface.clearStride(0, y, @max(0, sfc_width));
             continue;
         }
 
@@ -401,40 +396,40 @@ fn paintDirect(
 
             if (!bounded and start_x > 0) {
                 // Clear up to the start
-                const clear_stride = surface.getStride(0, y, @max(0, start_x));
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
+                surface.clearStride(0, y, @max(0, start_x));
             }
 
             if (fill_len > 0) {
-                const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
-                compositor.StrideCompositor.run(dst_stride, &.{.{
-                    .operator = operator,
-                    .src = switch (pattern.*) {
-                        .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                        .gradient => |g| .{ .gradient = .{
-                            .underlying = g,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                        .dither => .{ .dither = .{
-                            .underlying = pattern.dither,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                    },
-                }}, .{ .precision = _precision });
+                if (operator == .clear) {
+                    surface.clearStride(start_x, y, @max(0, fill_len));
+                } else if (pattern.* == .opaque_pattern and
+                    fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                {
+                    surface.paintStride(start_x, y, @max(0, fill_len), pattern.opaque_pattern.pixel);
+                } else {
+                    const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
+                    compositor.StrideCompositor.run(dst_stride, &.{.{
+                        .operator = operator,
+                        .src = switch (pattern.*) {
+                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                            .gradient => |g| .{ .gradient = .{
+                                .underlying = g,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                            .dither => .{ .dither = .{
+                                .underlying = pattern.dither,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                        },
+                    }}, .{ .precision = _precision });
+                }
             }
 
             if (!bounded and end_clear_len > 0) {
                 // Clear to the end
-                const clear_stride = surface.getStride(end_x, y, @max(0, end_clear_len));
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
+                surface.clearStride(end_x, y, @max(0, end_clear_len));
             }
         }
     }
@@ -695,27 +690,17 @@ fn paintMultiSample(
     // Clear out the area not covered by the draw area when we're dealing with
     // unbounded operators.
     if (!operator.isBounded()) {
-        const ClearStrideFn = struct {
-            fn f(sfc: *Surface, scy: i32, width: usize) void {
-                const clear_stride = sfc.getStride(0, scy, width);
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
-            }
-        };
-
         // Do any full scanlines first
         for (0..@max(0, start_scanline)) |y_u|
-            ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width));
+            surface.clearStride(0, @intCast(y_u), @max(0, sfc_width));
         for (@max(0, end_scanline + 1)..@max(0, sfc_width)) |y_u|
-            ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width));
+            surface.clearStride(0, @intCast(y_u), @max(0, sfc_width));
 
         // Now, do the strides outside of the draw area on the same scanlines
         for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
-            if (scanline_start_x > 0) ClearStrideFn.f(surface, @intCast(y_u), @max(0, scanline_start_x));
+            if (scanline_start_x > 0) surface.clearStride(0, @intCast(y_u), @max(0, scanline_start_x));
             if (scanline_end_x < sfc_width) {
-                ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width - scanline_end_x));
+                surface.clearStride(0, @intCast(y_u), @max(0, sfc_width - scanline_end_x));
             }
         }
     }
@@ -824,36 +809,17 @@ fn paintMultiSample(
                 0 => {}, // Skip zero entries
                 coverage_full => {
                     // Fully opaque span, so we can just composite directly (no alpha).
-                    const dst_stride = surface.getStride(x, y, coverage_len);
-                    compositor.StrideCompositor.run(dst_stride, &.{.{
-                        .operator = operator,
-                        .src = switch (pattern.*) {
-                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                            .gradient => |g| .{ .gradient = .{
-                                .underlying = g,
-                                .x = x,
-                                .y = y,
-                            } },
-                            .dither => .{ .dither = .{
-                                .underlying = pattern.dither,
-                                .x = x,
-                                .y = y,
-                            } },
-                        },
-                    }}, .{ .precision = _precision });
-                },
-                else => {
-                    // Span with some degree of (> 0, < max) opacity, so we
-                    // need to grab that value, turn it into an alpha8 pixel,
-                    // and composite that across our span.
-                    const dst_stride = surface.getStride(x, y, coverage_len);
-                    const mask_px: pixel.Pixel = .{ .alpha8 = .{
-                        .a = @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
-                    } };
-                    compositor.StrideCompositor.run(dst_stride, &.{
-                        .{
-                            .operator = .dst_in,
-                            .dst = switch (pattern.*) {
+                    if (operator == .clear) {
+                        surface.clearStride(x, y, coverage_len);
+                    } else if (pattern.* == .opaque_pattern and
+                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                    {
+                        surface.paintStride(x, y, coverage_len, pattern.opaque_pattern.pixel);
+                    } else {
+                        const dst_stride = surface.getStride(x, y, coverage_len);
+                        compositor.StrideCompositor.run(dst_stride, &.{.{
+                            .operator = operator,
+                            .src = switch (pattern.*) {
                                 .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
                                 .gradient => |g| .{ .gradient = .{
                                     .underlying = g,
@@ -866,18 +832,73 @@ fn paintMultiSample(
                                     .y = y,
                                 } },
                             },
-                            .src = .{ .pixel = mask_px },
-                        },
-                        .{
-                            .operator = operator,
-                        },
-                    }, .{ .precision = precision });
+                        }}, .{ .precision = _precision });
+                    }
+                },
+                else => {
+                    // Span with some degree of (> 0, < max) opacity, so we
+                    // need to grab that value, turn it into an alpha8 pixel,
+                    // and composite that across our span.
+                    if (operator == .clear) {
+                        surface.clearStride(x, y, coverage_len);
+                    } else if (pattern.* == .opaque_pattern and
+                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                    {
+                        surface.compositeStride(
+                            x,
+                            y,
+                            coverage_len,
+                            pattern.opaque_pattern.pixel,
+                            operator,
+                            @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                        );
+                    } else {
+                        const dst_stride = surface.getStride(x, y, coverage_len);
+                        const mask_px: pixel.Pixel = .{ .alpha8 = .{
+                            .a = @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                        } };
+                        compositor.StrideCompositor.run(dst_stride, &.{
+                            .{
+                                .operator = .dst_in,
+                                .dst = switch (pattern.*) {
+                                    .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                                    .gradient => |g| .{ .gradient = .{
+                                        .underlying = g,
+                                        .x = x,
+                                        .y = y,
+                                    } },
+                                    .dither => .{ .dither = .{
+                                        .underlying = pattern.dither,
+                                        .x = x,
+                                        .y = y,
+                                    } },
+                                },
+                                .src = .{ .pixel = mask_px },
+                            },
+                            .{
+                                .operator = operator,
+                            },
+                        }, .{ .precision = precision });
+                    }
                 },
             }
 
             coverage_x_u += coverage_len; // Advance to next buffer entry
         }
     }
+}
+
+/// Returns true if the operator can be fast-pathed on the source by writing
+/// the source pixel directly to the surface.
+///
+/// Note that all operators that can be fast-pathed are also integer
+/// pipeline operations.
+fn fillReducesToSource(op: compositor.Operator, px: pixel.Pixel) bool {
+    return switch (op) {
+        .src => true,
+        .src_over => px.isOpaque(),
+        else => false,
+    };
 }
 
 test "stroke uninvertible matrix error" {
