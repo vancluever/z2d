@@ -226,7 +226,7 @@ pub fn yBreakPoints(
 }
 
 pub const WorkingEdgeSet = struct {
-    edges: []*Edge,
+    edges: []Edge,
     x_values: []i32,
     dirs: []i2,
     len: usize,
@@ -249,7 +249,7 @@ pub const WorkingEdgeSet = struct {
             }
 
             pub fn swap(ctx: @This(), a: usize, b: usize) void {
-                mem.swap(*Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
+                mem.swap(Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
                 mem.swap(i32, &ctx.s.x_values[a], &ctx.s.x_values[b]);
                 mem.swap(i2, &ctx.s.dirs[a], &ctx.s.dirs[b]);
             }
@@ -296,22 +296,21 @@ pub fn xEdgesForY(
 ) mem.Allocator.Error!WorkingEdgeSet {
     if (self.edges.items.len == 0) return .empty;
 
-    var result_edges: std.ArrayListUnmanaged(*Edge) = .empty;
-    errdefer result_edges.deinit(alloc);
-
     // We take our line measurements at the middle of the line; this helps
     // "break the tie" with lines that fall exactly on point boundaries.
     const line_y_middle = @as(f64, @floatFromInt(line_y)) + 0.5;
 
-    for (self.edges.items) |*current_edge| {
-        if (current_edge.top() < line_y_middle and current_edge.bottom() >= line_y_middle) {
-            try result_edges.append(alloc, current_edge);
+    var to: usize = 0;
+    for (0..self.edges.items.len) |from| {
+        if (self.edges.items[from].top() < line_y_middle and
+            self.edges.items[from].bottom() >= line_y_middle)
+        {
+            if (from != to) mem.swap(Edge, &self.edges.items[to], &self.edges.items[from]);
+            to += 1;
         }
     }
 
-    // Final slice for result edges
-    const result_edges_s = try result_edges.toOwnedSlice(alloc);
-    errdefer alloc.free(result_edges_s);
+    const result_edges_s = self.edges.items[0..to];
 
     // Reserve memory for our x-values
     const x_values_s = try alloc.alloc(i32, result_edges_s.len);
