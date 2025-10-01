@@ -1,6 +1,12 @@
-## 0.8.2-pre (Unreleased)
+## 0.9.0 (Unreleased)
 
-Bumped version for dev.
+ENHANCEMENTS:
+
+* More performance enhancements:
+  - Fast-pathing for source-exclusive operations
+    ([#150](https://github.com/vancluever/z2d/pull/150))
+  - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149),
+    [#152](https://github.com/vancluever/z2d/pull/152))
 
 ## 0.8.1 (September 11, 2025)
 

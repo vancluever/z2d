@@ -2,6 +2,7 @@
 
 const builtin = @import("std").builtin;
 const debug = @import("std").debug;
+const mem = @import("std").mem;
 
 const colorpkg = @import("../color.zig");
 
@@ -150,4 +151,15 @@ pub fn PointBuffer(split: usize, buffer_len: usize) type {
             return self.items[0];
         }
     };
+}
+
+/// Returns `true` if the field `name` exists in the supplied type. `T` must be
+/// a struct.
+pub fn hasField(comptime T: type, field_name: []const u8) bool {
+    inline for (@typeInfo(T).@"struct".fields) |f| {
+        if (mem.eql(u8, f.name, field_name)) {
+            return true;
+        }
+    }
+    return false;
 }

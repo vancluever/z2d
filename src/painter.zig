@@ -324,8 +324,28 @@ fn paintDirect(
     const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
     const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
 
-    // Make an ArenaAllocator for our edges, this allows us to re-use the same
-    // memory after every scanline by simply resetting the arena.
+    // Fetch our breakpoints
+    var y_breakpoints = try polygons.yBreakPoints(alloc);
+    defer y_breakpoints.deinit(alloc);
+    var y_breakpoint_idx: usize = y_breakpoint_idx: {
+        // Seek to our starting breakpoint, given a possible clamping of y=0
+        for (y_breakpoints.items, 0..) |y, idx| {
+            if (y >= start_scanline) {
+                break :y_breakpoint_idx idx -| 1;
+            }
+        }
+
+        // No breakpoints cross y=start_scanline, this is a no-op
+        return;
+    };
+
+    // Our working edge set that survives a particular scanline iteration. This
+    // is re-fetched at particular breakpoints, but only incremented on
+    // otherwise.
+    var working_edge_set: Polygon.WorkingEdgeSet = .empty;
+
+    // Make an ArenaAllocator for our working edge set, this allows us to
+    // re-use the same memory after refresh by simply resetting the arena.
     var edge_arena = heap.ArenaAllocator.init(alloc);
     defer edge_arena.deinit();
     const edge_alloc = edge_arena.allocator();
@@ -335,34 +355,39 @@ fn paintDirect(
     // so our len is end + 1. This helps correct for scenarios like small
     // polygons laying on edges, or very small surfaces (e.g., 1 pixel high).
     for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
-        defer {
-            _ = edge_arena.reset(.retain_capacity);
-        }
         const y: i32 = @intCast(y_u);
+        if (y >= y_breakpoints.items[y_breakpoint_idx]) {
+            // y-breakpoint passed, re-calculate our working edge set.
+            _ = edge_arena.reset(.retain_capacity);
+            working_edge_set = try polygons.xEdgesForY(
+                edge_alloc,
+                y,
+            );
+            if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
+        }
 
-        var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y), fill_rule);
-        defer edge_list.deinit(edge_alloc);
+        working_edge_set.inc(y);
+        working_edge_set.sort();
+        const filtered_edge_set = working_edge_set.filter(fill_rule);
 
-        if (!bounded and edge_list.items.len == 0) {
+        if (!bounded and filtered_edge_set.len == 0) {
             // Empty line but we're not bounded, so we clear the whole line.
-            const clear_stride = surface.getStride(0, y, @max(0, sfc_width));
-            compositor.StrideCompositor.run(clear_stride, &.{.{
-                .operator = .clear,
-                .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-            }}, .{ .precision = .integer });
-
+            surface.clearStride(0, y, @max(0, sfc_width));
             continue;
         }
 
-        for (0..edge_list.items.len / 2) |edge_pair_idx| {
+        for (0..filtered_edge_set.len / 2) |edge_pair_idx| {
             const edge_pair_start = edge_pair_idx * 2;
-            const start_x: i32 = @max(0, edge_list.items[edge_pair_start]);
+            const start_x: i32 = @max(
+                0,
+                filtered_edge_set[edge_pair_start],
+            );
             if (start_x >= sfc_width) {
                 // We're past the end of the draw area and can stop drawing.
                 break;
             }
             const end_x: i32 = math.clamp(
-                edge_list.items[edge_pair_start + 1],
+                filtered_edge_set[edge_pair_start + 1],
                 start_x,
                 sfc_width,
             );
@@ -371,40 +396,40 @@ fn paintDirect(
 
             if (!bounded and start_x > 0) {
                 // Clear up to the start
-                const clear_stride = surface.getStride(0, y, @max(0, start_x));
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
+                surface.clearStride(0, y, @max(0, start_x));
             }
 
             if (fill_len > 0) {
-                const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
-                compositor.StrideCompositor.run(dst_stride, &.{.{
-                    .operator = operator,
-                    .src = switch (pattern.*) {
-                        .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                        .gradient => |g| .{ .gradient = .{
-                            .underlying = g,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                        .dither => .{ .dither = .{
-                            .underlying = pattern.dither,
-                            .x = start_x,
-                            .y = y,
-                        } },
-                    },
-                }}, .{ .precision = _precision });
+                if (operator == .clear) {
+                    surface.clearStride(start_x, y, @max(0, fill_len));
+                } else if (pattern.* == .opaque_pattern and
+                    fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                {
+                    surface.paintStride(start_x, y, @max(0, fill_len), pattern.opaque_pattern.pixel);
+                } else {
+                    const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
+                    compositor.StrideCompositor.run(dst_stride, &.{.{
+                        .operator = operator,
+                        .src = switch (pattern.*) {
+                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                            .gradient => |g| .{ .gradient = .{
+                                .underlying = g,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                            .dither => .{ .dither = .{
+                                .underlying = pattern.dither,
+                                .x = start_x,
+                                .y = y,
+                            } },
+                        },
+                    }}, .{ .precision = _precision });
+                }
             }
 
             if (!bounded and end_clear_len > 0) {
                 // Clear to the end
-                const clear_stride = surface.getStride(end_x, y, @max(0, end_clear_len));
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
+                surface.clearStride(end_x, y, @max(0, end_clear_len));
             }
         }
     }
@@ -493,34 +518,66 @@ fn paintSuperSample(
         );
         errdefer mask_sfc_scaled.deinit(alloc);
 
-        // Make an ArenaAllocator for our edges, this allows us to re-use the
-        // same memory after every scanline by simply resetting the arena.
+        // Fetch our breakpoints
+        var y_breakpoints = try polygons.yBreakPoints(alloc);
+        defer y_breakpoints.deinit(alloc);
+        var y_breakpoint_idx: usize = y_breakpoint_idx: {
+            for (y_breakpoints.items, 0..) |y, idx| {
+                if (y >= box_y0) {
+                    break :y_breakpoint_idx idx -| 1;
+                }
+            }
+
+            // No breakpoints cross y=box_y0, this is a no-op
+            return;
+        };
+
+        // Our working edge set that survives a particular scanline iteration. This
+        // is re-fetched at particular breakpoints, but only incremented on
+        // otherwise.
+        var working_edge_set: Polygon.WorkingEdgeSet = .empty;
+
+        // Make an ArenaAllocator for our working edge set, this allows us to
+        // re-use the same memory after refresh by simply resetting the arena.
         var edge_arena = heap.ArenaAllocator.init(alloc);
         defer edge_arena.deinit();
         const edge_alloc = edge_arena.allocator();
 
         for (0..@max(0, mask_height)) |y_u| {
-            defer {
-                _ = edge_arena.reset(.retain_capacity);
-            }
             const y: i32 = @intCast(y_u);
+            const dev_y: i32 = y + box_y0; // Device-space y-coordinate (still supersampled)
 
-            // Our polygon co-ordinates are in (scaled) device space, so when
-            // we search for edges, we need to offset our mask-space scanline
-            // to that.
-            var edge_list = try polygons.xEdgesForY(edge_alloc, @floatFromInt(y + box_y0), fill_rule);
-            defer edge_list.deinit(edge_alloc);
-            for (0..edge_list.items.len / 2) |edge_pair_idx| {
+            if (dev_y >= y_breakpoints.items[y_breakpoint_idx]) {
+                // y-breakpoint passed, re-calculate our working edge set.
+                _ = edge_arena.reset(.retain_capacity);
+                working_edge_set = try polygons.xEdgesForY(
+                    edge_alloc,
+                    dev_y,
+                );
+                if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
+            }
+
+            working_edge_set.inc(dev_y);
+            working_edge_set.sort();
+            const filtered_edge_set = working_edge_set.filter(fill_rule);
+
+            for (0..filtered_edge_set.len / 2) |edge_pair_idx| {
                 // Inverse to the above; pull back our scaled device space
                 // co-ordinates to mask space.
                 const edge_pair_start = edge_pair_idx * 2;
-                const start_x: i32 = @max(0, edge_list.items[edge_pair_start] - box_x0);
+                const start_x: i32 = @max(
+                    0,
+                    filtered_edge_set[edge_pair_start] - box_x0,
+                );
                 if (start_x >= mask_width) {
                     // We're past the mask draw area and can stop drawing.
                     break;
                 }
-                const end_x: i32 =
-                    math.clamp(edge_list.items[edge_pair_start + 1] - box_x0, start_x, mask_width);
+                const end_x: i32 = math.clamp(
+                    filtered_edge_set[edge_pair_start + 1] - box_x0,
+                    start_x,
+                    mask_width,
+                );
 
                 const fill_len: i32 = end_x - start_x;
                 if (fill_len > 0) {
@@ -630,56 +687,69 @@ fn paintMultiSample(
     const scanline_start_x_scaled = scanline_start_x * scale;
     const scanline_draw_width_scaled = scanline_draw_width * scale;
 
-    // Make an ArenaAllocator for our edges, this allows us to re-use the
-    // same memory after every scanline by simply resetting the arena.
-    var edge_arena = heap.ArenaAllocator.init(alloc);
-    defer edge_arena.deinit();
-    const edge_alloc = edge_arena.allocator();
-
     // Clear out the area not covered by the draw area when we're dealing with
     // unbounded operators.
     if (!operator.isBounded()) {
-        const ClearStrideFn = struct {
-            fn f(sfc: *Surface, scy: i32, width: usize) void {
-                const clear_stride = sfc.getStride(0, scy, width);
-                compositor.StrideCompositor.run(clear_stride, &.{.{
-                    .operator = .clear,
-                    .src = .{ .pixel = .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } } },
-                }}, .{ .precision = .integer });
-            }
-        };
-
         // Do any full scanlines first
         for (0..@max(0, start_scanline)) |y_u|
-            ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width));
+            surface.clearStride(0, @intCast(y_u), @max(0, sfc_width));
         for (@max(0, end_scanline + 1)..@max(0, sfc_width)) |y_u|
-            ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width));
+            surface.clearStride(0, @intCast(y_u), @max(0, sfc_width));
 
         // Now, do the strides outside of the draw area on the same scanlines
         for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
-            if (scanline_start_x > 0) ClearStrideFn.f(surface, @intCast(y_u), @max(0, scanline_start_x));
+            if (scanline_start_x > 0) surface.clearStride(0, @intCast(y_u), @max(0, scanline_start_x));
             if (scanline_end_x < sfc_width) {
-                ClearStrideFn.f(surface, @intCast(y_u), @max(0, sfc_width - scanline_end_x));
+                surface.clearStride(0, @intCast(y_u), @max(0, sfc_width - scanline_end_x));
             }
         }
     }
 
-    for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
-        defer {
-            _ = edge_arena.reset(.retain_capacity);
-            coverage_buffer.reset();
+    // Fetch our breakpoints
+    var y_breakpoints = try polygons.yBreakPoints(alloc);
+    defer y_breakpoints.deinit(alloc);
+    var y_breakpoint_idx: usize = y_breakpoint_idx: {
+        for (y_breakpoints.items, 0..) |y, idx| {
+            if (y >= start_scanline) {
+                break :y_breakpoint_idx idx -| 1;
+            }
         }
+
+        // No breakpoints cross y=start_scanline, this is a no-op
+        return;
+    };
+
+    // Our working edge set that survives a particular scanline iteration. This
+    // is re-fetched at particular breakpoints, but only incremented on
+    // otherwise.
+    var working_edge_set: Polygon.WorkingEdgeSet = .empty;
+
+    // Make an ArenaAllocator for our working edge set, this allows us to
+    // re-use the same memory after refresh by simply resetting the arena.
+    var edge_arena = heap.ArenaAllocator.init(alloc);
+    defer edge_arena.deinit();
+    const edge_alloc = edge_arena.allocator();
+
+    for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
+        defer coverage_buffer.reset();
         const y: i32 = @intCast(y_u);
 
         const y_scaled: i32 = y * scale;
         for (0..4) |y_offset| {
             const y_scanline_scaled: i32 = y_scaled + @as(i32, @intCast(y_offset));
-            var edge_list = try polygons.xEdgesForY(
-                edge_alloc,
-                @floatFromInt(y_scanline_scaled),
-                fill_rule,
-            );
-            defer edge_list.deinit(edge_alloc);
+            if (y_scanline_scaled >= y_breakpoints.items[y_breakpoint_idx]) {
+                // y-breakpoint passed, re-calculate our working edge set.
+                _ = edge_arena.reset(.retain_capacity);
+                working_edge_set = try polygons.xEdgesForY(
+                    edge_alloc,
+                    y_scanline_scaled,
+                );
+                if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
+            }
+
+            working_edge_set.inc(y_scanline_scaled);
+            working_edge_set.sort();
+            const filtered_edge_set = working_edge_set.filter(fill_rule);
 
             // x_min controls the last x-position on the scanline we've
             // recorded (i.e., the end of the last span) and serves as the
@@ -688,11 +758,14 @@ fn paintMultiSample(
             // coverage overflowing, etc.
             var x_min: i32 = 0;
 
-            for (0..edge_list.items.len / 2) |edge_pair_idx| {
+            for (0..filtered_edge_set.len / 2) |edge_pair_idx| {
                 const edge_pair_start = edge_pair_idx * 2;
                 // Pull back the scaled device space co-ordinates (similar to
                 // supersample).
-                const start_x: i32 = @max(x_min, edge_list.items[edge_pair_start] - scanline_start_x_scaled);
+                const start_x: i32 = @max(
+                    x_min,
+                    filtered_edge_set[edge_pair_start] - scanline_start_x_scaled,
+                );
                 if (start_x >= scanline_draw_width_scaled) {
                     // We're past the end of the draw area and can stop
                     // drawing.
@@ -705,7 +778,7 @@ fn paintMultiSample(
                 // (i.e., clamping to the width of the mask, not the width of
                 // the final target surface).
                 const end_x: i32 = math.clamp(
-                    edge_list.items[edge_pair_start + 1] - scanline_start_x_scaled,
+                    filtered_edge_set[edge_pair_start + 1] - scanline_start_x_scaled,
                     start_x,
                     scanline_draw_width_scaled,
                 );
@@ -736,36 +809,17 @@ fn paintMultiSample(
                 0 => {}, // Skip zero entries
                 coverage_full => {
                     // Fully opaque span, so we can just composite directly (no alpha).
-                    const dst_stride = surface.getStride(x, y, coverage_len);
-                    compositor.StrideCompositor.run(dst_stride, &.{.{
-                        .operator = operator,
-                        .src = switch (pattern.*) {
-                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                            .gradient => |g| .{ .gradient = .{
-                                .underlying = g,
-                                .x = x,
-                                .y = y,
-                            } },
-                            .dither => .{ .dither = .{
-                                .underlying = pattern.dither,
-                                .x = x,
-                                .y = y,
-                            } },
-                        },
-                    }}, .{ .precision = _precision });
-                },
-                else => {
-                    // Span with some degree of (> 0, < max) opacity, so we
-                    // need to grab that value, turn it into an alpha8 pixel,
-                    // and composite that across our span.
-                    const dst_stride = surface.getStride(x, y, coverage_len);
-                    const mask_px: pixel.Pixel = .{ .alpha8 = .{
-                        .a = @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
-                    } };
-                    compositor.StrideCompositor.run(dst_stride, &.{
-                        .{
-                            .operator = .dst_in,
-                            .dst = switch (pattern.*) {
+                    if (operator == .clear) {
+                        surface.clearStride(x, y, coverage_len);
+                    } else if (pattern.* == .opaque_pattern and
+                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                    {
+                        surface.paintStride(x, y, coverage_len, pattern.opaque_pattern.pixel);
+                    } else {
+                        const dst_stride = surface.getStride(x, y, coverage_len);
+                        compositor.StrideCompositor.run(dst_stride, &.{.{
+                            .operator = operator,
+                            .src = switch (pattern.*) {
                                 .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
                                 .gradient => |g| .{ .gradient = .{
                                     .underlying = g,
@@ -778,18 +832,73 @@ fn paintMultiSample(
                                     .y = y,
                                 } },
                             },
-                            .src = .{ .pixel = mask_px },
-                        },
-                        .{
-                            .operator = operator,
-                        },
-                    }, .{ .precision = precision });
+                        }}, .{ .precision = _precision });
+                    }
+                },
+                else => {
+                    // Span with some degree of (> 0, < max) opacity, so we
+                    // need to grab that value, turn it into an alpha8 pixel,
+                    // and composite that across our span.
+                    if (operator == .clear) {
+                        surface.clearStride(x, y, coverage_len);
+                    } else if (pattern.* == .opaque_pattern and
+                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
+                    {
+                        surface.compositeStride(
+                            x,
+                            y,
+                            coverage_len,
+                            pattern.opaque_pattern.pixel,
+                            operator,
+                            @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                        );
+                    } else {
+                        const dst_stride = surface.getStride(x, y, coverage_len);
+                        const mask_px: pixel.Pixel = .{ .alpha8 = .{
+                            .a = @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                        } };
+                        compositor.StrideCompositor.run(dst_stride, &.{
+                            .{
+                                .operator = .dst_in,
+                                .dst = switch (pattern.*) {
+                                    .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
+                                    .gradient => |g| .{ .gradient = .{
+                                        .underlying = g,
+                                        .x = x,
+                                        .y = y,
+                                    } },
+                                    .dither => .{ .dither = .{
+                                        .underlying = pattern.dither,
+                                        .x = x,
+                                        .y = y,
+                                    } },
+                                },
+                                .src = .{ .pixel = mask_px },
+                            },
+                            .{
+                                .operator = operator,
+                            },
+                        }, .{ .precision = precision });
+                    }
                 },
             }
 
             coverage_x_u += coverage_len; // Advance to next buffer entry
         }
     }
+}
+
+/// Returns true if the operator can be fast-pathed on the source by writing
+/// the source pixel directly to the surface.
+///
+/// Note that all operators that can be fast-pathed are also integer
+/// pipeline operations.
+fn fillReducesToSource(op: compositor.Operator, px: pixel.Pixel) bool {
+    return switch (op) {
+        .src => true,
+        .src_over => px.isOpaque(),
+        else => false,
+    };
 }
 
 test "stroke uninvertible matrix error" {

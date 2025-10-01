@@ -136,18 +136,16 @@ test "degenerate line_to" {
     try testing.expectEqual(2, result.edges.items.len);
     try testing.expectEqualSlices(Polygon.Edge, &.{
         .{
-            .top = 0.0,
-            .bottom = 10.0,
+            .y0 = 0.0,
+            .y1 = 10.0,
             .x_start = 5.0,
             .x_inc = 0.5,
-            .dir = -1,
         },
         .{
-            .top = 0.0,
-            .bottom = 10.0,
+            .y0 = 10.0,
+            .y1 = 0.0,
             .x_start = 5.0,
             .x_inc = -0.5,
-            .dir = 1,
         },
     }, result.edges.items);
 }
@@ -168,11 +166,10 @@ test "degenerate close" {
         try testing.expectEqual(1, result.edges.items.len);
         try testing.expectEqualSlices(Polygon.Edge, &.{
             .{
-                .top = 0.0,
-                .bottom = 10.0,
+                .y0 = 0.0,
+                .y1 = 10.0,
                 .x_start = 5.0,
                 .x_inc = 0.5,
-                .dir = -1,
             },
         }, result.edges.items);
     }
@@ -196,18 +193,16 @@ test "degenerate close" {
         try testing.expectEqual(2, result.edges.items.len);
         try testing.expectEqualSlices(Polygon.Edge, &.{
             .{
-                .top = 0.0,
-                .bottom = 10.0,
+                .y0 = 0.0,
+                .y1 = 10.0,
                 .x_start = 5.0,
                 .x_inc = 0.5,
-                .dir = -1,
             },
             .{
-                .top = 0.0,
-                .bottom = 10.0,
+                .y0 = 10.0,
+                .y1 = 0.0,
                 .x_start = 5.0,
                 .x_inc = -0.5,
-                .dir = 1,
             },
         }, result.edges.items);
     }

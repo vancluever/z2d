@@ -89,10 +89,10 @@ pub const Stride = union(Format) {
     },
 
     /// Returns the pixel length of the stride.
-    pub fn pxLen(dst: Stride) usize {
-        return switch (dst) {
-            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |d| d.len,
-            inline .alpha4, .alpha2, .alpha1 => |d| d.px_len,
+    pub fn pxLen(self: Stride) usize {
+        return switch (self) {
+            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |s| s.len,
+            inline .alpha4, .alpha2, .alpha1 => |s| s.px_len,
         };
     }
 };
@@ -118,6 +118,26 @@ pub const Pixel = union(Format) {
     /// Initializes a wrapped RGBA pixel from the supplied color verb.
     pub fn fromColor(color: Color.InitArgs) Pixel {
         return colorpkg.LinearRGB.fromColor(Color.init(color)).encodeRGBA().asPixel();
+    }
+
+    /// Convenience method that returns true if the pixel is full-opacity.
+    ///
+    /// Note that:
+    ///
+    ///  * Any pixel type lacking an alpha channel (e.g., `RGB`) is always
+    ///    considered opaque.
+    ///  * Alpha types (e.g., `Alpha8` or the sub-8-bit versions) follow the
+    ///    same opacity rules as RGBA types (full opacity is max alpha channel
+    ///    value). Keep this in mind when using alpha-only pixel types to
+    ///    represent grayscale.
+    pub fn isOpaque(self: Pixel) bool {
+        return switch (self) {
+            inline .xrgb, .rgb => true,
+            inline .argb, .rgba, .alpha8 => |px| px.a == 255,
+            .alpha4 => |px| px.a == 15,
+            .alpha2 => |px| px.a == 3,
+            .alpha1 => |px| px.a == 1,
+        };
     }
 };
 
@@ -528,12 +548,16 @@ fn Alpha(comptime fmt: Format) type {
                     // Special case: we assume that RGB pixels are always opaque
                     .a = MaxInt,
                 },
-                inline .argb, .rgba, .alpha8, .alpha4, .alpha2 => |q| .{ .a = shlr(IntType, q.a) },
-                .alpha1 => |q| .{
-                    // Short-circuit to on/off * MaxInt
-                    .a = @intCast(q.a * MaxInt),
-                },
+                inline else => |q| .{ .a = scaleIntoIntAlpha(q.a) },
             };
+        }
+
+        /// Low-level primitive used to scale up/down alpha bytes, uses
+        /// repeating-bit padding when scaling up. Not recommended for external
+        /// use (use `fromPixel` instead).
+        pub fn scaleIntoIntAlpha(val: anytype) IntType {
+            if (@typeInfo(@TypeOf(val)).int.bits == 1) return val * MaxInt;
+            return shlr(IntType, val);
         }
 
         fn shlr(

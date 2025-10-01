@@ -24,6 +24,8 @@ const testing = @import("std").testing;
 const compositor = @import("compositor.zig");
 const pixel = @import("pixel.zig");
 
+const hasField = @import("internal/util.zig").hasField;
+
 /// The scale factor used for super-sample anti-aliasing. Any functionality
 /// using the `downsample` method in a surface should be aware of this value.
 pub const supersample_scale = 4;
@@ -309,6 +311,43 @@ pub const Surface = union(SurfaceType) {
             inline else => |*s| s.paintStride(x, y, len, px),
         };
     }
+
+    /// Effectively clears the stride, equivalent to `paintStride` using a
+    /// zero-value RGBA pixel.
+    ///
+    /// Out-of-range start co-ordinates cause a no-op.
+    ///
+    /// `len` is unbounded and will wrap if going past the x-boundary of the
+    /// surface. Going past the actual length of the buffer is safety-checked
+    /// undefined behavior.
+    pub fn clearStride(self: *Surface, x: i32, y: i32, len: usize) void {
+        return self.paintStride(x, y, len, .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } });
+    }
+
+    /// Composites a single pixel using the specified operation, with an
+    /// optional opacity, to the range starting at `(x, y)` and proceeding
+    /// for `len`.
+    ///
+    /// Out-of-range start co-ordinates cause a no-op.
+    ///
+    /// `len` is unbounded and will wrap if going past the x-boundary of
+    /// the surface. Going past the actual length of the buffer is
+    /// safety-checked undefined behavior.
+    ///
+    /// This function currently only works with integer operators.
+    pub fn compositeStride(
+        self: *Surface,
+        x: i32,
+        y: i32,
+        len: usize,
+        px: pixel.Pixel,
+        operator: compositor.Operator,
+        opacity: u8,
+    ) void {
+        return switch (self.*) {
+            inline else => |*s| s.compositeStride(x, y, len, px, operator, opacity),
+        };
+    }
 };
 
 /// A memory-backed image surface. The pixel format is the type (e.g.
@@ -502,6 +541,43 @@ pub fn ImageSurface(comptime T: type) type {
             const x_usize: usize = @max(0, x);
             const start = w_usize * y_usize + x_usize;
             @memset(self.buf[start .. start + len], T.fromPixel(px));
+        }
+
+        /// Composites a single pixel using the specified operation, with an
+        /// optional opacity, to the range starting at `(x, y)` and proceeding
+        /// for `len`.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer is
+        /// safety-checked undefined behavior.
+        ///
+        /// This function currently only works with integer operators.
+        pub fn compositeStride(
+            self: *ImageSurface(T),
+            x: i32,
+            y: i32,
+            len: usize,
+            px: pixel.Pixel,
+            operator: compositor.Operator,
+            opacity: u8,
+        ) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            const w_usize: usize = @max(0, self.width);
+            const y_usize: usize = @max(0, y);
+            const x_usize: usize = @max(0, x);
+            const start = w_usize * y_usize + x_usize;
+
+            // We use RGBA as our base intermediary pixel for the source.
+            var src: pixel.RGBA = .fromPixel(px);
+            if (opacity < 255) {
+                src = compositor.runPixelT(pixel.RGBA, src, pixel.Alpha8, .{ .a = opacity }, .dst_in);
+            }
+
+            for (start..start + len) |idx| {
+                self.buf[idx] = compositor.runPixelT(T, self.buf[idx], pixel.RGBA, src, operator);
+            }
         }
     };
 }
@@ -760,6 +836,43 @@ pub fn PackedImageSurface(comptime T: type) type {
             // zig fmt: on
             for (l_low..l_high) |idx| self._set(idx, src_px);
             for (r_low..r_high) |idx| self._set(idx, src_px);
+        }
+
+        /// Composites a single pixel using the specified operation, with an
+        /// optional opacity, to the range starting at `(x, y)` and proceeding
+        /// for `len`.
+        ///
+        /// Out-of-range start co-ordinates cause a no-op.
+        ///
+        /// `len` is unbounded and will wrap if going past the x-boundary of
+        /// the surface. Going past the actual length of the buffer is
+        /// safety-checked undefined behavior.
+        ///
+        /// This function currently only works with integer operators.
+        pub fn compositeStride(
+            self: *PackedImageSurface(T),
+            x: i32,
+            y: i32,
+            len: usize,
+            px: pixel.Pixel,
+            operator: compositor.Operator,
+            opacity: u8,
+        ) void {
+            if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+            const w_usize: usize = @max(0, self.width);
+            const y_usize: usize = @max(0, y);
+            const x_usize: usize = @max(0, x);
+            const start = w_usize * y_usize + x_usize;
+
+            // We use RGBA as our base intermediary pixel for the source.
+            var src: pixel.RGBA = .fromPixel(px);
+            if (opacity < 255) {
+                src = compositor.runPixelT(pixel.RGBA, src, pixel.Alpha8, .{ .a = opacity }, .dst_in);
+            }
+
+            for (start..start + len) |idx| {
+                self._set(idx, compositor.runPixelT(T, self._get(idx), pixel.RGBA, src, operator));
+            }
         }
 
         fn _get(self: *const PackedImageSurface(T), index: usize) T {
@@ -1585,6 +1698,78 @@ test "getStride, OOB" {
                         debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
                         return err;
                     };
+                }
+            }
+        }
+    }
+}
+
+test "compositeStride, simple test w/OOB" {
+    const alloc = testing.allocator;
+    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
+        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+        defer sfc.deinit(alloc);
+        inline for (.{ -10, 5, 20 }) |x| {
+            inline for (.{ -10, 5, 20 }) |y| {
+                sfc.paintPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } });
+                sfc.compositeStride(
+                    x,
+                    y,
+                    2,
+                    .{ .rgba = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+                    .src,
+                    255,
+                );
+                const sfc_type_enum: SurfaceType = @enumFromInt(sfc_type.value);
+                if (x < 0 or y < 0 or x >= 10 or y >= 10) {
+                    for (0..10) |want_y_u| {
+                        for (0..10) |want_x_u| {
+                            const want_x: i32 = @intCast(want_x_u);
+                            const want_y: i32 = @intCast(want_y_u);
+                            var got = sfc_type_enum.toPixelType().fromPixel(
+                                sfc.getPixel(want_x, want_y).?,
+                            );
+                            if (comptime hasField(sfc_type_enum.toPixelType(), "_padding")) got._padding = 0;
+                            testing.expectEqualDeep(
+                                sfc_type_enum.toPixelType().fromPixel(
+                                    .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+                                ),
+                                got,
+                            ) catch |err| {
+                                debug.print(
+                                    "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
+                                    .{ x, y, want_x, want_y },
+                                );
+                                return err;
+                            };
+                        }
+                    }
+                } else {
+                    for (0..10) |want_y_u| {
+                        for (0..10) |want_x_u| {
+                            const want_x: i32 = @intCast(want_x_u);
+                            const want_y: i32 = @intCast(want_y_u);
+                            var got = sfc_type_enum.toPixelType().fromPixel(
+                                sfc.getPixel(want_x, want_y).?,
+                            );
+                            if (comptime hasField(sfc_type_enum.toPixelType(), "_padding")) got._padding = 0;
+                            const want: sfc_type_enum.toPixelType() = if (want_y == 5 and
+                                (want_x == 5 or want_x == 6))
+                                .fromPixel(.{ .rgba = .{ .r = 255, .g = 255, .b = 255, .a = 255 } })
+                            else
+                                .fromPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } });
+                            testing.expectEqualDeep(
+                                want,
+                                got,
+                            ) catch |err| {
+                                debug.print(
+                                    "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
+                                    .{ x, y, want_x, want_y },
+                                );
+                                return err;
+                            };
+                        }
+                    }
                 }
             }
         }

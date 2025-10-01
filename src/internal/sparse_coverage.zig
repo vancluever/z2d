@@ -219,13 +219,11 @@ pub const SparseCoverageBuffer = struct {
                 self.put(idx, current_value, rem);
                 self.put(idx + rem, current_value, current_len - rem);
                 break;
+            } else if (rem == current_len) {
+                break;
             }
 
             rem -= current_len;
-            if (rem == 0) {
-                return;
-            }
-
             idx += current_len;
         }
     }
