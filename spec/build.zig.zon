@@ -2,7 +2,7 @@
     .name = .spec,
     .version = "0.0.0",
     .fingerprint = 0xc00e173ec5152bb9,
-    .minimum_zig_version = "0.15.0-dev.769+4d7980645",
+    .minimum_zig_version = "0.15.1",
     .dependencies = .{
         .z2d = .{ .path = ".." },
         .zbench = .{
