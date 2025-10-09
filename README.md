@@ -77,8 +77,8 @@ vector rasterization, suitable for UI design and other similar tasks.
 
 `zig fetch --save git+https://github.com/vancluever/z2d#[tag or commit]`
 
-Note that `main` and release tags are currently being done against the Zig
-0.14.x release. For Zig 0.15.x support, please use the `zig-0.15.0` branch.
+Note that Zig 0.15.1 or higher is required. For Zig 0.14.x support, the last
+supported version is 0.8.1.
 
 ## Documentation and examples
 
