@@ -121,11 +121,12 @@ pub fn addEdgesFromContour(
     var initial_point_: ?Point = null;
     var last_point_: ?Point = null;
     while (node_) |node| {
-        if (initial_point_ == null) initial_point_ = node.data;
+        const current_point = Contour.Corner.fromNode(node).point;
+        if (initial_point_ == null) initial_point_ = current_point;
         if (last_point_) |last_point| {
-            try self.addEdge(alloc, last_point, node.data);
+            try self.addEdge(alloc, last_point, current_point);
         }
-        last_point_ = node.data;
+        last_point_ = current_point;
         node_ = node.next;
     }
     if (initial_point_) |initial_point| {
@@ -335,16 +336,24 @@ pub fn xEdgesForY(
 /// polygon, or converted to a set of edges to be added to a larger
 /// polygon/edge collection.
 pub const Contour = struct {
-    pub const CornerList = std.DoublyLinkedList(Point);
+    pub const Corner = struct {
+        point: Point,
+        node: std.DoublyLinkedList.Node = .{},
 
-    corners: CornerList = .{},
+        pub fn fromNode(n: *std.DoublyLinkedList.Node) *Corner {
+            return @alignCast(@fieldParentPtr("node", n));
+        }
+    };
+
+    len: usize = 0,
+    corners: std.DoublyLinkedList = .{},
     scale: f64,
 
     pub fn deinit(self: *Contour, alloc: mem.Allocator) void {
         var node_ = self.corners.first;
         while (node_) |node| {
             node_ = node.next;
-            alloc.destroy(node);
+            alloc.destroy(Contour.Corner.fromNode(node));
         }
         self.* = undefined;
     }
@@ -355,7 +364,7 @@ pub const Contour = struct {
         self: *Contour,
         alloc: mem.Allocator,
         point: Point,
-        before_: ?*CornerList.Node,
+        before_: ?*std.DoublyLinkedList.Node,
     ) mem.Allocator.Error!void {
         debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
         const scaled: Point = .{
@@ -363,36 +372,39 @@ pub const Contour = struct {
             .y = point.y * self.scale,
         };
 
-        const n = try alloc.create(CornerList.Node);
+        const n = try alloc.create(Corner);
         n.* = .{
-            .data = scaled,
+            .point = scaled,
         };
-        if (before_) |before| self.corners.insertBefore(before, n) else self.corners.append(n);
+        if (before_) |before| self.corners.insertBefore(before, &n.node) else self.corners.append(&n.node);
+        self.len += 1;
     }
 
     /// Like plot, but adds points in the reverse direction (i.e., at the start of
     /// the polygon instead of the end.
     pub fn plotReverse(self: *Contour, alloc: mem.Allocator, point: Point) mem.Allocator.Error!void {
         debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
-        const n = try alloc.create(CornerList.Node);
-
         const scaled: Point = .{
             .x = point.x * self.scale,
             .y = point.y * self.scale,
         };
 
+        const n = try alloc.create(Corner);
         n.* = .{
-            .data = scaled,
+            .point = scaled,
         };
-        self.corners.prepend(n);
+        self.corners.prepend(&n.node);
+        self.len += 1;
     }
 
-    /// Concatenates a contour into this one. It's invalid to use the other contour
-    /// after this operation is done.
+    /// Concatenates a contour into this one and detaches its contours from its
+    /// linked list.
     pub fn concat(self: *Contour, other: *Contour) void {
         // concatByMoving will reset the other list to an empty list, so we
         // don't need to do it ourselves.
         self.corners.concatByMoving(&other.corners);
+        self.len += other.len;
+        other.len = 0;
     }
 };
 

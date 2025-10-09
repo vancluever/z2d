@@ -26,7 +26,7 @@
           in
           pkgs.mkShell {
             packages = with pkgs; [
-              zig_0_14
+              zig_0_15
               zls
               python3
             ];

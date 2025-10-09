@@ -19,15 +19,18 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const spec_bench = b.addExecutable(.{
-        .name = "spec-bench",
+    const spec_bench_mod = b.addModule("spec_bench", .{
         .root_source_file = b.path("main_bench.zig"),
         .target = target,
         .optimize = optimize,
     });
-    spec_bench.root_module.addOptions("options", options);
-    spec_bench.root_module.addImport("z2d", z2d_dep.module("z2d"));
-    spec_bench.root_module.addImport("zbench", zbench_dep.module("zbench"));
+    spec_bench_mod.addOptions("options", options);
+    spec_bench_mod.addImport("z2d", z2d_dep.module("z2d"));
+    spec_bench_mod.addImport("zbench", zbench_dep.module("zbench"));
+    const spec_bench = b.addExecutable(.{
+        .name = "spec-bench",
+        .root_module = spec_bench_mod,
+    });
     const spec_bench_run = b.addRunArtifact(spec_bench);
     b.step("bench", "Run benchmarks (default)").dependOn(&spec_bench_run.step);
     b.default_step = &spec_bench_run.step;

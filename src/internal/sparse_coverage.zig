@@ -448,7 +448,7 @@ test "addSpan, capacity tests/checks" {
             const alloc = testing.allocator;
             var coverage: SparseCoverageBuffer = try .init(alloc, tc.capacity);
             defer coverage.deinit(alloc);
-            try testing.expectEqual(tc.expected_T, @tagName(coverage.lengths));
+            try testing.expectEqualSlices(u8, tc.expected_T, @tagName(coverage.lengths));
 
             var got_val: u8 = undefined;
             var got_len: u32 = undefined;

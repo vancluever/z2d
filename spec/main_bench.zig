@@ -6,7 +6,6 @@ const debug = @import("std").debug;
 const fs = @import("std").fs;
 const fmt = @import("std").fmt;
 const heap = @import("std").heap;
-const io = @import("std").io;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
@@ -122,7 +121,7 @@ pub fn main() !void {
         _ = debug_allocator.deinit();
     };
 
-    const stdout = io.getStdOut().writer();
+    var stdout = fs.File.stdout().writerStreaming(&.{});
     var bench = zbench.Benchmark.init(alloc, .{ .track_allocations = switch (builtin.mode) {
         .Debug, .ReleaseSafe => false,
         .ReleaseFast, .ReleaseSmall => true,
@@ -214,7 +213,7 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _079_fill_degenerate_lineto);
     try addPathBenchmark(&bench, _080_fill_z2d_logo);
 
-    try bench.run(stdout);
+    try bench.run(&stdout.interface);
 }
 
 fn addCompositorBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {

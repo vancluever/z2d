@@ -208,7 +208,7 @@ const Plotter = struct {
         //
         // Note that we draw rectangles/squares for dashed lines, see this
         // function in the dashed plotter for more details.
-        debug.assert(self.inner.corners.len == 0); // should have not been used
+        debug.assert(self.inner.len == 0); // should have not been used
         if (self.opts.cap_mode == .round) {
             // Just plot off all of the pen's vertices, no need to
             // determine a subset as we're doing a 360-degree plot.
@@ -251,7 +251,7 @@ const Plotter = struct {
 pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
     // Single-segment line. This can be drawn off of
     // our start line caps.
-    debug.assert(self.inner.corners.len == 0); // should have not been used
+    debug.assert(self.inner.len == 0); // should have not been used
     const cap_points = Face.init(
         start,
         end,
@@ -414,7 +414,7 @@ pub fn join(
     p0: Point,
     p1: Point,
     p2: Point,
-    before_outer: ?*Polygon.Contour.CornerList.Node,
+    before_outer: ?*std.DoublyLinkedList.Node,
 ) mem.Allocator.Error!void {
     const Joiner = struct {
         const Self = @This();
@@ -424,13 +424,13 @@ pub fn join(
             *const @This(),
             *?mem.Allocator.Error,
             Point,
-            ?*Polygon.Contour.CornerList.Node,
+            ?*std.DoublyLinkedList.Node,
         ) void,
 
         fn plot(
             this: *const Self,
             point: Point,
-            before: ?*Polygon.Contour.CornerList.Node,
+            before: ?*std.DoublyLinkedList.Node,
         ) mem.Allocator.Error!void {
             var err_: ?mem.Allocator.Error = null;
             this.plot_fn(this, &err_, point, before);
@@ -441,7 +441,7 @@ pub fn join(
             this: *const Self,
             err_: *?mem.Allocator.Error,
             point: Point,
-            before: ?*Polygon.Contour.CornerList.Node,
+            before: ?*std.DoublyLinkedList.Node,
         ) void {
             this.plotter.outer.plot(this.plotter.alloc, point, before) catch |err| {
                 err_.* = err;
@@ -453,7 +453,7 @@ pub fn join(
             this: *const Self,
             err_: *?mem.Allocator.Error,
             point: Point,
-            before: ?*Polygon.Contour.CornerList.Node,
+            before: ?*std.DoublyLinkedList.Node,
         ) void {
             _ = before;
             this.plotter.inner.plotReverse(this.plotter.alloc, point) catch |err| {
@@ -563,7 +563,7 @@ pub fn join(
 const CapPlotterCtx = struct {
     alloc: mem.Allocator,
     contour: *Polygon.Contour,
-    before: ?*Polygon.Contour.CornerList.Node,
+    before: ?*std.DoublyLinkedList.Node,
 
     fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *CapPlotterCtx = @ptrCast(@alignCast(ctx));
