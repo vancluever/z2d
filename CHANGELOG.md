@@ -1,4 +1,4 @@
-## 0.9.0 (Unreleased)
+## 0.9.0 (October 9, 2025)
 
 ZIG 0.15.1 REQUIRED
 
