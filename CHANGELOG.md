@@ -26,8 +26,10 @@ Here, "source exclusive" means two things:
 1. When calling a draw operation (`Context.fill`, `Context.stroke`,
    `painter.fill`, or `painter.stroke`), you use either the default `.src_over`
    operator, or the `.src` operator, and:
-2. You use a single-pixel source, i.e., you set the source with
-   `Context.setSourceToPixel`.
+2. You use a single-pixel source (i.e., you set the source with
+   `Context.setSourceToPixel`), and the pixel is fully opaque, e.g., full
+   alpha, if using a pixel with alpha channel; note this includes alpha-only
+   pixels (`pixel.Alpha8` et al.).
 
 In these situations, the compositor is bypassed for a large amount of the
 rasterization operation (only being used sparingly for edge opacity) and opaque
