@@ -1,5 +1,10 @@
 ## 0.9.0 (Unreleased)
 
+ZIG 0.15.1 REQUIRED
+
+0.9.0 now requires Zig 0.15.1 or higher. For Zig 0.14.x versions, use 0.8.1 or
+earlier versions within the appropriate range.
+
 ENHANCEMENTS:
 
 * More performance enhancements:
@@ -7,6 +12,26 @@ ENHANCEMENTS:
     ([#150](https://github.com/vancluever/z2d/pull/150))
   - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149),
     [#152](https://github.com/vancluever/z2d/pull/152))
+
+Together, these two enhancements will yield massive gains on the naive path: 
+
+* Working edge sets will give a modest performance increase in cases with a
+  large amount of edges that do not span the whole draw area; anti-aliasing
+  will yield more gains due to scaling, of course.
+* However, the new source-exclusive fast-pathing enhancements yield an
+  approximate **2x-3x speedup**!
+
+Here, "source exclusive" means two things:
+
+1. When calling a draw operation (`Context.fill`, `Context.stroke`,
+   `painter.fill`, or `painter.stroke`), you use either the default `.src_over`
+   operator, or the `.src` operator, and:
+2. You use a single-pixel source, i.e., you set the source with
+   `Context.setSourceToPixel`.
+
+In these situations, the compositor is bypassed for a large amount of the
+rasterization operation (only being used sparingly for edge opacity) and opaque
+pixels are painted directly to the surface.
 
 ## 0.8.1 (September 11, 2025)
 
