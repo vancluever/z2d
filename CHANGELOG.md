@@ -17,7 +17,7 @@ ENHANCEMENTS:
   - Working edge sets ([#149](https://github.com/vancluever/z2d/pull/149),
     [#152](https://github.com/vancluever/z2d/pull/152))
 
-Together, these two enhancements will yield massive gains on the naive path: 
+Together, these two enhancements will yield massive gains on the default path: 
 
 * Working edge sets will give a modest performance increase in cases with a
   large amount of edges that do not span the whole draw area; anti-aliasing
