@@ -29,7 +29,7 @@ pub fn docsStep(
     const tar = b.addSystemCommand(&.{"sh"});
     tar.addArgs(&.{
         "-c",
-        b.fmt("cat {s} | tar --delete std builtin > {s}", .{ in_tar, out_tar }),
+        b.fmt("cat {s} | tar --delete std > {s}", .{ in_tar, out_tar }),
     });
 
     const mv = b.addSystemCommand(&.{ "mv", out_tar, in_tar });
