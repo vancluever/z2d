@@ -198,30 +198,41 @@ pub fn yBreakPoints(
     self: *const Polygon,
     alloc: mem.Allocator,
 ) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
+    const InsertFn = struct {
+        fn f(
+            insert_alloc: mem.Allocator,
+            insert_list: *std.ArrayListUnmanaged(i32),
+            insert_value: i32,
+        ) mem.Allocator.Error!void {
+            if (insert_list.items.len == 0) return insert_list.append(insert_alloc, insert_value);
+
+            var low: usize = 0;
+            var high: usize = insert_list.items.len;
+
+            while (low < high) {
+                const mid = low + (high - low) / 2;
+                if (insert_list.items[mid] < insert_value) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+
+            const insertion_idx = low;
+            if (insertion_idx == insert_list.items.len) {
+                return insert_list.append(insert_alloc, insert_value);
+            } else if (insert_list.items[insertion_idx] != insert_value) {
+                return insert_list.insert(insert_alloc, insertion_idx, insert_value);
+            }
+        }
+    };
+
     var result: std.ArrayListUnmanaged(i32) = try .initCapacity(alloc, self.edges.items.len * 2);
     errdefer result.deinit(alloc);
     for (self.edges.items) |e| {
-        result.appendAssumeCapacity(@intFromFloat(@round(e.top())));
-        result.appendAssumeCapacity(@intFromFloat(@round(e.bottom())));
+        try InsertFn.f(alloc, &result, @intFromFloat(@round(e.top())));
+        try InsertFn.f(alloc, &result, @intFromFloat(@round(e.bottom())));
     }
-
-    stdSort.pdq(i32, result.items, {}, stdSort.asc(i32));
-
-    // De-duplicate
-    var to: usize = 0;
-    for (0..result.items.len) |from| {
-        result.items[to] = result.items[from];
-        if (from == result.items.len - 1) {
-            to += 1;
-            break;
-        }
-
-        if (result.items[from] != result.items[from + 1]) {
-            to += 1;
-        }
-    }
-
-    result.shrinkAndFree(alloc, to);
 
     return result;
 }
