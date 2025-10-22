@@ -12,7 +12,7 @@ const Slope = @This();
 const debug = @import("std").debug;
 const math = @import("std").math;
 
-const Point = @import("Point.zig");
+const Point = @import("../Point.zig");
 
 dx: f64,
 dy: f64,

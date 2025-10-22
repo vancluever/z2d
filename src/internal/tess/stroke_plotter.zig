@@ -7,22 +7,22 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const options = @import("../../options.zig");
+const nodepkg = @import("../path_nodes.zig");
 const dashed_plotter = @import("dashed_plotter.zig");
-const nodepkg = @import("path_nodes.zig");
-const options = @import("../options.zig");
 
+const Transformation = @import("../../Transformation.zig");
+const Point = @import("../Point.zig");
 const Dasher = @import("Dasher.zig");
 const Face = @import("Face.zig");
 const Pen = @import("Pen.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
-const Point = @import("Point.zig");
+const PointBuffer = @import("point_buffer.zig").PointBuffer(2, 5);
 const Polygon = @import("Polygon.zig");
 const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
-const Transformation = @import("../Transformation.zig");
-const PointBuffer = @import("util.zig").PointBuffer(2, 5);
 
-const InternalError = @import("InternalError.zig").InternalError;
+const InternalError = @import("../InternalError.zig").InternalError;
 pub const Error = InternalError || mem.Allocator.Error;
 
 pub const PlotterOptions = struct {

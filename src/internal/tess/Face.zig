@@ -25,14 +25,14 @@ const debug = @import("std").debug;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-const nodepkg = @import("path_nodes.zig");
-const options = @import("../options.zig");
+const options = @import("../../options.zig");
+const nodepkg = @import("../path_nodes.zig");
 
+const Transformation = @import("../../Transformation.zig");
+const Point = @import("../Point.zig");
 const Pen = @import("Pen.zig");
-const Point = @import("Point.zig");
-const Slope = @import("Slope.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
-const Transformation = @import("../Transformation.zig");
+const Slope = @import("Slope.zig");
 
 p0: Point,
 p1: Point,

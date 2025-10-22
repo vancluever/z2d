@@ -7,9 +7,9 @@ const PlotterVTable = @This();
 
 const mem = @import("std").mem;
 
-const nodepkg = @import("path_nodes.zig");
+const nodepkg = @import("../path_nodes.zig");
 
-const InternalError = @import("InternalError.zig").InternalError;
+const InternalError = @import("../InternalError.zig").InternalError;
 
 pub const Error = InternalError || mem.Allocator.Error;
 

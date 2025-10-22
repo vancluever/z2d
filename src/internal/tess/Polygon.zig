@@ -8,12 +8,12 @@ const mem = @import("std").mem;
 const stdSort = @import("std").sort;
 const testing = @import("std").testing;
 
-const FillRule = @import("../options.zig").FillRule;
-const Point = @import("Point.zig");
-const InternalError = @import("InternalError.zig").InternalError;
+const FillRule = @import("../../options.zig").FillRule;
+const InternalError = @import("../InternalError.zig").InternalError;
+const Point = @import("../Point.zig");
 
-const runCases = @import("util.zig").runCases;
-const TestingError = @import("util.zig").TestingError;
+const runCases = @import("../util.zig").runCases;
+const TestingError = @import("../util.zig").TestingError;
 
 pub const Edge = struct {
     y0: f64,

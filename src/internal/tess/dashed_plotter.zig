@@ -6,26 +6,26 @@ const debug = @import("std").debug;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-const options = @import("../options.zig");
-const nodepkg = @import("path_nodes.zig");
+const options = @import("../../options.zig");
+const nodepkg = @import("../path_nodes.zig");
 
+const Transformation = @import("../../Transformation.zig");
+const Point = @import("../Point.zig");
 const Dasher = @import("Dasher.zig");
 const Face = @import("Face.zig");
 const Pen = @import("Pen.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
-const Point = @import("Point.zig");
+const PointBuffer = @import("point_buffer.zig").PointBuffer(2, 5);
 const Polygon = @import("Polygon.zig");
 const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
-const Transformation = @import("../Transformation.zig");
 
 const join = @import("stroke_plotter.zig").join;
 const plotOpenJoined = @import("stroke_plotter.zig").plotOpenJoined;
 const plotSingle = @import("stroke_plotter.zig").plotSingle;
-const PointBuffer = @import("util.zig").PointBuffer(2, 5);
 const PlotterOptions = @import("stroke_plotter.zig").PlotterOptions;
 
-const InternalError = @import("InternalError.zig").InternalError;
+const InternalError = @import("../InternalError.zig").InternalError;
 const Error = @import("stroke_plotter.zig").Error;
 
 pub fn plot(
