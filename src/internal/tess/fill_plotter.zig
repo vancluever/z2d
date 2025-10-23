@@ -7,15 +7,15 @@ const debug = @import("std").debug;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-const nodepkg = @import("path_nodes.zig");
+const nodepkg = @import("../path_nodes.zig");
 
-const Polygon = @import("Polygon.zig");
-const Point = @import("Point.zig");
-const Spline = @import("Spline.zig");
+const Point = @import("../Point.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
-const InternalError = @import("InternalError.zig").InternalError;
-const PointBuffer = @import("util.zig").PointBuffer(1, 3);
+const PointBuffer = @import("point_buffer.zig").PointBuffer(1, 3);
+const Polygon = @import("Polygon.zig");
+const Spline = @import("Spline.zig");
 
+const InternalError = @import("../InternalError.zig").InternalError;
 pub const Error = InternalError || mem.Allocator.Error;
 
 pub fn plot(

@@ -13,11 +13,12 @@ const std = @import("std");
 const math = @import("std").math;
 const mem = @import("std").mem;
 
-const arc = @import("arc.zig");
+const arc = @import("../arc.zig");
+
+const Transformation = @import("../../Transformation.zig");
+const Point = @import("../Point.zig");
 const Face = @import("Face.zig");
-const Point = @import("Point.zig");
 const Slope = @import("Slope.zig");
-const Transformation = @import("../Transformation.zig");
 
 const PenVertex = struct {
     point: Point,

@@ -12,8 +12,8 @@ const mem = @import("std").mem;
 const testing = @import("std").testing;
 const debug = @import("std").debug;
 
-const runCases = @import("util.zig").runCases;
-const TestingError = @import("util.zig").TestingError;
+const runCases = @import("../util.zig").runCases;
+const TestingError = @import("../util.zig").TestingError;
 
 /// A structure for representing run-length-encoded coverage for a single
 /// scanline. This facilities MSAA by taking supersampled co-ordinates and

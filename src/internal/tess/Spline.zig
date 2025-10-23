@@ -16,8 +16,8 @@ const Spline = @This();
 const std = @import("std");
 const mem = @import("std").mem;
 
-const nodepkg = @import("path_nodes.zig");
-const Point = @import("Point.zig");
+const nodepkg = @import("../path_nodes.zig");
+const Point = @import("../Point.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 
 // Initial points.
