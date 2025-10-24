@@ -194,56 +194,104 @@ pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) 
     return true;
 }
 
-pub fn yBreakPoints(
-    self: *const Polygon,
-    alloc: mem.Allocator,
-) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
-    const InsertFn = struct {
-        fn f(
-            insert_alloc: mem.Allocator,
-            insert_list: *std.ArrayListUnmanaged(i32),
-            insert_value: i32,
-        ) mem.Allocator.Error!void {
-            if (insert_list.items.len == 0) return insert_list.append(insert_alloc, insert_value);
-
-            var low: usize = 0;
-            var high: usize = insert_list.items.len;
-
-            while (low < high) {
-                const mid = low + (high - low) / 2;
-                if (insert_list.items[mid] < insert_value) {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-
-            const insertion_idx = low;
-            if (insertion_idx == insert_list.items.len) {
-                return insert_list.append(insert_alloc, insert_value);
-            } else if (insert_list.items[insertion_idx] != insert_value) {
-                return insert_list.insert(insert_alloc, insertion_idx, insert_value);
-            }
-        }
-    };
-
-    var result: std.ArrayListUnmanaged(i32) = try .initCapacity(alloc, self.edges.items.len * 2);
-    errdefer result.deinit(alloc);
-    for (self.edges.items) |e| {
-        try InsertFn.f(alloc, &result, @intFromFloat(@round(e.top())));
-        try InsertFn.f(alloc, &result, @intFromFloat(@round(e.bottom())));
-    }
-
-    return result;
-}
-
 pub const WorkingEdgeSet = struct {
+    polygon: *const Polygon,
     edges: []Edge,
     x_values: []i32,
-    dirs: []i2,
-    len: usize,
 
-    pub const empty: WorkingEdgeSet = .{ .edges = &.{}, .x_values = &.{}, .dirs = &.{}, .len = 0 };
+    pub fn init(alloc: mem.Allocator, polygon: *const Polygon) mem.Allocator.Error!WorkingEdgeSet {
+        // Allocate our scratch space for the whole of the length of the
+        // polygon edges. Note that we re-slice this often, so the source of
+        // truth for the length here is the actual number of polygon edges,
+        // which is const in the context of the working edge table; although we
+        // do re-order the edges, the number of them does not change.
+        const x_values_full = try alloc.alloc(i32, polygon.edges.items.len);
+        // Initialize the edges and x-value scratch space empty (implying an
+        // empty working edge set to start).
+        return .{
+            .polygon = polygon,
+            .edges = polygon.edges.items[0..0],
+            .x_values = x_values_full[0..0],
+        };
+    }
+
+    pub fn deinit(self: *WorkingEdgeSet, alloc: mem.Allocator) void {
+        // Reset the x-value scratch space to the full edge length before
+        // freeing.
+        self.x_values.len = self.polygon.edges.items.len;
+        alloc.free(self.x_values);
+        self.* = undefined;
+    }
+
+    pub fn breakpoints(
+        self: *WorkingEdgeSet,
+        alloc: mem.Allocator,
+    ) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
+        const InsertFn = struct {
+            fn f(
+                insert_alloc: mem.Allocator,
+                insert_list: *std.ArrayListUnmanaged(i32),
+                insert_value: i32,
+            ) mem.Allocator.Error!void {
+                if (insert_list.items.len == 0) return insert_list.append(insert_alloc, insert_value);
+
+                var low: usize = 0;
+                var high: usize = insert_list.items.len;
+
+                while (low < high) {
+                    const mid = low + (high - low) / 2;
+                    if (insert_list.items[mid] < insert_value) {
+                        low = mid + 1;
+                    } else {
+                        high = mid;
+                    }
+                }
+
+                const insertion_idx = low;
+                if (insertion_idx == insert_list.items.len) {
+                    return insert_list.append(insert_alloc, insert_value);
+                } else if (insert_list.items[insertion_idx] != insert_value) {
+                    return insert_list.insert(insert_alloc, insertion_idx, insert_value);
+                }
+            }
+        };
+
+        var result: std.ArrayListUnmanaged(i32) = try .initCapacity(alloc, self.polygon.edges.items.len * 2);
+        errdefer result.deinit(alloc);
+        for (self.polygon.edges.items) |e| {
+            try InsertFn.f(alloc, &result, @intFromFloat(@round(e.top())));
+            try InsertFn.f(alloc, &result, @intFromFloat(@round(e.bottom())));
+        }
+
+        return result;
+    }
+
+    pub fn rescan(self: *WorkingEdgeSet, line_y: i32) void {
+        if (self.polygon.edges.items.len == 0) return;
+
+        // We take our line measurements at the middle of the line; this helps
+        // "break the tie" with lines that fall exactly on point boundaries.
+        const line_y_middle = @as(f64, @floatFromInt(line_y)) + 0.5;
+
+        var to: usize = 0;
+        for (0..self.polygon.edges.items.len) |from| {
+            if (self.polygon.edges.items[from].top() < line_y_middle and
+                self.polygon.edges.items[from].bottom() >= line_y_middle)
+            {
+                if (from != to) mem.swap(
+                    Edge,
+                    &self.polygon.edges.items[to],
+                    &self.polygon.edges.items[from],
+                );
+                to += 1;
+            }
+        }
+
+        self.edges = self.polygon.edges.items[0..to];
+        self.x_values.len = to;
+
+        debug.assert(self.edges.len == self.x_values.len);
+    }
 
     pub fn inc(self: *WorkingEdgeSet, y: i32) void {
         const y_mid: f64 = @as(f64, @floatFromInt(y)) + 0.5;
@@ -263,11 +311,10 @@ pub const WorkingEdgeSet = struct {
             pub fn swap(ctx: @This(), a: usize, b: usize) void {
                 mem.swap(Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
                 mem.swap(i32, &ctx.s.x_values[a], &ctx.s.x_values[b]);
-                mem.swap(i2, &ctx.s.dirs[a], &ctx.s.dirs[b]);
             }
         };
 
-        stdSort.pdqContext(0, self.len, Context{ .s = self });
+        stdSort.pdqContext(0, self.x_values.len, Context{ .s = self });
     }
 
     pub fn filter(self: *WorkingEdgeSet, fill_rule: FillRule) []i32 {
@@ -281,13 +328,13 @@ pub const WorkingEdgeSet = struct {
                 // one after the other.
                 var winding_number: i32 = 0;
                 var to: usize = 0;
-                for (0..self.len) |from| {
+                for (0..self.x_values.len) |from| {
                     self.x_values[to] = self.x_values[from];
                     if (winding_number == 0) {
-                        winding_number += self.dirs[from];
+                        winding_number += self.edges[from].dir();
                         to += 1;
                     } else {
-                        winding_number += self.dirs[from];
+                        winding_number += self.edges[from].dir();
                         if (winding_number == 0) {
                             to += 1;
                         }
@@ -299,49 +346,6 @@ pub const WorkingEdgeSet = struct {
         }
     }
 };
-
-/// Caller is responsible for freeing the WorkingEdgeSet.
-pub fn xEdgesForY(
-    self: *const Polygon,
-    alloc: mem.Allocator,
-    line_y: i32,
-) mem.Allocator.Error!WorkingEdgeSet {
-    if (self.edges.items.len == 0) return .empty;
-
-    // We take our line measurements at the middle of the line; this helps
-    // "break the tie" with lines that fall exactly on point boundaries.
-    const line_y_middle = @as(f64, @floatFromInt(line_y)) + 0.5;
-
-    var to: usize = 0;
-    for (0..self.edges.items.len) |from| {
-        if (self.edges.items[from].top() < line_y_middle and
-            self.edges.items[from].bottom() >= line_y_middle)
-        {
-            if (from != to) mem.swap(Edge, &self.edges.items[to], &self.edges.items[from]);
-            to += 1;
-        }
-    }
-
-    const result_edges_s = self.edges.items[0..to];
-
-    // Reserve memory for our x-values
-    const x_values_s = try alloc.alloc(i32, result_edges_s.len);
-    errdefer alloc.free(x_values_s);
-
-    // Reserve memory and cache directions for each edge
-    const dirs_s = try alloc.alloc(i2, result_edges_s.len);
-    errdefer alloc.free(dirs_s);
-    for (result_edges_s, 0..) |edge, idx| dirs_s[idx] = edge.dir();
-
-    debug.assert(result_edges_s.len == x_values_s.len and result_edges_s.len == dirs_s.len);
-
-    return .{
-        .edges = result_edges_s,
-        .x_values = x_values_s,
-        .dirs = dirs_s,
-        .len = result_edges_s.len,
-    };
-}
 
 /// Represents a polyline (contour) that will be later assembled into a
 /// polygon, or converted to a set of edges to be added to a larger

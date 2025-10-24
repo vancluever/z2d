@@ -98,8 +98,14 @@ pub fn run(
         );
         errdefer mask_sfc_scaled.deinit(alloc);
 
+        // Our working edge set that survives a particular scanline iteration. This
+        // is re-fetched at particular breakpoints, but only incremented on
+        // otherwise.
+        var working_edge_set: Polygon.WorkingEdgeSet = try .init(alloc, &polygons);
+        defer working_edge_set.deinit(alloc);
+
         // Fetch our breakpoints
-        var y_breakpoints = try polygons.yBreakPoints(alloc);
+        var y_breakpoints = try working_edge_set.breakpoints(alloc);
         defer y_breakpoints.deinit(alloc);
         var y_breakpoint_idx: usize = y_breakpoint_idx: {
             for (y_breakpoints.items, 0..) |y, idx| {
@@ -112,28 +118,13 @@ pub fn run(
             return;
         };
 
-        // Our working edge set that survives a particular scanline iteration. This
-        // is re-fetched at particular breakpoints, but only incremented on
-        // otherwise.
-        var working_edge_set: Polygon.WorkingEdgeSet = .empty;
-
-        // Make an ArenaAllocator for our working edge set, this allows us to
-        // re-use the same memory after refresh by simply resetting the arena.
-        var edge_arena = heap.ArenaAllocator.init(alloc);
-        defer edge_arena.deinit();
-        const edge_alloc = edge_arena.allocator();
-
         for (0..@max(0, mask_height)) |y_u| {
             const y: i32 = @intCast(y_u);
             const dev_y: i32 = y + box_y0; // Device-space y-coordinate (still supersampled)
 
             if (dev_y >= y_breakpoints.items[y_breakpoint_idx]) {
                 // y-breakpoint passed, re-calculate our working edge set.
-                _ = edge_arena.reset(.retain_capacity);
-                working_edge_set = try polygons.xEdgesForY(
-                    edge_alloc,
-                    dev_y,
-                );
+                working_edge_set.rescan(dev_y);
                 if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
             }
 
