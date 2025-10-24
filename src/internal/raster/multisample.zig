@@ -103,8 +103,14 @@ pub fn run(
         }
     }
 
+    // Our working edge set that survives a particular scanline iteration. This
+    // is re-fetched at particular breakpoints, but only incremented on
+    // otherwise.
+    var working_edge_set: Polygon.WorkingEdgeSet = try .init(alloc, &polygons);
+    defer working_edge_set.deinit(alloc);
+
     // Fetch our breakpoints
-    var y_breakpoints = try polygons.yBreakPoints(alloc);
+    var y_breakpoints = try working_edge_set.breakpoints(alloc);
     defer y_breakpoints.deinit(alloc);
     var y_breakpoint_idx: usize = y_breakpoint_idx: {
         for (y_breakpoints.items, 0..) |y, idx| {
@@ -117,17 +123,6 @@ pub fn run(
         return;
     };
 
-    // Our working edge set that survives a particular scanline iteration. This
-    // is re-fetched at particular breakpoints, but only incremented on
-    // otherwise.
-    var working_edge_set: Polygon.WorkingEdgeSet = .empty;
-
-    // Make an ArenaAllocator for our working edge set, this allows us to
-    // re-use the same memory after refresh by simply resetting the arena.
-    var edge_arena = heap.ArenaAllocator.init(alloc);
-    defer edge_arena.deinit();
-    const edge_alloc = edge_arena.allocator();
-
     for (@max(0, start_scanline)..@max(0, end_scanline) + 1) |y_u| {
         defer coverage_buffer.reset();
         const y: i32 = @intCast(y_u);
@@ -137,11 +132,7 @@ pub fn run(
             const y_scanline_scaled: i32 = y_scaled + @as(i32, @intCast(y_offset));
             if (y_scanline_scaled >= y_breakpoints.items[y_breakpoint_idx]) {
                 // y-breakpoint passed, re-calculate our working edge set.
-                _ = edge_arena.reset(.retain_capacity);
-                working_edge_set = try polygons.xEdgesForY(
-                    edge_alloc,
-                    y_scanline_scaled,
-                );
+                working_edge_set.rescan(y_scanline_scaled);
                 if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
             }
 

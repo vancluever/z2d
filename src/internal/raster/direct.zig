@@ -48,8 +48,14 @@ pub fn run(
     const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
     const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
 
+    // Our working edge set that survives a particular scanline iteration. This
+    // is re-scanned at particular breakpoints, but only incremented on
+    // otherwise.
+    var working_edge_set: Polygon.WorkingEdgeSet = try .init(alloc, &polygons);
+    defer working_edge_set.deinit(alloc);
+
     // Fetch our breakpoints
-    var y_breakpoints = try polygons.yBreakPoints(alloc);
+    var y_breakpoints = try working_edge_set.breakpoints(alloc);
     defer y_breakpoints.deinit(alloc);
     var y_breakpoint_idx: usize = y_breakpoint_idx: {
         // Seek to our starting breakpoint, given a possible clamping of y=0
@@ -63,17 +69,6 @@ pub fn run(
         return;
     };
 
-    // Our working edge set that survives a particular scanline iteration. This
-    // is re-fetched at particular breakpoints, but only incremented on
-    // otherwise.
-    var working_edge_set: Polygon.WorkingEdgeSet = .empty;
-
-    // Make an ArenaAllocator for our working edge set, this allows us to
-    // re-use the same memory after refresh by simply resetting the arena.
-    var edge_arena = heap.ArenaAllocator.init(alloc);
-    defer edge_arena.deinit();
-    const edge_alloc = edge_arena.allocator();
-
     // Note that we have to add 1 to the end scanline here as our start -> end
     // boundaries above only account for+clamp to the last line to be scanned,
     // so our len is end + 1. This helps correct for scenarios like small
@@ -82,11 +77,7 @@ pub fn run(
         const y: i32 = @intCast(y_u);
         if (y >= y_breakpoints.items[y_breakpoint_idx]) {
             // y-breakpoint passed, re-calculate our working edge set.
-            _ = edge_arena.reset(.retain_capacity);
-            working_edge_set = try polygons.xEdgesForY(
-                edge_alloc,
-                y,
-            );
+            working_edge_set.rescan(y);
             if (y_breakpoint_idx < y_breakpoints.items.len - 1) y_breakpoint_idx += 1;
         }
 
