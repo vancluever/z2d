@@ -75,7 +75,7 @@ pub fn fill(
     const scale: f64 = switch (aa_mode) {
         .none => 1,
         .supersample_4x => supersample_scale,
-        .default, .multisample_4x => SparseCoverageBuffer.scale,
+        .default, .multisample_4x => multisample_rasterizer.scale,
     };
 
     var polygons = try fill_plotter.plot(
@@ -202,7 +202,7 @@ pub fn stroke(
     const scale: f64 = switch (aa_mode) {
         .none => 1,
         .supersample_4x => supersample_scale,
-        .default, .multisample_4x => SparseCoverageBuffer.scale,
+        .default, .multisample_4x => multisample_rasterizer.scale,
     };
 
     // NOTE: for now, we set a minimum thickness for the following options:
