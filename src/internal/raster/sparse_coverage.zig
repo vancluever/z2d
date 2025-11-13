@@ -108,25 +108,6 @@ pub const SparseCoverageBuffer = struct {
         self.putValue(x, coverage_value);
     }
 
-    pub fn setSpan(self: *SparseCoverageBuffer, x: u32, value: u8, len: u32) void {
-        self.extend(x, len);
-        var x_cur: u32 = x;
-        const x_end: u32 = x + len;
-        while (x_cur < x_end) {
-            var coverage_value, const coverage_len = self.get(x_cur);
-            coverage_value = value;
-            self.putValue(x_cur, coverage_value);
-            x_cur += coverage_len;
-        }
-    }
-
-    pub fn subSingle(self: *SparseCoverageBuffer, x: u32, value: u8) void {
-        self.extend(x, 1);
-        var coverage_value, _ = self.get(x);
-        coverage_value -= value;
-        self.putValue(x, coverage_value);
-    }
-
     /// Extends the buffer depending on the specified (x, len).
     ///
     /// When neither x nor len are out of range, extends the buffer by adding a
