@@ -196,7 +196,7 @@ fn RGBVec(comptime underlying_T: type) type {
         /// gamma-corrected.
         fn fromColorVec(src: [vector_length]color.Color) T {
             var result: T = undefined;
-            for (src, 0..) |c, i| {
+            inline for (src, 0..) |c, i| {
                 const s = underlying_T.fromColor(c);
                 result.r[i] = s.r;
                 result.g[i] = s.g;
@@ -231,7 +231,7 @@ fn RGBVec(comptime underlying_T: type) type {
             // math.pow is not implemented for vectors, so we need to do this
             // element-by-element.
             var result: T = undefined;
-            for (0..vector_length) |i| {
+            inline for (0..vector_length) |i| {
                 result.r[i] = math.pow(f32, src.r[i], underlying_T.gamma);
                 result.g[i] = math.pow(f32, src.g[i], underlying_T.gamma);
                 result.b[i] = math.pow(f32, src.b[i], underlying_T.gamma);
@@ -349,7 +349,7 @@ pub const HSL = struct {
     /// Vectorizes a slice of colors translated to HSL.
     fn fromColorVec(src: [vector_length]color.Color) T {
         var result: T = undefined;
-        for (src, 0..) |c, i| {
+        inline for (src, 0..) |c, i| {
             const s = color.HSL.fromColor(c);
             result.h[i] = s.h;
             result.s[i] = s.s;
@@ -482,7 +482,7 @@ fn lerpPolar(
 fn mBayer8x8Vec(x: i32, y: i32) @Vector(vector_length, f32) {
     // Construct our x-vector
     var _x: @Vector(vector_length, i32) = undefined;
-    for (0..vector_length) |i| _x[i] = x + @as(i32, @intCast(i));
+    inline for (0..vector_length) |i| _x[i] = x + @as(i32, @intCast(i));
 
     // Set up our xor-ed y-vector
     const _y = splat(i32, y) ^ _x;
@@ -507,7 +507,7 @@ fn mBayer8x8Vec(x: i32, y: i32) @Vector(vector_length, f32) {
 
 fn mBlueNoise64x64Vec(x: i32, y: i32) @Vector(vector_length, f32) {
     var _x: @Vector(vector_length, i32) = undefined;
-    for (0..vector_length) |i| _x[i] = x + @as(i32, @intCast(i));
+    inline for (0..vector_length) |i| _x[i] = x + @as(i32, @intCast(i));
     const _y = splat(i32, y);
 
     const _i64 = splat(i32, 64);

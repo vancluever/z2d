@@ -16,7 +16,7 @@ const Font = @This();
 
 const std = @import("std");
 const debug = @import("std").debug;
-const io = @import("std").io;
+const Io = @import("std").Io;
 const fs = @import("std").fs;
 const math = @import("std").math;
 const mem = @import("std").mem;
@@ -25,7 +25,7 @@ const testing = @import("std").testing;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
-file: io.FixedBufferStream([]const u8),
+file: Io.Reader,
 dir: Directory,
 meta: Meta,
 
@@ -75,7 +75,7 @@ pub const LoadBufferError = ValidateMagicError || Directory.InitError || Meta.In
 /// Loads and validates a font from a buffer. Do not use `deinit` when using
 /// this function, as it will produce illegal behavior.
 pub fn loadBuffer(buffer: []const u8) LoadBufferError!Font {
-    var file = io.fixedBufferStream(buffer);
+    var file = Io.Reader.fixed(buffer);
     try validateMagic(&file);
     const dir = try Directory.init(&file);
     const meta = try Meta.init(&file, dir);
@@ -107,7 +107,7 @@ const ValidateMagicError = error{
     InvalidFormat,
 } || FileError;
 
-fn validateMagic(file: *io.FixedBufferStream([]const u8)) ValidateMagicError!void {
+fn validateMagic(file: *Io.Reader) ValidateMagicError!void {
     var header = [_]u8{0} ** 4;
     try file.reader().readNoEof(&header);
     var header_ok: bool = false;
@@ -142,7 +142,7 @@ const Directory = struct {
         MissingRequiredTable,
     } || FileError;
 
-    fn init(file: *io.FixedBufferStream([]const u8)) InitError!Directory {
+    fn init(file: *Io.Reader) InitError!Directory {
         var result: Directory = result: {
             var r: Directory = undefined;
             inline for (@typeInfo(Directory).@"struct".fields) |f| {
@@ -279,7 +279,7 @@ const Meta = struct {
         InvalidIndexToLocFormat,
     } || FileError;
 
-    fn init(file: *io.FixedBufferStream([]const u8), dir: Directory) InitError!Meta {
+    fn init(file: *Io.Reader, dir: Directory) InitError!Meta {
         const cmap_subtable_offset: CmapSubtable = cmap_subtable_offset: {
             // We don't really do a lot of hard work here to look for the table; we
             // just look for either Windows or Unicode platform with the appropriate
