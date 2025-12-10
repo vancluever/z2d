@@ -3,6 +3,7 @@
 const builtin = @import("std").builtin;
 const debug = @import("std").debug;
 const mem = @import("std").mem;
+const Io = @import("std").Io;
 
 const colorpkg = @import("../color.zig");
 
@@ -99,4 +100,43 @@ pub fn hasField(comptime T: type, field_name: []const u8) bool {
         }
     }
     return false;
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerInt(reader: *Io.Reader, comptime T: type, endian: builtin.Endian) Io.Reader.Error!T {
+    const bytes = try readerBytesNoEof(reader, @divExact(@typeInfo(T).int.bits, 8));
+    return mem.readInt(T, &bytes, endian);
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerByteSigned(reader: *Io.Reader) Io.Reader.Error!i8 {
+    return @as(i8, @bitCast(try readerByte(reader)));
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerByte(reader: *Io.Reader) Io.Reader.Error!u8 {
+    var result: [1]u8 = undefined;
+    try reader.readSliceAll(&result);
+    return result[0];
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerSkipBytes(reader: *Io.Reader, num_bytes: u64) Io.Reader.Error!void {
+    const buf_size = 512;
+
+    var buf: [buf_size]u8 = undefined;
+    var remaining = num_bytes;
+
+    while (remaining > 0) {
+        const amt = @min(remaining, buf_size);
+        try reader.readSliceAll(buf[0..amt]);
+        remaining -= amt;
+    }
+}
+
+/// Pulled from old stdlib as this function has been removed.
+fn readerBytesNoEof(reader: *Io.Reader, comptime num_bytes: usize) Io.Reader.Error![num_bytes]u8 {
+    var bytes: [num_bytes]u8 = undefined;
+    try reader.readSliceAll(&bytes);
+    return bytes;
 }
