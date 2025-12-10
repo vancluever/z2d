@@ -91,6 +91,8 @@ const _077_oob_draw_full_outside = @import("077_oob_draw_full_outside.zig");
 const _078_double_close = @import("078_double_close.zig");
 const _079_fill_degenerate_lineto = @import("079_fill_degenerate_lineto.zig");
 const _080_fill_z2d_logo = @import("080_fill_z2d_logo.zig");
+const _081_stroke_hairline = @import("081_stroke_hairline.zig");
+const _082_stroke_hairline_clip = @import("082_stroke_hairline_clip.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -178,6 +180,8 @@ pub fn main() !void {
     try pathExportRun(alloc, _078_double_close);
     try pathExportRun(alloc, _079_fill_degenerate_lineto);
     try pathExportRun(alloc, _080_fill_z2d_logo);
+    try pathExportRun(alloc, _081_stroke_hairline);
+    try pathExportRun(alloc, _082_stroke_hairline_clip);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -500,6 +504,14 @@ test "079_fill_degenerate_lineto" {
 
 test "080_fill_z2d_logo" {
     try pathTestRun(testing.allocator, _080_fill_z2d_logo);
+}
+
+test "081_stroke_hairline" {
+    try pathTestRun(testing.allocator, _081_stroke_hairline);
+}
+
+test "082_stroke_hairline_clip" {
+    try pathTestRun(testing.allocator, _082_stroke_hairline_clip);
 }
 
 //////////////////////////////////////////////////////////////////////////////

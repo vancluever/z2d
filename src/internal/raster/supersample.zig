@@ -11,7 +11,6 @@ const Pattern = @import("../../pattern.zig").Pattern;
 const Surface = @import("../../surface.zig").Surface;
 const SurfaceType = @import("../../surface.zig").SurfaceType;
 const Polygon = @import("../tess/Polygon.zig");
-const fillReducesToSource = @import("shared.zig").fillReducesToSource;
 
 pub const Error = Surface.Error || mem.Allocator.Error;
 
