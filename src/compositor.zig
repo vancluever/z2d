@@ -721,7 +721,7 @@ const RGBA16Vec = struct {
                     .b = zero_int_vec,
                     .a = zero_int_vec,
                 };
-                for (0..vector_length) |i| {
+                inline for (0..vector_length) |i| {
                     const px = pixel.Alpha8.fromPixel(
                         @TypeOf(_src).T.getFromPacked(_src.buf, _src.px_offset + idx + i).asPixel(),
                     );
@@ -809,7 +809,7 @@ const RGBA16Vec = struct {
                 transposeFromVec(_dst[idx..end], self.underlying, limit);
             },
             inline .alpha4, .alpha2, .alpha1 => |_dst| {
-                for (0..vector_length) |i| {
+                inline for (0..vector_length) |i| {
                     const dst_t = @TypeOf(_dst).T;
                     dst_t.setInPacked(
                         _dst.buf,

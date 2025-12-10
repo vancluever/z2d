@@ -428,7 +428,7 @@ fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
 
 test "RGB/ARGB formats all export to same image" {
     const Context = @import("Context.zig");
-    const hash_bytes_int_T = @Type(.{ .int = .{ .signedness = .unsigned, .bits = sha256.digest_length * 8 } });
+    const hash_bytes_int_T = @Int(.unsigned, sha256.digest_length * 8);
     const alloc = testing.allocator;
     const width = 300;
     const height = 300;

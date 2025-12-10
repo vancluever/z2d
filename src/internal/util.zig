@@ -38,24 +38,20 @@ pub const TestingError = error{
 /// `@Vector(vector_length, T)`, to allow for SIMD and ease of utilization by
 /// the compositor.
 pub fn vectorize(comptime T: type) type {
-    var new_fields: [@typeInfo(T).@"struct".fields.len]builtin.Type.StructField = undefined;
+    const num = @typeInfo(T).@"struct".fields.len;
+    var field_names: [num][]const u8 = undefined;
+    var field_types: [num]type = undefined;
+    var field_attrs: [num]builtin.Type.StructField.Attributes = undefined;
     for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
-        new_fields[i] = .{
-            .name = f.name,
-            .type = @Vector(vector_length, f.type),
+        field_names[i] = f.name;
+        field_types[i] = @Vector(vector_length, f.type);
+        field_attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = @alignOf(field_types[i]),
             .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &new_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 /// Internal function for splatting, shorthand for
