@@ -719,7 +719,7 @@ fn testExportPNG(
 }
 
 fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output: bool) !void {
-    const hash_bytes_int_T = @Type(.{ .int = .{ .signedness = .unsigned, .bits = sha256.digest_length * 8 } });
+    const hash_bytes_int_T = @Int(.unsigned, sha256.digest_length * 8);
     const max_file_size = 10240000; // 10MB
 
     // We expect the file with the same name to be in spec/files
@@ -729,9 +729,9 @@ fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output:
 
     var used_fallback: bool = false;
     const expected_data = fs.cwd().readFileAlloc(
-        alloc,
         expected_filename,
-        max_file_size,
+        alloc,
+        .limited(max_file_size),
     ) catch |err| data: {
         // In the event of our MSAA tests, there might be a file ending in
         // "_smooth_multisample.png". Check that first, if that file isn't there,
@@ -746,7 +746,7 @@ fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output:
                 "_smooth.png",
             );
             defer alloc.free(expected_backup);
-            break :data try fs.cwd().readFileAlloc(alloc, expected_backup, max_file_size);
+            break :data try fs.cwd().readFileAlloc(expected_backup, alloc, .limited(max_file_size));
         }
 
         return err;
@@ -756,7 +756,7 @@ fn compareFiles(alloc: mem.Allocator, actual_filename: []const u8, print_output:
     var expected_hash: [sha256.digest_length]u8 = undefined;
     sha256.hash(expected_data, &expected_hash, .{});
 
-    const actual_data = try fs.cwd().readFileAlloc(alloc, actual_filename, max_file_size);
+    const actual_data = try fs.cwd().readFileAlloc(actual_filename, alloc, .limited(max_file_size));
     defer alloc.free(actual_data);
     var actual_hash: [sha256.digest_length]u8 = undefined;
     sha256.hash(actual_data, &actual_hash, .{});

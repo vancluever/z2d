@@ -22,6 +22,7 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const readerInt = @import("internal/util.zig").readerInt;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
@@ -34,6 +35,7 @@ pub const LoadFileError = LoadBufferError ||
     fs.File.OpenError ||
     mem.Allocator.Error ||
     fs.File.ReadError ||
+    fs.Dir.StatFileError ||
     error{
         /// The amount of bytes read did not match the size of the file.
         BytesReadMismatch,
@@ -80,7 +82,7 @@ pub fn loadBuffer(buffer: []const u8) LoadBufferError!Font {
     const dir = try Directory.init(&file);
     const meta = try Meta.init(&file, dir);
     // Reset our stream before we return it
-    try file.seekTo(0);
+    file.seek = 0;
 
     return .{
         .file = file,
@@ -98,18 +100,18 @@ pub fn deinit(self: *Font, alloc: mem.Allocator) void {
 
 /// Errors associated with reading font file data, generally an alias for file
 /// and stream read operations.
-pub const FileError = error{EndOfStream};
+pub const FileError = error{ EndOfStream, ReadFailed };
 
 /// Errors associated with validating the font file type.
 const ValidateMagicError = error{
     /// The font file's magic number (first u32) does not match a supported
     /// format.
     InvalidFormat,
-} || FileError;
+} || Io.Reader.Error;
 
 fn validateMagic(file: *Io.Reader) ValidateMagicError!void {
     var header = [_]u8{0} ** 4;
-    try file.reader().readNoEof(&header);
+    try file.readSliceAll(&header);
     var header_ok: bool = false;
     if (mem.eql(u8, &header, &.{ '1', 0, 0, 0 })) header_ok = true;
     if (mem.eql(u8, &header, "OTTO")) header_ok = true;
@@ -140,7 +142,7 @@ const Directory = struct {
 
         /// A required table is missing in the font's directory.
         MissingRequiredTable,
-    } || FileError;
+    } || Io.Reader.Error;
 
     fn init(file: *Io.Reader) InitError!Directory {
         var result: Directory = result: {
@@ -159,20 +161,20 @@ const Directory = struct {
         const table_dir_offset = 12;
         const table_dir_entry_len = 16;
 
-        try file.seekTo(table_num_offset);
-        const num_tables = try file.reader().readInt(u16, .big);
+        file.seek = table_num_offset;
+        const num_tables = try readerInt(file, u16, .big);
 
-        try file.seekTo(table_dir_offset);
+        file.seek = table_dir_offset;
 
         for (0..num_tables) |dir_idx| {
-            try file.seekTo(dir_idx * table_dir_entry_len + table_dir_offset);
+            file.seek = dir_idx * table_dir_entry_len + table_dir_offset;
             var entry_tag: [4]u8 = undefined;
-            try file.reader().readNoEof(&entry_tag);
+            try file.readSliceAll(&entry_tag);
             inline for (@typeInfo(Directory).@"struct".fields) |f| {
                 if (mem.eql(u8, &entry_tag, f.name)) {
-                    const checksum: u32 = try file.reader().readInt(u32, .big);
-                    const offset: u32 = try file.reader().readInt(u32, .big);
-                    const len: u32 = try file.reader().readInt(u32, .big);
+                    const checksum: u32 = try readerInt(file, u32, .big);
+                    const offset: u32 = try readerInt(file, u32, .big);
+                    const len: u32 = try readerInt(file, u32, .big);
 
                     // Validate the checksum of the table. This is a simple
                     // addition of the u32 (padded) words in the table,
@@ -183,15 +185,15 @@ const Directory = struct {
                     // checksumAdjustment value of zero when calculating for
                     // the "head" table.
                     var actual_checksum: u32 = 0;
-                    try file.seekTo(offset);
+                    file.seek = offset;
                     const is_head = mem.eql(u8, f.name, "head");
                     for (0..((len + 3) / 4)) |j| {
                         if (is_head and j == 2)
-                            _ = try file.reader().readInt(u32, .big)
+                            _ = try readerInt(file, u32, .big)
                         else
                             actual_checksum, _ = @addWithOverflow(
                                 actual_checksum,
-                                try file.reader().readInt(u32, .big),
+                                try readerInt(file, u32, .big),
                             );
                     }
 
@@ -277,7 +279,7 @@ const Meta = struct {
         /// value (neither 0 or 1). This likely means that the font is
         /// corrupted.
         InvalidIndexToLocFormat,
-    } || FileError;
+    } || Io.Reader.Error;
 
     fn init(file: *Io.Reader, dir: Directory) InitError!Meta {
         const cmap_subtable_offset: CmapSubtable = cmap_subtable_offset: {
@@ -299,13 +301,13 @@ const Meta = struct {
             const windows_encoding_bmp = 1;
             const windows_encoding_full = 10;
 
-            try file.seekTo(table_num_offset);
-            const num_tables = try file.reader().readInt(u16, .big);
+            file.seek = table_num_offset;
+            const num_tables = try readerInt(file, u16, .big);
 
             for (0..num_tables) |_| {
-                const platform_id = try file.reader().readInt(u16, .big);
-                const encoding_id = try file.reader().readInt(u16, .big);
-                const subtable_offset = try file.reader().readInt(u32, .big) + dir.cmap;
+                const platform_id = try readerInt(file, u16, .big);
+                const encoding_id = try readerInt(file, u16, .big);
+                const subtable_offset = try readerInt(file, u32, .big) + dir.cmap;
 
                 if (platform_id == encoding_platform_unicode) {
                     switch (encoding_id) {
@@ -335,22 +337,22 @@ const Meta = struct {
         const head_flags = dir.head + 14;
         const units_per_em_offset = dir.head + 18;
         const index_to_loc_format_offset = dir.head + 50;
-        try file.seekTo(head_flags);
+        file.seek = head_flags;
         const lsb_is_at_x_zero: bool = @bitCast(@as(
             u1,
-            @intCast(try file.reader().readInt(u16, .big) & 2 >> 1),
+            @intCast(try readerInt(file, u16, .big) & 2 >> 1),
         ));
-        try file.seekTo(index_to_loc_format_offset);
-        const index_to_loc_format = try file.reader().readInt(u16, .big);
-        try file.seekTo(units_per_em_offset);
-        const units_per_em = try file.reader().readInt(u16, .big);
+        file.seek = index_to_loc_format_offset;
+        const index_to_loc_format = try readerInt(file, u16, .big);
+        file.seek = units_per_em_offset;
+        const units_per_em = try readerInt(file, u16, .big);
 
         const advance_width_max_offset = dir.hhea + 10;
         const number_of_hmetrics_offset = dir.hhea + 34;
-        try file.seekTo(advance_width_max_offset);
-        const advance_width_max = try file.reader().readInt(u16, .big);
-        try file.seekTo(number_of_hmetrics_offset);
-        const number_of_hmetrics = try file.reader().readInt(u16, .big);
+        file.seek = advance_width_max_offset;
+        const advance_width_max = try readerInt(file, u16, .big);
+        file.seek = number_of_hmetrics_offset;
+        const number_of_hmetrics = try readerInt(file, u16, .big);
 
         return .{
             .cmap_subtable_offset = cmap_subtable_offset,

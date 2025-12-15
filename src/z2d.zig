@@ -145,7 +145,6 @@ pub const vector_length: usize = vector_length: {
 
 test {
     @import("std").testing.refAllDecls(@This());
-    _ = @import("internal/compat/compress/zlib.zig");
     _ = @import("internal/Glyph.zig");
     _ = @import("internal/raster/sparse_coverage.zig");
     _ = @import("internal/tess/fill_plotter.zig");

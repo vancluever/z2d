@@ -214,7 +214,7 @@ fn RGBVec(comptime underlying_T: type) type {
             // math.pow is not implemented for vectors, so we need to do this
             // element-by-element.
             var result: T = undefined;
-            for (0..vector_length) |i| {
+            inline for (0..vector_length) |i| {
                 result.r[i] = math.pow(f32, src.r[i], 1 / underlying_T.gamma);
                 result.g[i] = math.pow(f32, src.g[i], 1 / underlying_T.gamma);
                 result.b[i] = math.pow(f32, src.b[i], 1 / underlying_T.gamma);
@@ -527,7 +527,7 @@ test "LinearRGB.fromColorVec" {
     // intervals.
     var colors: [vector_length]color.Color = undefined;
     var expected: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const j: f32 = @floatFromInt(i);
         const k: f32 = @floatFromInt(vector_length);
         colors[i] = color.HSL.init(0, 1, 0.5 * (1 / k * j), 1).asColor();
@@ -550,7 +550,7 @@ test "LinearRGB.decodeRGBAVecRaw" {
     // fine.
     const px_rgba = pixel.RGBA.fromClamped(0.25, 0.5, 0.75, 0.9);
     var px_rgba_vec: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         px_rgba_vec.r[i] = px_rgba.r;
         px_rgba_vec.g[i] = px_rgba.g;
         px_rgba_vec.b[i] = px_rgba.b;
@@ -560,7 +560,7 @@ test "LinearRGB.decodeRGBAVecRaw" {
     const got_raw_vec = LinearRGB.decodeRGBAVecRaw(px_rgba_vec);
 
     var expected_raw_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_raw_vec.r[i] = got_raw.r;
         expected_raw_vec.g[i] = got_raw.g;
         expected_raw_vec.b[i] = got_raw.b;
@@ -573,7 +573,7 @@ test "LinearRGB.decodeRGBAVecRaw" {
 test "LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBAVecRaw" {
     const in = color.LinearRGB.init(0.25, 0.5, 0.75, 0.9);
     var in_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -584,14 +584,14 @@ test "LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBAVecRaw" {
     const got_raw = color.LinearRGB.encodeRGBARaw(in);
     const got_raw_vec = LinearRGB.encodeRGBAVecRaw(in_vec);
     var expected_vec: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
     var expected_raw_vec: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_raw_vec.r[i] = got_raw.r;
         expected_raw_vec.g[i] = got_raw.g;
         expected_raw_vec.b[i] = got_raw.b;
@@ -623,7 +623,7 @@ test "LinearRGB.demultiplyVec, divide by zero" {
 test "LinearRGB.removeGammaVec" {
     const in = color.LinearRGB.init(0.25, 0.5, 0.75, 0.9);
     var in_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -632,7 +632,7 @@ test "LinearRGB.removeGammaVec" {
     const got = in.removeGamma();
     const got_vec = LinearRGB.removeGammaVec(in_vec);
     var expected_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
@@ -644,7 +644,7 @@ test "LinearRGB.removeGammaVec" {
 test "LinearRGB.applyGammaVec" {
     const in = color.LinearRGB.init(0.25, 0.5, 0.75, 0.9);
     var in_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -654,7 +654,7 @@ test "LinearRGB.applyGammaVec" {
     const got = in.applyGamma();
     const got_vec = LinearRGB.applyGammaVec(in_vec);
     var expected_vec: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
@@ -672,7 +672,7 @@ test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
     var red_vec: LinearRGB.T = undefined;
     var green_vec: LinearRGB.T = undefined;
     var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         red_vec.r[i] = red.r;
         red_vec.g[i] = red.g;
         red_vec.b[i] = red.b;
@@ -689,7 +689,7 @@ test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
     // Build other params and expected RGBA set from interpolating individually
     var expected: LinearRGB.T = undefined;
     var expected_encoded: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const expected_scalar = color.LinearRGB.interpolate(red, green, t_vec[i]);
         const expected_encoded_scalar = color.LinearRGB.interpolateEncode(red, green, t_vec[i]);
         expected.r[i] = expected_scalar.r;
@@ -714,7 +714,7 @@ test "SRGB.fromColorVec" {
     // intervals.
     var colors: [vector_length]color.Color = undefined;
     var expected: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const j: f32 = @floatFromInt(i);
         const k: f32 = @floatFromInt(vector_length);
         colors[i] = color.HSL.init(0, 1, 0.5 * (1 / k * j), 1).asColor();
@@ -724,7 +724,7 @@ test "SRGB.fromColorVec" {
         expected.a[i] = 1;
     }
     const got = SRGB.fromColorVec(colors);
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         try testing.expectApproxEqAbs(expected.r[i], got.r[i], math.floatEps(f32));
         try testing.expectApproxEqAbs(expected.g[i], got.g[i], math.floatEps(f32));
         try testing.expectApproxEqAbs(expected.b[i], got.b[i], math.floatEps(f32));
@@ -735,7 +735,7 @@ test "SRGB.fromColorVec" {
 test "SRGB.encodeRGBAVec, SRGB.encodeRGBAVecRaw" {
     const in = color.SRGB.init(0.5296636, 0.7284379, 0.87481296, 0.9019608);
     var in_vec: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -746,14 +746,14 @@ test "SRGB.encodeRGBAVec, SRGB.encodeRGBAVecRaw" {
     const got_raw = color.SRGB.encodeRGBARaw(in);
     const got_raw_vec = SRGB.encodeRGBAVecRaw(in_vec);
     var expected_vec: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
     var expected_raw_vec: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_raw_vec.r[i] = got_raw.r;
         expected_raw_vec.g[i] = got_raw.g;
         expected_raw_vec.b[i] = got_raw.b;
@@ -766,7 +766,7 @@ test "SRGB.encodeRGBAVec, SRGB.encodeRGBAVecRaw" {
 test "SRGB.removeGammaVec" {
     const in = color.SRGB.init(0.25, 0.5, 0.75, 0.9);
     var in_vec: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -775,7 +775,7 @@ test "SRGB.removeGammaVec" {
     const got = in.removeGamma();
     const got_vec = SRGB.removeGammaVec(in_vec);
     var expected_vec: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
@@ -787,7 +787,7 @@ test "SRGB.removeGammaVec" {
 test "SRGB.applyGammaVec" {
     const in = color.SRGB.init(0.25, 0.5, 0.75, 0.9);
     var in_vec: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         in_vec.r[i] = in.r;
         in_vec.g[i] = in.g;
         in_vec.b[i] = in.b;
@@ -796,7 +796,7 @@ test "SRGB.applyGammaVec" {
     const got = in.applyGamma();
     const got_vec = SRGB.applyGammaVec(in_vec);
     var expected_vec: SRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         expected_vec.r[i] = got.r;
         expected_vec.g[i] = got.g;
         expected_vec.b[i] = got.b;
@@ -814,7 +814,7 @@ test "SRGB.interpolateEncodeVec" {
     var red_vec: SRGB.T = undefined;
     var green_vec: SRGB.T = undefined;
     var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         red_vec.r[i] = red.r;
         red_vec.g[i] = red.g;
         red_vec.b[i] = red.b;
@@ -831,7 +831,7 @@ test "SRGB.interpolateEncodeVec" {
     // Build other params and expected RGBA set from interpolating individually
     var expected: SRGB.T = undefined;
     var expected_encoded: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const expected_scalar = color.SRGB.interpolate(red, green, t_vec[i]);
         const expected_encoded_scalar = color.SRGB.interpolateEncode(red, green, t_vec[i]);
         expected.r[i] = expected_scalar.r;
@@ -855,7 +855,7 @@ test "HSL.fromColorVec" {
     // modification (see below).
     var colors: [vector_length]color.Color = undefined;
     var expected: HSL.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         // Bump j up so that it's 1-indexed versus 0-indexed, this ensures that
         // we don't actually init black (as we'll just get a zero-value HSL
         // back in that case).
@@ -876,7 +876,7 @@ test "HSL.toSRGBVec" {
     // the color unwrapped.
     var src_vec: HSL.T = undefined;
     var expected: LinearRGB.T = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const j: f32 = @floatFromInt(i);
         const k: f32 = @floatFromInt(vector_length);
         const src = color.HSL.init(0, 1, 0.5 * (1 / k * j), 1);
@@ -919,7 +919,7 @@ test "HSL.interpolateEncodeVec" {
     var red_vec: HSL.T = undefined;
     var blue_vec: HSL.T = undefined;
     var t_vec: @Vector(vector_length, f32) = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         red_vec.h[i] = red.h;
         red_vec.s[i] = red.s;
         red_vec.l[i] = red.l;
@@ -938,7 +938,7 @@ test "HSL.interpolateEncodeVec" {
     var expected_long: pixel_vector.RGBA16 = undefined;
     var expected_cw: pixel_vector.RGBA16 = undefined;
     var expected_ccw: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const expected_scalar_short = color.HSL.interpolateEncode(red, blue, t_vec[i], .shorter);
         const expected_scalar_long = color.HSL.interpolateEncode(red, blue, t_vec[i], .longer);
         const expected_scalar_cw = color.HSL.interpolateEncode(red, blue, t_vec[i], .increasing);
@@ -1198,7 +1198,7 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
             var t_vec: [vector_length]f32 = undefined;
             var expected: LinearRGB.T = undefined;
             var expected_encoded: pixel_vector.RGBA16 = undefined;
-            for (0..vector_length) |i| {
+            inline for (0..vector_length) |i| {
                 a_vec[i] = tc.a;
                 b_vec[i] = tc.b;
                 const j: f32 = @floatFromInt(i);
@@ -1298,7 +1298,7 @@ test "Dither.getRGBAVec" {
                 .scale = tc.scale,
             };
             var expected: pixel_vector.RGBA16 = undefined;
-            for (0..vector_length) |i| {
+            inline for (0..vector_length) |i| {
                 const expected_scalar = pixel.RGBA.fromPixel(d.getPixel(tc.x + @as(i32, @intCast(i)), tc.y));
                 expected.r[i] = expected_scalar.r;
                 expected.g[i] = expected_scalar.g;
