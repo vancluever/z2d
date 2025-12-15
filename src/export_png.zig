@@ -8,12 +8,13 @@ const crc32 = @import("std").hash.Crc32;
 const debug = @import("std").debug;
 const fmt = @import("std").fmt;
 const fs = @import("std").fs;
-const io = @import("std").io;
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
-const zlib = @import("internal/compat/compress/zlib.zig");
+// const zlib = @import("internal/compat/compress/zlib.zig");
+const flate = @import("std").compress.flate;
 
 const color = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
@@ -36,7 +37,7 @@ pub const Error = error{
 /// full set.
 pub const WriteToPNGFileError = Error ||
     fs.File.OpenError ||
-    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
+    Io.Writer.Error ||
     fs.File.WriteError;
 
 pub const WriteToPNGFileOptions = struct {
@@ -134,7 +135,7 @@ fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) (fs.File.WriteError ||
 }
 
 const WritePNGIDATStreamError = Error ||
-    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
+    Io.Writer.Error ||
     fs.File.WriteError;
 
 /// Write the IDAT stream (pixel data) for the PNG file.
@@ -149,30 +150,43 @@ fn writePNGIDATStream(
     const sfc_width: i32 = sfc.getWidth();
     const sfc_height: i32 = sfc.getHeight();
 
-    // Set a minimum remaining buffer size here that is reasonably
-    // sized. This may not be 100% scientific, but should account for
-    // the 248 byte deflate buffer (see buffer sizes in the stdlib at
-    // deflate/huffman_bit_writer.zig) plus 1 full write.
-    //
-    // This may change when we start supporting filter algorithms, and
-    // have to start writing whole scanlines at once (multiple
-    // scanlines, in fact).
-    const min_remaining: usize = 248 + (4 * vector_length + 1);
+    const IDATStream = struct {
+        const buffer_size = 16384;
 
-    // Our zlib buffer is 16K, but we may add the ability to tune this
-    // in the future.
-    //
-    // NOTE: When allowing for modifications to this value, there
-    // likely will need to be a minimum buffer size of ~512 bytes or
-    // something else reasonable. This is due to the minimum size we
-    // need for headers (see above).
-    var zlib_buffer_underlying = [_]u8{0} ** 16384;
-    var zlib_buffer = io.fixedBufferStream(&zlib_buffer_underlying);
-    var zlib_stream = try zlib.compressor(zlib_buffer.writer(), .{});
+        file: fs.File,
+        writer: Io.Writer,
 
-    // Initialize our remaining buffer size. We keep track of this as
-    // we need to flush regularly to output IDAT chunks.
-    var zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
+        fn drain(w: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
+            _ = splat;
+            if (data.len == 0) {
+                @panic("at least one data entry must be provided");
+            }
+            const stream_writer: *@This() = @fieldParentPtr("writer", w);
+            writePNGIDATSingle(stream_writer.file, w.buffer[0..w.end]) catch return error.WriteFailed;
+            const len: usize = @min(data[0].len, buffer_size);
+            @memcpy(w.buffer[0..len], data[0][0..len]);
+            w.end = len;
+            return len;
+        }
+    };
+
+    var idat_buffer = [_]u8{0} ** IDATStream.buffer_size;
+    var zlib_buffer = [_]u8{0} ** flate.max_window_len;
+    var idat_stream: IDATStream = .{
+        .file = file,
+        .writer = .{
+            .buffer = &idat_buffer,
+            .vtable = &.{
+                .drain = IDATStream.drain,
+            },
+        },
+    };
+    var zlib_stream: flate.Compress = try .init(
+        &idat_stream.writer,
+        &zlib_buffer,
+        .zlib,
+        flate.Compress.Options.default,
+    );
 
     // To encode, we read from our buffer, pixel-by-pixel, and convert
     // to a writable format (big-endian, no padding). We also need to
@@ -272,32 +286,9 @@ fn writePNGIDATStream(
                     },
                 }
             };
-            if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
-                // If we didn't actually write everything, it's an error.
-                return error.BytesWrittenMismatch;
-            }
 
-            // New remaining at this point is current_remaining - what was
-            // written
-            zlib_buffer_remaining -= nbytes;
-
-            if (zlib_buffer_remaining < min_remaining) {
-                // If we possibly could have less remaining than our minimum
-                // buffer size, we need to flush. This should always succeed.
-                try zlib_stream.flush();
-
-                // We can now check to see how much remaining is in our
-                // underlying buffer.
-                if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
-                    // We are now actually below the threshold, so write out an
-                    // IDAT chunk, and reset the buffer.
-                    try writePNGIDATSingle(file, zlib_buffer.getWritten());
-                    zlib_buffer.reset();
-                }
-
-                // Actual new remaining is now the amount remaining in the buffer.
-                zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
-            }
+            // Write out the encoded pixels to the stream
+            try zlib_stream.writer.writeAll(pixel_buffer[0..nbytes]);
 
             // Reset nbytes for the next run.
             nbytes = 0;
@@ -305,8 +296,8 @@ fn writePNGIDATStream(
     }
 
     // Close off and write the remaining bytes. This should always succeed.
-    try zlib_stream.finish();
-    try writePNGIDATSingle(file, zlib_buffer.getWritten());
+    try zlib_stream.writer.flush();
+    try idat_stream.writer.flush();
 }
 
 /// Returns a cast of u32 vectors to u8 (little endian).
@@ -323,7 +314,7 @@ fn encodeRGBAVec(
     comptime use_alpha: bool,
 ) [vector_length]u32 {
     var rgba_vector: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const rgba_scalar: if (in_argb) pixel.ARGB else pixel.RGBA = @bitCast(value[i]);
         rgba_vector.r[i] = rgba_scalar.r;
         rgba_vector.g[i] = rgba_scalar.g;
@@ -356,7 +347,7 @@ fn encodeRGBAVec(
 
     // Encode the value to return
     var result: @Vector(vector_length, u32) = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const rgba_scalar: pixel.RGBA = .{
             .r = @intCast(rgba_vector.r[i]),
             .g = @intCast(rgba_vector.g[i]),
@@ -463,7 +454,7 @@ test "RGB/ARGB formats all export to same image" {
                 .{},
             );
 
-            const actual_data = try fs.cwd().readFileAlloc(alloc, target_path, 10240000);
+            const actual_data = try fs.cwd().readFileAlloc(target_path, alloc, .limited(10240000));
             defer alloc.free(actual_data);
             if (expected_hash_) |expected_hash| {
                 var actual_hash: [sha256.digest_length]u8 = undefined;
