@@ -13,7 +13,6 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
-// const zlib = @import("internal/compat/compress/zlib.zig");
 const flate = @import("std").compress.flate;
 
 const color = @import("color.zig");
@@ -157,9 +156,10 @@ fn writePNGIDATStream(
         writer: Io.Writer,
 
         fn drain(w: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
-            _ = splat;
-            if (data.len == 0) {
-                @panic("at least one data entry must be provided");
+            switch (data.len) {
+                0 => @panic("at least one data entry must be provided"),
+                1 => if (splat == 0) return 0,
+                else => {},
             }
             const stream_writer: *@This() = @fieldParentPtr("writer", w);
             writePNGIDATSingle(stream_writer.file, w.buffer[0..w.end]) catch return error.WriteFailed;
