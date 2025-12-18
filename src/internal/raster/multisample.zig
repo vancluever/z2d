@@ -11,7 +11,8 @@ const Pattern = @import("../../pattern.zig").Pattern;
 const Surface = @import("../../surface.zig").Surface;
 const Polygon = @import("../tess/Polygon.zig");
 const SparseCoverageBuffer = @import("sparse_coverage.zig").SparseCoverageBuffer;
-const fillReducesToSource = @import("shared.zig").fillReducesToSource;
+const compositeOpaque = @import("shared.zig").compositeOpaque;
+const compositeOpacity = @import("shared.zig").compositeOpacity;
 
 const runCases = @import("../util.zig").runCases;
 const TestingError = @import("../util.zig").TestingError;
@@ -203,77 +204,22 @@ pub fn run(
                 0 => {}, // Skip zero entries
                 coverage_full => {
                     // Fully opaque span, so we can just composite directly (no alpha).
-                    if (operator == .clear) {
-                        surface.clearStride(x, y, coverage_len);
-                    } else if (pattern.* == .opaque_pattern and
-                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
-                    {
-                        surface.paintStride(x, y, coverage_len, pattern.opaque_pattern.pixel);
-                    } else {
-                        const dst_stride = surface.getStride(x, y, coverage_len);
-                        compositor.StrideCompositor.run(dst_stride, &.{.{
-                            .operator = operator,
-                            .src = switch (pattern.*) {
-                                .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                                .gradient => |g| .{ .gradient = .{
-                                    .underlying = g,
-                                    .x = x,
-                                    .y = y,
-                                } },
-                                .dither => .{ .dither = .{
-                                    .underlying = pattern.dither,
-                                    .x = x,
-                                    .y = y,
-                                } },
-                            },
-                        }}, .{ .precision = _precision });
-                    }
+                    compositeOpaque(operator, surface, pattern, x, y, coverage_len, _precision);
                 },
                 else => {
                     // Span with some degree of (> 0, < max) opacity, so we
                     // need to grab that value, turn it into an alpha8 pixel,
                     // and composite that across our span.
-                    if (operator == .clear) {
-                        surface.clearStride(x, y, coverage_len);
-                    } else if (pattern.* == .opaque_pattern and
-                        fillReducesToSource(operator, pattern.opaque_pattern.pixel))
-                    {
-                        surface.compositeStride(
-                            x,
-                            y,
-                            coverage_len,
-                            pattern.opaque_pattern.pixel,
-                            operator,
-                            @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
-                        );
-                    } else {
-                        const dst_stride = surface.getStride(x, y, coverage_len);
-                        const mask_px: pixel.Pixel = .{ .alpha8 = .{
-                            .a = @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
-                        } };
-                        compositor.StrideCompositor.run(dst_stride, &.{
-                            .{
-                                .operator = .dst_in,
-                                .dst = switch (pattern.*) {
-                                    .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                                    .gradient => |g| .{ .gradient = .{
-                                        .underlying = g,
-                                        .x = x,
-                                        .y = y,
-                                    } },
-                                    .dither => .{ .dither = .{
-                                        .underlying = pattern.dither,
-                                        .x = x,
-                                        .y = y,
-                                    } },
-                                },
-                                .src = .{ .pixel = mask_px },
-                            },
-                            .{
-                                .operator = operator,
-                            },
-                        }, .{ .precision = precision });
-                    }
+                    compositeOpacity(
+                        operator,
+                        surface,
+                        pattern,
+                        x,
+                        y,
+                        coverage_len,
+                        _precision,
+                        @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                    );
                 },
             }
 
