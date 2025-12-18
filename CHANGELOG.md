@@ -1,6 +1,13 @@
-## 0.9.1-pre (Unreleased)
+## 0.10.0 (Unreleased)
 
-Bumped version for dev.
+ENHANCEMENTS:
+
+* Hairline stroke is now supported while stroking. Under this mode, strokes are
+  drawn using actual line drawing algorithms versus being tessellated to whole
+  polygons, and as such render at exactly one display unit wide (e.g., 1
+  pixel). This option ignores several line style options; see the description
+  of `Context.setHairline` or the `hairline` option in `painter.StrokeOpts`
+  for more details.
 
 ## 0.9.0 (October 9, 2025)
 
