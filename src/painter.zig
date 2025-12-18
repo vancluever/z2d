@@ -10,6 +10,7 @@ const compositor = @import("compositor.zig");
 const options = @import("options.zig");
 
 const fill_plotter = @import("internal/tess/fill_plotter.zig");
+const polyline_plotter = @import("internal/tess/polyline_plotter.zig");
 const stroke_plotter = @import("internal/tess/stroke_plotter.zig");
 
 const Pattern = @import("pattern.zig").Pattern;
@@ -18,6 +19,7 @@ const Transformation = @import("Transformation.zig");
 const InternalError = @import("internal/InternalError.zig").InternalError;
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const direct_rasterizer = @import("internal/raster/direct.zig");
+const hairline_rasterizer = @import("internal/raster/hairline.zig");
 const multisample_rasterizer = @import("internal/raster/multisample.zig");
 const supersample_rasterizer = @import("internal/raster/supersample.zig");
 const SparseCoverageBuffer = @import("internal/raster/sparse_coverage.zig").SparseCoverageBuffer;
@@ -165,6 +167,15 @@ pub const StrokeOpts = struct {
     /// warping due to a warped scale (e.g., different x and y scale), and any
     /// respective capping.
     transformation: Transformation = Transformation.identity,
+
+    /// Sets hairline mode. In hairline mode, all lines are drawn using their
+    /// minimum line width (effectively zero or one pixel or display unit,
+    /// depending on the implementation).
+    ///
+    /// This option ignores several other options, such as dashes (for the time
+    /// being), line cap and join modes, and other associated options such as
+    /// miter limit, line width, and the transformation matrix.
+    hairline: bool = false,
 };
 
 /// Errors related to the `stroke` operation.
@@ -198,6 +209,21 @@ pub fn stroke(
         .none
     else
         opts.anti_aliasing_mode;
+
+    // We can fast-path here if we're using hairline stroking.
+    if (opts.hairline) {
+        var contours = try polyline_plotter.plot(alloc, nodes, opts.tolerance);
+        defer contours.deinit(alloc);
+        hairline_rasterizer.run(
+            surface,
+            pattern,
+            contours,
+            opts.operator,
+            opts.precision,
+            opts.anti_aliasing_mode,
+        );
+        return;
+    }
 
     const scale: f64 = switch (aa_mode) {
         .none => 1,

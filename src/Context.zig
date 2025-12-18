@@ -48,6 +48,7 @@ dash_offset: f64 = 0,
 dither: Dither.Type = .none,
 fill_rule: options.FillRule = .non_zero,
 font_size: f64 = 16.0,
+hairline: bool = false,
 line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
 line_width: f64 = 2.0,
@@ -397,6 +398,26 @@ pub fn deviceToUserDistance(self: *Context, x: *f64, y: *f64) Transformation.Err
     try self.transformation.deviceToUserDistance(x, y);
 }
 
+/// Returns whether hairline stroking is enabled in the context.
+pub fn getHairline(self: *Context) bool {
+    return self.hairline;
+}
+
+/// Sets hairline stroking. Hairline stroking is designed to guarantee stroking
+/// at a minimum viable width that is possible without artifacts (usually
+/// equivalent to 1 pixel or display unit).
+///
+/// Note that hairline stroking ignores several stroke options: line cap modes,
+/// line join modes, and other associated options such as miter limit, line
+/// width, and the transformation matrix (used when plotting line widths) are
+/// all ignored when using hairline stroking.
+///
+/// Dashed lines are also not supported in hairline stroking, but will be at a
+/// later time.
+pub fn setHairline(self: *Context, hairline: bool) void {
+    self.hairline = hairline;
+}
+
 /// Rests the path set, clearing all nodes and state.
 pub fn resetPath(self: *Context) void {
     self.path.reset();
@@ -575,6 +596,7 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
             .precision = self.precision,
             .tolerance = self.tolerance,
             .transformation = self.transformation,
+            .hairline = self.hairline,
         },
     );
 }

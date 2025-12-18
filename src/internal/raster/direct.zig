@@ -9,7 +9,7 @@ const Pattern = @import("../../pattern.zig").Pattern;
 const Surface = @import("../../surface.zig").Surface;
 const InternalError = @import("../InternalError.zig").InternalError;
 const Polygon = @import("../tess/Polygon.zig");
-const fillReducesToSource = @import("shared.zig").fillReducesToSource;
+const commpositeOpaque = @import("shared.zig").compositeOpaque;
 
 pub fn run(
     alloc: mem.Allocator,
@@ -115,31 +115,7 @@ pub fn run(
             }
 
             if (fill_len > 0) {
-                if (operator == .clear) {
-                    surface.clearStride(start_x, y, @max(0, fill_len));
-                } else if (pattern.* == .opaque_pattern and
-                    fillReducesToSource(operator, pattern.opaque_pattern.pixel))
-                {
-                    surface.paintStride(start_x, y, @max(0, fill_len), pattern.opaque_pattern.pixel);
-                } else {
-                    const dst_stride = surface.getStride(start_x, y, @max(0, fill_len));
-                    compositor.StrideCompositor.run(dst_stride, &.{.{
-                        .operator = operator,
-                        .src = switch (pattern.*) {
-                            .opaque_pattern => .{ .pixel = pattern.opaque_pattern.pixel },
-                            .gradient => |g| .{ .gradient = .{
-                                .underlying = g,
-                                .x = start_x,
-                                .y = y,
-                            } },
-                            .dither => .{ .dither = .{
-                                .underlying = pattern.dither,
-                                .x = start_x,
-                                .y = y,
-                            } },
-                        },
-                    }}, .{ .precision = _precision });
-                }
+                commpositeOpaque(operator, surface, pattern, start_x, y, @max(0, fill_len), _precision);
             }
 
             if (!bounded and end_clear_len > 0) {

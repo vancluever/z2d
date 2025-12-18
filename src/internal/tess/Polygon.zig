@@ -421,6 +421,26 @@ pub const Contour = struct {
         self.len += other.len;
         other.len = 0;
     }
+
+    /// Convenience functionality for a set of polylines over an ArrayList.
+    pub const List = struct {
+        list: std.ArrayListUnmanaged(Contour),
+
+        pub const empty: List = .{ .list = .empty };
+
+        pub fn deinit(self: *List, alloc: mem.Allocator) void {
+            for (self.list.items) |*c| {
+                c.deinit(alloc);
+            }
+
+            self.list.deinit(alloc);
+            self.* = undefined;
+        }
+
+        pub fn append(self: *List, alloc: mem.Allocator, contour: Contour) mem.Allocator.Error!void {
+            try self.list.append(alloc, contour);
+        }
+    };
 };
 
 test "Polygon.inBox" {
