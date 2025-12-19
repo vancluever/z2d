@@ -29,7 +29,7 @@ const Transformation = @import("Transformation.zig");
 const Font = @import("Font.zig");
 const Glyph = @import("internal/Glyph.zig");
 
-pub const ShowTextOpts = struct {
+pub const ShowTextOptions = struct {
     /// The transformation matrix to use when drawing text. This is used as the
     /// initial matrix when tracing font outlines.
     transformation: Transformation = Transformation.identity,
@@ -39,7 +39,7 @@ pub const ShowTextOpts = struct {
     size: f64 = 16.0,
 
     /// Options passed down to the underlying `fill` operation.
-    fill_opts: painter.FillOpts,
+    fill_opts: painter.FillOptions,
 };
 
 pub const ShowTextError = error{
@@ -75,7 +75,7 @@ pub fn show(
     utf8: []const u8,
     x: f64,
     y: f64,
-    opts: ShowTextOpts,
+    opts: ShowTextOptions,
 ) ShowTextError!void {
     var glyphs: std.AutoHashMapUnmanaged(u21, Glyph) = .empty;
     defer glyphs.deinit(alloc);
