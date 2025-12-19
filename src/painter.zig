@@ -172,9 +172,9 @@ pub const StrokeOpts = struct {
     /// minimum line width (effectively zero or one pixel or display unit,
     /// depending on the implementation).
     ///
-    /// This option ignores several other options, such as dashes (for the time
-    /// being), line cap and join modes, and other associated options such as
-    /// miter limit, line width, and the transformation matrix.
+    /// This option ignores several other options, such as line cap and join
+    /// modes, and other associated options such as miter limit, line width,
+    /// and the transformation matrix.
     hairline: bool = false,
 };
 
@@ -212,7 +212,13 @@ pub fn stroke(
 
     // We can fast-path here if we're using hairline stroking.
     if (opts.hairline) {
-        var contours = try polyline_plotter.plot(alloc, nodes, opts.tolerance);
+        var contours = try polyline_plotter.plot(
+            alloc,
+            nodes,
+            opts.tolerance,
+            opts.dashes,
+            opts.dash_offset,
+        );
         defer contours.deinit(alloc);
         hairline_rasterizer.run(
             surface,
