@@ -411,9 +411,6 @@ pub fn getHairline(self: *Context) bool {
 /// line join modes, and other associated options such as miter limit, line
 /// width, and the transformation matrix (used when plotting line widths) are
 /// all ignored when using hairline stroking.
-///
-/// Dashed lines are also not supported in hairline stroking, but will be at a
-/// later time.
 pub fn setHairline(self: *Context, hairline: bool) void {
     self.hairline = hairline;
 }
