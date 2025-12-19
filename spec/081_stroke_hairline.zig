@@ -14,7 +14,7 @@ const sub_sfc_height = 300;
 
 pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
-    const height = 1200;
+    const height = 2100;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
     var context = z2d.Context.init(alloc, &sfc);
@@ -54,6 +54,41 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         context.translate(150, 900);
         defer context.setIdentity();
         try drawDots(&context);
+    }
+
+    // Same as above (save the single-path dots) but with dashes. We've
+    // adjusted the offset to straddle the midpoint in the first triangle.
+    context.setDashes(&.{ 20, 5 });
+    context.setDashOffset(-6);
+    {
+        context.translate(0, 1200);
+        defer context.setIdentity();
+        try drawTriangle(&context);
+    }
+    {
+        context.translate(300, 1200);
+        defer context.setIdentity();
+        try drawSquare(&context);
+    }
+    {
+        context.translate(0, 1500);
+        defer context.setIdentity();
+        try drawStar(&context);
+    }
+    {
+        context.translate(300, 1500);
+        defer context.setIdentity();
+        try drawBezier(&context);
+    }
+    {
+        context.translate(0, 1800);
+        defer context.setIdentity();
+        try drawCircle(&context);
+    }
+    {
+        context.translate(300, 1800);
+        defer context.setIdentity();
+        try drawEllipse(&context);
     }
 
     return sfc;

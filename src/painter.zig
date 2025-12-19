@@ -25,7 +25,7 @@ const supersample_rasterizer = @import("internal/raster/supersample.zig");
 const SparseCoverageBuffer = @import("internal/raster/sparse_coverage.zig").SparseCoverageBuffer;
 const supersample_scale = @import("surface.zig").supersample_scale;
 
-pub const FillOpts = struct {
+pub const FillOptions = struct {
     /// The anti-aliasing mode to use with the fill operation.
     anti_aliasing_mode: options.AntiAliasMode = .default,
 
@@ -60,7 +60,7 @@ pub fn fill(
     surface: *Surface,
     pattern: *const Pattern,
     nodes: []const PathNode,
-    opts: FillOpts,
+    opts: FillOptions,
 ) FillError!void {
     if (nodes.len == 0) return;
     if (!PathNode.isClosedNodeSet(nodes)) return error.PathNotClosed;
@@ -126,7 +126,7 @@ pub fn fill(
     }
 }
 
-pub const StrokeOpts = struct {
+pub const StrokeOptions = struct {
     /// The anti-aliasing mode to use with the stroke operation.
     anti_aliasing_mode: options.AntiAliasMode = .default,
 
@@ -172,9 +172,9 @@ pub const StrokeOpts = struct {
     /// minimum line width (effectively zero or one pixel or display unit,
     /// depending on the implementation).
     ///
-    /// This option ignores several other options, such as dashes (for the time
-    /// being), line cap and join modes, and other associated options such as
-    /// miter limit, line width, and the transformation matrix.
+    /// This option ignores several other options, such as line cap and join
+    /// modes, and other associated options such as miter limit, line width,
+    /// and the transformation matrix.
     hairline: bool = false,
 };
 
@@ -192,7 +192,7 @@ pub fn stroke(
     surface: *Surface,
     pattern: *const Pattern,
     nodes: []const PathNode,
-    opts: StrokeOpts,
+    opts: StrokeOptions,
 ) StrokeError!void {
     // Attempt to inverse the matrix supplied to ensure it can be inverted
     // farther down.
@@ -212,7 +212,13 @@ pub fn stroke(
 
     // We can fast-path here if we're using hairline stroking.
     if (opts.hairline) {
-        var contours = try polyline_plotter.plot(alloc, nodes, opts.tolerance);
+        var contours = try polyline_plotter.plot(
+            alloc,
+            nodes,
+            opts.tolerance,
+            opts.dashes,
+            opts.dash_offset,
+        );
         defer contours.deinit(alloc);
         hairline_rasterizer.run(
             surface,

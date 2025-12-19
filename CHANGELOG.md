@@ -7,7 +7,11 @@ ENHANCEMENTS:
   polygons, and as such render at exactly one display unit wide (e.g., 1
   pixel). This option ignores several line style options; see the description
   of `Context.setHairline` or the `hairline` option in `painter.StrokeOpts`
-  for more details.
+  for more details. ([#162](https://github.com/vancluever/z2d/pull/162),
+  [#163](https://github.com/vancluever/z2d/pull/163))
+
+* Some minor changes to naming of some API options types to better match
+  convention. ([#164](https://github.com/vancluever/z2d/pull/164))
 
 ## 0.9.0 (October 9, 2025)
 
