@@ -1,4 +1,8 @@
-## 0.10.0 (Unreleased)
+## 0.10.1-pre (Unreleased)
+
+Bumped version for dev.
+
+## 0.10.0 (December 28, 2025)
 
 ENHANCEMENTS:
 
