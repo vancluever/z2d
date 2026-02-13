@@ -92,7 +92,7 @@ See the [`spec/`](spec/) directory for a number of rudimentary usage examples.
 ## Contributing
 
 Note that public pull requests to this repository are closed. See
-[CONTRIBUTING.md](/CONTRIBUTING.md) for more details.
+[`CONTRIBUTING.md`](/CONTRIBUTING.md) for more details.
 
 ## LICENSE and acknowledgments 
 
