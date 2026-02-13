@@ -89,6 +89,11 @@ View the documentation for the latest release at:
 
 See the [`spec/`](spec/) directory for a number of rudimentary usage examples.
 
+## Contributing
+
+Note that public pull requests to this repository are closed. See
+[CONTRIBUTING.md](/CONTRIBUTING.md) for more details.
+
 ## LICENSE and acknowledgments 
 
 z2d itself is licensed MPL 2.0; see the LICENSE file for further details.
