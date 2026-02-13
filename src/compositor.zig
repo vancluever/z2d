@@ -263,6 +263,10 @@ pub const SurfaceCompositor = struct {
             /// entirety of the destination. In this case, the composition must be
             /// positioned at the origin of destination (i.e., dst_x=0, dst_y=0),
             /// if it isn't, it's a no-op.
+            ///
+            /// RGB pixels with alpha channels (`pixel.ARGB`, `pixel.RGBA`)
+            /// *must* be pre-multiplied, any that are not will cause
+            /// safety-checked undefined behavior.
             pixel: pixel.Pixel,
 
             /// Represents a surface to use in this operation.
@@ -474,6 +478,10 @@ pub const StrideCompositor = struct {
 
             /// Represents a single pixel, used individually or broadcast across a
             /// vector depending on the operation.
+            ///
+            /// RGB pixels with alpha channels (`pixel.ARGB`, `pixel.RGBA`)
+            /// *must* be pre-multiplied, any that are not will cause
+            /// safety-checked undefined behavior.
             pixel: pixel.Pixel,
 
             /// Represents a stride of pixel data. Must be as long or longer

@@ -1,6 +1,10 @@
-## 0.10.1-pre (Unreleased)
+## 0.11.0 (Unreleased)
 
-Bumped version for dev.
+ENHANCEMENTS:
+
+* `fill` and `stroke` calls (both in `Context` and unmanaged) will now return a
+  `PixelSourceNotPreMultiplied` error if used with a single-pixel source that
+  has not been correctly pre-multiplied.
 
 ## 0.10.0 (December 28, 2025)
 

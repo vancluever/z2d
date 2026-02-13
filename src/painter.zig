@@ -52,6 +52,11 @@ pub const FillError = error{
     /// The supplied path (and any sub-paths) have not been explicitly closed,
     /// which is required by the fill operation.
     PathNotClosed,
+
+    /// The single-pixel source data is an RGB-with-alpha-channel type, but the
+    /// value has not been correctly pre-multiplied and will cause overflows
+    /// with compositing. See `pixel.ARGB` or `pixel.RGBA` for more details.
+    PixelSourceNotPreMultiplied,
 } || Surface.Error || InternalError || mem.Allocator.Error;
 
 /// Runs a fill operation on the path set represented by `nodes`.
@@ -62,6 +67,14 @@ pub fn fill(
     nodes: []const PathNode,
     opts: FillOptions,
 ) FillError!void {
+    switch (pattern.*) {
+        .opaque_pattern => |o| switch (o.pixel) {
+            inline .argb, .rgba => |px| if (!px.canDemultiply()) return error.PixelSourceNotPreMultiplied,
+            else => {},
+        },
+        else => {},
+    }
+
     if (nodes.len == 0) return;
     if (!PathNode.isClosedNodeSet(nodes)) return error.PathNotClosed;
 
@@ -182,7 +195,12 @@ pub const StrokeOptions = struct {
 ///
 /// **Note for autodoc viewers:** `std.mem.Allocator.Error` is a member of this
 /// set, but is not shown because `std` is pruned from our autodoc.
-pub const StrokeError = Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
+pub const StrokeError = error{
+    /// The single-pixel source data is an RGB-with-alpha-channel type, but the
+    /// value has not been correctly pre-multiplied and will cause overflows
+    /// with compositing. See `pixel.ARGB` or `pixel.RGBA` for more details.
+    PixelSourceNotPreMultiplied,
+} || Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
 
 /// Runs a stroke operation on the path set represented by `nodes`. The path(s)
 /// is/are transformed to one or more polygon(s) representing the line(s),
@@ -194,6 +212,14 @@ pub fn stroke(
     nodes: []const PathNode,
     opts: StrokeOptions,
 ) StrokeError!void {
+    switch (pattern.*) {
+        .opaque_pattern => |o| switch (o.pixel) {
+            inline .argb, .rgba => |px| if (!px.canDemultiply()) return error.PixelSourceNotPreMultiplied,
+            else => {},
+        },
+        else => {},
+    }
+
     // Attempt to inverse the matrix supplied to ensure it can be inverted
     // farther down.
     _ = try opts.transformation.inverse();
@@ -331,5 +357,37 @@ test "stroke uninvertible matrix error" {
             .tx = 5,
             .ty = 6,
         } },
+    ));
+}
+
+test "fill, non pre-multiplied pixel" {
+    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
+    defer sfc.deinit(testing.allocator);
+    try testing.expectError(error.PixelSourceNotPreMultiplied, fill(
+        testing.allocator,
+        &sfc,
+        &.{
+            .opaque_pattern = .{
+                .pixel = .{ .rgba = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xAA } },
+            },
+        },
+        &.{},
+        .{},
+    ));
+}
+
+test "stroke, non pre-multiplied pixel" {
+    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
+    defer sfc.deinit(testing.allocator);
+    try testing.expectError(error.PixelSourceNotPreMultiplied, stroke(
+        testing.allocator,
+        &sfc,
+        &.{
+            .opaque_pattern = .{
+                .pixel = .{ .rgba = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF, .a = 0xAA } },
+            },
+        },
+        &.{},
+        .{},
     ));
 }

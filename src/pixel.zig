@@ -284,6 +284,12 @@ pub const ARGB = packed struct(u32) {
     pub fn demultiply(self: ARGB) ARGB {
         return RGBA_T(@This()).demultiply(self);
     }
+
+    /// Returns `true` if the value can be de-multipled. This ultimately
+    /// validates that the value is safe for compositor operations.
+    pub fn canDemultiply(self: ARGB) bool {
+        return RGBA_T(@This()).canDemultiply(self);
+    }
 };
 
 /// Describes a 32-bit RGBA format (or ABGR when described a little-endian).
@@ -346,6 +352,12 @@ pub const RGBA = packed struct(u32) {
     /// As a special case, a zero alpha de-multiplies into transparent black.
     pub fn demultiply(self: RGBA) RGBA {
         return RGBA_T(@This()).demultiply(self);
+    }
+
+    /// Returns `true` if the value can be de-multipled. This ultimately
+    /// validates that the value is safe for compositor operations.
+    pub fn canDemultiply(self: RGBA) bool {
+        return RGBA_T(@This()).canDemultiply(self);
     }
 };
 
@@ -487,6 +499,18 @@ fn RGBA_T(T: type) type {
                 .b = @intCast(@as(u16, self.b) * 255 / self.a),
                 .a = self.a,
             };
+        }
+
+        fn canDemultiply(self: T) bool {
+            debug.assert(is_rgba);
+            if (self.a == 0) return true;
+            inline for (.{ "r", "g", "b" }) |f| {
+                if (@as(u16, @field(self, f)) * 255 / self.a > 255) {
+                    return false;
+                }
+            }
+
+            return true;
         }
     };
 }
@@ -1385,6 +1409,88 @@ test "Pixel.fromColor" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             try testing.expectEqualDeep(tc.expected, Pixel.fromColor(tc.args));
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "ARGB.canDemultiply" {
+    const name = "ARGB.canDemultiply";
+    const cases = [_]struct {
+        name: []const u8,
+        px: ARGB,
+        expected: bool,
+    }{
+        .{
+            .name = "good",
+            .px = .{ .r = 127, .g = 127, .b = 127, .a = 128 },
+            .expected = true,
+        },
+        .{
+            .name = "good, zero alpha",
+            .px = .{ .r = 180, .g = 180, .b = 180, .a = 0 }, // Deliberately bad values cuz this is fast-pathed
+            .expected = true,
+        },
+        .{
+            .name = "bad, r",
+            .px = .{ .r = 180, .g = 127, .b = 127, .a = 128 },
+            .expected = false,
+        },
+        .{
+            .name = "bad, g",
+            .px = .{ .r = 127, .g = 180, .b = 127, .a = 128 },
+            .expected = false,
+        },
+        .{
+            .name = "bad, b",
+            .px = .{ .r = 127, .g = 127, .b = 180, .a = 128 },
+            .expected = false,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqual(tc.expected, tc.px.canDemultiply());
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "RGBA.canDemultiply" {
+    const name = "RGBA.canDemultiply";
+    const cases = [_]struct {
+        name: []const u8,
+        px: RGBA,
+        expected: bool,
+    }{
+        .{
+            .name = "good",
+            .px = .{ .r = 127, .g = 127, .b = 127, .a = 128 },
+            .expected = true,
+        },
+        .{
+            .name = "good, zero alpha",
+            .px = .{ .r = 180, .g = 180, .b = 180, .a = 0 }, // Deliberately bad values cuz this is fast-pathed
+            .expected = true,
+        },
+        .{
+            .name = "bad, r",
+            .px = .{ .r = 180, .g = 127, .b = 127, .a = 128 },
+            .expected = false,
+        },
+        .{
+            .name = "bad, g",
+            .px = .{ .r = 127, .g = 180, .b = 127, .a = 128 },
+            .expected = false,
+        },
+        .{
+            .name = "bad, b",
+            .px = .{ .r = 127, .g = 127, .b = 180, .a = 128 },
+            .expected = false,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            try testing.expectEqual(tc.expected, tc.px.canDemultiply());
         }
     };
     try runCases(name, cases, TestFn.f);
