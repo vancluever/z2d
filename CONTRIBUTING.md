@@ -6,12 +6,7 @@
 > feel free to [open an issue](https://github.com/vancluever/z2d/issues/new)
 > with any questions, bugs, or feature requests.
 
-Pull requests to the z2d project are restricted. Any pull request opened will
-likely be closed using the [Vouch](https://github.com/mitchellh/vouch)
-workflow, with a message directing you to this document to explain why.
-
-Note that the project does not accept public pull requests and there are no
-plans to change this for the foreseeable future. If you have a feature request
+Pull requests to the z2d project are restricted. If you have a feature request
 or bug, please open an issue to get further help.
 
 **Please do not use AI to open issues**. If you are using AI or an agent to
@@ -33,12 +28,10 @@ will not burn out as the maintainer and principal author.
 
 Finally, while the z2d project has luckily not yet been affected by this, the
 increasing trend of AI-submitted work has made me loath to keep my projects
-open to external contributions in general. Vouch has a [great section
-explaining this](https://github.com/mitchellh/vouch/blob/f0591095f3c46406301604874d2482797fab7bab/README.md#why).
-On a personal level, I am not very interested in even having to engage with
-content created by AI coding agents and/or other tools (see last section).
-**This is not a blanket judgment of the work produced by such tools, or those
-that use them.** To each their own.
+open to external contributions in general. On a personal level, I am not very
+interested in even having to engage with content created by AI coding agents
+and/or other tools. **This is not a blanket judgment of the work produced by
+such tools, or those that use them.** To each their own.
 
 ## Open source, not open contribution
 
