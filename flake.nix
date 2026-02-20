@@ -1,7 +1,8 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    { self, nixpkgs }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -10,27 +11,29 @@
         "x86_64-linux"
       ];
 
-      defaultForEachSupportedSystem = (func:
+      defaultForEachSupportedSystem = (
+        func:
         nixpkgs.lib.genAttrs supportedSystems (system: {
           default = func system;
         })
       );
     in
     {
-      devShells = defaultForEachSupportedSystem
-        (system:
-          let
-            pkgs = import nixpkgs {
-              inherit system;
-            };
-          in
-          pkgs.mkShell {
-            packages = with pkgs; [
-              zig_0_15
-              zls
-              python3
-            ];
-          }
-        );
+      devShells = defaultForEachSupportedSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+          };
+        in
+        pkgs.mkShell {
+          packages = with pkgs; [
+            kcov
+            python3
+            zig_0_15
+            zls
+          ];
+        }
+      );
     };
 }

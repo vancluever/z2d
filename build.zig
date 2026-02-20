@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024-2025 Chris Marchesi
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// Returns a step that generates our documentation, with all unnecessary
 /// dependencies filtered out (currently this is "std" and "builtin").
@@ -100,6 +101,30 @@ pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step
     return &tar.step;
 }
 
+/// A step that runs kcov on an artifact binary (requires kcov to be
+/// installed).
+pub fn coverStep(b: *std.Build, artifact: *std.Build.Step.Compile, clean: bool) *std.Build.Step {
+    const dir = b.pathJoin(
+        &.{ b.install_prefix, "cover" },
+    );
+
+    const coverage_command = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=z2d", dir });
+    coverage_command.addArtifactArg(artifact);
+
+    if (clean) {
+        const clean_command = b.addSystemCommand(&.{ "rm", "-rf", dir });
+        coverage_command.step.dependOn(&clean_command.step);
+    }
+
+    const open_command = b.addSystemCommand(&.{
+        if (builtin.target.os.tag == .linux) "xdg-open" else "open",
+        b.pathJoin(&.{ dir, "index.html" }),
+    });
+
+    open_command.step.dependOn(&coverage_command.step);
+    return &open_command.step;
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -135,14 +160,36 @@ pub fn build(b: *std.Build) void {
         "filter",
         "Test filter for \"test\" or \"spec\" target (repeat for multiple filters)",
     ) orelse &[0][]const u8{};
-    const test_step = b.addTest(.{
+    const llvm = b.option(
+        bool,
+        "llvm",
+        "Override use of llvm in tests (default: test=false, spec=true)",
+    );
+    const cover = b.option(
+        bool,
+        "cover",
+        "Generate and open coverage report for test or spec steps (implies llvm=true)",
+    ) orelse false;
+    const clean = b.option(
+        bool,
+        "clean",
+        "Clean coverage directory when running",
+    ) orelse false;
+    const test_compile = b.addTest(.{
         .root_module = z2d,
         .filters = test_filters,
+        .use_llvm = if (cover) true else llvm orelse false,
     });
-    const test_run = b.addRunArtifact(test_step);
-    b.step("test", "Run unit tests").dependOn(&test_run.step);
+    const test_step = b.step("test", "Run unit tests");
+    if (cover) {
+        const cover_step = coverStep(b, test_compile, clean);
+        test_step.dependOn(cover_step);
+    } else {
+        const test_run = b.addRunArtifact(test_compile);
+        test_step.dependOn(&test_run.step);
+    }
     var check_step = b.step("check", "Build, but don't run, unit tests");
-    check_step.dependOn(&test_step.step);
+    check_step.dependOn(&test_compile.step);
 
     /////////////////////////////////////////////////////////////////////////
     // Spec tests
@@ -168,14 +215,14 @@ pub fn build(b: *std.Build) void {
             break :spec b.addExecutable(.{
                 .name = "spec",
                 .root_module = z2d_spec,
-                .use_llvm = true,
+                .use_llvm = llvm orelse true,
             })
         else
             break :spec b.addTest(.{
                 .name = "spec",
                 .root_module = z2d_spec,
                 .filters = test_filters,
-                .use_llvm = true,
+                .use_llvm = llvm orelse true,
             });
     };
     spec_test.root_module.addImport("z2d", z2d);
