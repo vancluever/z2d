@@ -10,7 +10,13 @@
     inputs.zig-overlay.follows = "zig-overlay";
   };
 
-  outputs = { self, nixpkgs, zig-overlay, zls }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      zig-overlay,
+      zls,
+    }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -19,27 +25,29 @@
         "x86_64-linux"
       ];
 
-      defaultForEachSupportedSystem = (func:
+      defaultForEachSupportedSystem = (
+        func:
         nixpkgs.lib.genAttrs supportedSystems (system: {
           default = func system;
         })
       );
     in
     {
-      devShells = defaultForEachSupportedSystem
-        (system:
-          let
-            pkgs = import nixpkgs {
-              inherit system;
-            };
-          in
-          pkgs.mkShell {
-            packages = with pkgs; [
-              zig-overlay.packages.${system}.master
-              zls.packages.${system}.zls
-              python3
-            ];
-          }
-        );
+      devShells = defaultForEachSupportedSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+          };
+        in
+        pkgs.mkShell {
+          packages = with pkgs; [
+            kcov
+            python3
+            zig-overlay.packages.${system}.master
+            zls.packages.${system}.zls
+          ];
+        }
+      );
     };
 }
