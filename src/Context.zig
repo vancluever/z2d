@@ -12,6 +12,7 @@
 //! the patterns used here as an example.
 const Context = @This();
 
+const Io = @import("std").Io;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
@@ -28,6 +29,7 @@ const Surface = @import("surface.zig").Surface;
 const Font = @import("Font.zig");
 const Transformation = @import("Transformation.zig");
 
+io: Io,
 alloc: mem.Allocator,
 path: Path,
 surface: *Surface,
@@ -61,11 +63,12 @@ transformation: Transformation = Transformation.identity,
 /// Initializes a `Context` with the passed in allocator and surface. Call
 /// `deinit` to release any resources managed solely by the context, such as
 /// the managed `Path`.
-pub fn init(alloc: mem.Allocator, surface: *Surface) Context {
+pub fn init(io: Io, alloc: mem.Allocator, surface: *Surface) Context {
     return .{
         .alloc = alloc,
         .surface = surface,
         .path = .empty,
+        .io = io,
     };
 }
 
@@ -309,7 +312,7 @@ pub fn setTolerance(self: *Context, tolerance: f64) void {
 /// another `setFontToFile` or `setFontToBuffer` call.
 pub fn setFontToFile(self: *Context, filename: []const u8) Font.LoadFileError!void {
     self.deinitFont();
-    self.font = .{ .file = try Font.loadFile(self.alloc, filename) };
+    self.font = .{ .file = try Font.loadFile(self.io, self.alloc, filename) };
 }
 
 /// Sets the font to use with `showText`, using a supplied buffer of externally
@@ -658,9 +661,10 @@ fn wrapDither(self: *Context) Pattern {
 
 test "deinit after allocating path elements" {
     const alloc = testing.allocator;
+    const io = testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
-    var context = Context.init(alloc, &sfc);
+    var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.moveTo(10, 10);
     try context.lineTo(20, 20);
@@ -670,9 +674,10 @@ test "deinit after allocating path elements" {
 
 test "setFontToFile, deinit" {
     const alloc = testing.allocator;
+    const io = testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
-    var context = Context.init(alloc, &sfc);
+    var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
     try testing.expect(context.font == .file);
@@ -681,9 +686,10 @@ test "setFontToFile, deinit" {
 
 test "setFontToBuffer, deinit" {
     const alloc = testing.allocator;
+    const io = testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
-    var context = Context.init(alloc, &sfc);
+    var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
     try testing.expect(context.font == .buffer);
@@ -692,9 +698,10 @@ test "setFontToBuffer, deinit" {
 
 test "setFontToFile, deinitFont" {
     const alloc = testing.allocator;
+    const io = testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
-    var context = Context.init(alloc, &sfc);
+    var context = Context.init(io, alloc, &sfc);
     // NOTE: No deinit here for the context. We want to test deinitFont
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.
@@ -706,9 +713,10 @@ test "setFontToFile, deinitFont" {
 
 test "setFontToBuffer, deinitFont" {
     const alloc = testing.allocator;
+    const io = testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
-    var context = Context.init(alloc, &sfc);
+    var context = Context.init(io, alloc, &sfc);
     // NOTE: No deinit here for the context. We want to test deinitFont
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.

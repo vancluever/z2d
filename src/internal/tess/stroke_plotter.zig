@@ -578,7 +578,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
         // p0 -> p1 is equal
         const alloc = testing.allocator;
-        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
         try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
@@ -602,7 +602,7 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
         // p1 -> p2 is equal
         const alloc = testing.allocator;
-        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
         try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } });
@@ -628,7 +628,7 @@ test "slope difference below epsilon does not produce NaN" {
     {
         // p1 -> p2 is equal
         const alloc = testing.allocator;
-        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(
             alloc,

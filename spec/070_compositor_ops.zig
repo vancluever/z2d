@@ -8,6 +8,7 @@
 //! then with alpha), then float, (fully opaque, then alpha). Note that the
 //! compositor will automatically switch to floating point precision for
 //! operators that are not supported by integer precision.
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -15,7 +16,7 @@ const z2d = @import("z2d");
 
 pub const filename = "070_compositor_ops";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 460;
     const height = 3090;
     var sfc = try z2d.Surface.initPixel(
@@ -29,6 +30,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         for (0..2) |j| {
             try draw(
                 alloc,
+                io,
                 &sfc,
                 @intCast(10 + 110 * j),
                 @intCast(10 + 110 * i),
@@ -41,6 +43,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         for (2..4) |j| {
             try draw(
                 alloc,
+                io,
                 &sfc,
                 @intCast(10 + 110 * j),
                 @intCast(10 + 110 * i),
@@ -57,6 +60,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
 
 fn draw(
     alloc: mem.Allocator,
+    io: Io,
     main_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,
@@ -78,7 +82,7 @@ fn draw(
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, 100, 100);
     defer scratch_sfc.deinit(alloc);
 
-    var context = z2d.Context.init(alloc, &scratch_sfc);
+    var context = z2d.Context.init(io, alloc, &scratch_sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
     context.setPrecision(precision);

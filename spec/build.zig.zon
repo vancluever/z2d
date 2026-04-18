@@ -2,12 +2,12 @@
     .name = .spec,
     .version = "0.0.0",
     .fingerprint = 0xc00e173ec5152bb9,
-    .minimum_zig_version = "0.15.1",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .z2d = .{ .path = ".." },
         .zbench = .{
-            .url = "git+https://github.com/hendriknielaender/zBench?ref=main#7069bb9c3e2e4773ff93995a85238b8e08039ba0",
-            .hash = "zbench-0.11.0-YTdc75klAQDX2m3fa_EHmQA_wJDgBIGiWXXX091e3qUQ",
+            .url = "https://github.com/hendriknielaender/zBench/archive/refs/tags/v0.13.0.tar.gz",
+            .hash = "zbench-0.13.0-YTdc7xVBAQCCMC-IdLLuotBeiNNNm8k9Pi2V4VYqrwfI",
         },
     },
     .paths = .{

@@ -44,7 +44,7 @@
           packages = with pkgs; [
             kcov
             python3
-            zig-overlay.packages.${system}.master
+            zig-overlay.packages.${system}."0.16.0"
             zls.packages.${system}.zls
           ];
         }

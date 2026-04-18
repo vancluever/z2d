@@ -755,7 +755,7 @@ pub const Stop = struct {
     /// gradient to gradient as it may cause the index to go out of sync.
     const List = struct {
         current_idx: usize = 0,
-        l: std.ArrayListUnmanaged(Stop) = .{},
+        l: std.ArrayListUnmanaged(Stop) = .empty,
         interpolation_method: InterpolationMethod,
 
         /// Releases any memory allocated using `add`.

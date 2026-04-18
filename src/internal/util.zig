@@ -14,7 +14,7 @@ const vector_length = @import("../z2d.zig").vector_length;
 /// Internal table test helper. Passes in an array of structs representing test
 /// cases. "name" is the only expected field, otherwise it's entirely handled
 /// by `f`.
-pub fn runCases(name: []const u8, cases: anytype, f: *const fn (case: anytype) TestingError!void) !void {
+pub fn runCases(name: []const u8, cases: anytype, comptime f: *const fn (case: anytype) TestingError!void) !void {
     for (cases) |tc| {
         f(tc) catch |err| {
             debug.print("FAIL: {s}/{s}\n", .{ name, tc.name });
