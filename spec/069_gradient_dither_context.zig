@@ -7,6 +7,7 @@
 //! alpha4 part and in reverse, black to white).
 //!
 //! This also tests blue noise (not tested in the other test).
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -14,7 +15,7 @@ const z2d = @import("z2d");
 
 pub const filename = "069_gradient_dither_context";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     var dst_sfc = try z2d.Surface.init(.image_surface_alpha4, alloc, 400, 150);
     var gradient = z2d.Gradient.init(.{
         .type = .{ .linear = .{
@@ -27,7 +28,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     defer gradient.deinit(alloc);
     try gradient.addStop(alloc, 0, .{ .rgba = .{ 0, 0, 0, 0 } });
     try gradient.addStop(alloc, 1, .{ .rgba = .{ 1, 1, 1, 1 } });
-    var context = z2d.Context.init(alloc, &dst_sfc);
+    var context = z2d.Context.init(io, alloc, &dst_sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
     context.setSource(gradient.asPattern());

@@ -426,7 +426,7 @@ test "scale" {
 }
 
 test "rotate" {
-    const angle = math.pi / 2.0;
+    const angle = @as(f64, math.pi) / 2.0;
     const s = @sin(angle);
     const c = @cos(angle);
     try testing.expectEqualDeep(Transformation{

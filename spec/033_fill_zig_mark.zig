@@ -7,13 +7,14 @@
 //! The [Zig logo](https://github.com/ziglang/logo) and logomark are licensed
 //! CC-BY-SA 4.0. To view a copy of the license, visit
 //! https://creativecommons.org/licenses/by-sa/4.0/.
+const Io = @import("std").Io;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
 pub const filename = "033_fill_zig_mark";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 153;
     const height = 140;
     var sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);
@@ -40,7 +41,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     // </g>
     // </svg>
 
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
     context.setAntiAliasingMode(aa_mode);

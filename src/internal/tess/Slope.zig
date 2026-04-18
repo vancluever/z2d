@@ -55,7 +55,7 @@ pub fn compare(a: Slope, b: Slope) i32 {
     // clockwise/counterclockwise direction, etc).
     const cmp = math.sign(a.dy * bdx - bdy * a.dx);
     if (cmp != 0) {
-        return @intFromFloat(cmp);
+        return cmp;
     }
 
     // Handle special cases where our comparison is zero (tie breakers).

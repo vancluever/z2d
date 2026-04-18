@@ -120,7 +120,7 @@ const SplinePlotterCtx = struct {
 
 test "degenerate line_to" {
     const alloc = testing.allocator;
-    var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+    var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
     defer nodes.deinit(alloc);
     try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
     try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
@@ -154,7 +154,7 @@ test "degenerate close" {
     {
         // move_to -> line_to
         const alloc = testing.allocator;
-        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
         try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });
@@ -176,7 +176,7 @@ test "degenerate close" {
     {
         // double close
         const alloc = testing.allocator;
-        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .{};
+        var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
         try nodes.append(alloc, .{ .line_to = .{ .point = .{ .x = 10, .y = 10 } } });

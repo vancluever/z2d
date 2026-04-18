@@ -2,6 +2,7 @@
 //   Copyright © 2024-2025 Chris Marchesi
 
 //! Case: Covers clip cases for hairline stroking.
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -9,7 +10,8 @@ const z2d = @import("z2d");
 
 pub const filename = "082_stroke_hairline_clip";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+    _ = io;
     const width = 200;
     const height = cases.len / 2 * 100;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

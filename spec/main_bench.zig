@@ -2,6 +2,7 @@
 //   Copyright © 2024-2025 Chris Marchesi
 
 const builtin = @import("builtin");
+const Io = @import("std").Io;
 const debug = @import("std").debug;
 const fs = @import("std").fs;
 const fmt = @import("std").fmt;
@@ -123,7 +124,6 @@ pub fn main() !void {
         _ = debug_allocator.deinit();
     };
 
-    var stdout = fs.File.stdout().writerStreaming(&.{});
     var bench = zbench.Benchmark.init(alloc, .{ .track_allocations = switch (builtin.mode) {
         .Debug, .ReleaseSafe => false,
         .ReleaseFast, .ReleaseSmall => true,
@@ -217,7 +217,9 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _081_stroke_hairline);
     try addPathBenchmark(&bench, _082_stroke_hairline_clip);
 
-    try bench.run(&stdout.interface);
+    var threaded: Io.Threaded = .init_single_threaded;
+    const io = threaded.io();
+    try bench.run(io, Io.File.stdout());
 }
 
 fn addCompositorBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
@@ -236,8 +238,12 @@ fn CompositorBenchmark(
     subject: anytype,
 ) type {
     return struct {
-        fn f(alloc: mem.Allocator) void {
-            var sfc = subject.render(alloc) catch |err| {
+        fn f(
+            alloc: mem.Allocator,
+        ) void {
+            var threaded: Io.Threaded = .init_single_threaded;
+            const io = threaded.io();
+            var sfc = subject.render(alloc, io) catch |err| {
                 debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };
@@ -252,7 +258,9 @@ fn PathBenchmark(
 ) type {
     return struct {
         fn f(alloc: mem.Allocator) void {
-            var sfc = subject.render(alloc, aa_mode) catch |err| {
+            var threaded: Io.Threaded = .init_single_threaded;
+            const io = threaded.io();
+            var sfc = subject.render(alloc, io, aa_mode) catch |err| {
                 debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };

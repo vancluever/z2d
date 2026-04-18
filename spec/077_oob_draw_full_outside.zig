@@ -4,19 +4,20 @@
 //! Case: Interrogates out-of-bounds drawing under various cases, drawing rects
 //! completely out-of-bounds in various places. This is ultimately a no-op
 //! test, the image should be completely black.
+const Io = @import("std").Io;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
 pub const filename = "077_oob_draw_full_outside";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
 
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
 

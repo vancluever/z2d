@@ -31,44 +31,14 @@ dir: Directory,
 meta: Meta,
 
 /// Errors associated with loading a font from a file.
-pub const LoadFileError = LoadBufferError ||
-    fs.File.OpenError ||
-    mem.Allocator.Error ||
-    fs.File.ReadError ||
-    fs.Dir.StatFileError ||
-    error{
-        /// The amount of bytes read did not match the size of the file.
-        BytesReadMismatch,
-
-        /// The file is larger than ~2GB (exactly 0x7FFFF000 bytes) and cannot
-        /// be used with `loadFile`. Note that this is a hard limit on the size
-        /// we can allocate, but you are likely going to break due to other
-        /// reasons if you hit this limit.
-        FileTooLarge,
-    };
+pub const LoadFileError = LoadBufferError || Io.Dir.ReadFileAllocError;
 
 /// Loads and validates a font from a file.
 ///
 /// The file is read in its entirety into memory. `deinit` must be called to
 /// free the memory when you are finished with the font data.
-pub fn loadFile(alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
-    const size_raw = (try fs.cwd().statFile(filename)).size;
-    if (size_raw > 0x7FFFF000) {
-        // Our size limit here is a Linux limitation on the maximum size of
-        // read (2147479552 bytes).
-        return error.FileTooLarge;
-    }
-    const size: usize = @intCast(size_raw);
-    const file = try fs.cwd().openFile(filename, .{});
-    defer file.close();
-
-    const buffer = try alloc.alloc(u8, size);
-    errdefer alloc.free(buffer);
-    const len_read = try file.read(buffer);
-    if (len_read != size) {
-        return error.BytesReadMismatch;
-    }
-    return loadBuffer(buffer);
+pub fn loadFile(io: Io, alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
+    return loadBuffer(try Io.Dir.cwd().readFileAlloc(io, filename, alloc, .unlimited));
 }
 
 /// Errors associated with loading a font from a buffer.
@@ -409,6 +379,7 @@ test "Font.loadFile, loadBuffer" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             var actual: Font = loadFile(
+                testing.io,
                 testing.allocator,
                 tc.path,
             ) catch |err| {

@@ -4,6 +4,7 @@
 //! Demonstrates removal of gradient banding by adding dither. The top gradient
 //! is rendered without dithering, the below one is rendered with it, which
 //! visibly removes it.
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -11,7 +12,8 @@ const z2d = @import("z2d");
 
 pub const filename = "068_gradient_deband";
 
-pub fn render(alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+    _ = io;
     const width = 500;
     const height = 500;
     var dst_sfc = try z2d.Surface.initPixel(

@@ -4,7 +4,7 @@
     .name = .z2d,
     .version = "0.11.0",
     .fingerprint = 0x188c5a41eff938f,
-    .minimum_zig_version = "0.16.0-dev.1484+d0ba6642b",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
