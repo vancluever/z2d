@@ -1,4 +1,4 @@
-## 0.11.0 (Unreleased)
+## 0.11.0 (April 23, 2026)
 
 ZIG 0.16.0 REQUIRED
 
