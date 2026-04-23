@@ -1,3 +1,7 @@
+## 0.11.1-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.11.0 (April 23, 2026)
 
 ZIG 0.16.0 REQUIRED
