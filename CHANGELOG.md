@@ -1,5 +1,10 @@
 ## 0.11.0 (Unreleased)
 
+ZIG 0.16.0 REQUIRED
+
+0.11.0 now requires Zig 0.16.0 or higher. For Zig 0.15.x versions, use 0.10.0 or
+earlier versions within the appropriate range.
+
 ENHANCEMENTS:
 
 * `fill` and `stroke` calls (both in `Context` and unmanaged) will now return a
