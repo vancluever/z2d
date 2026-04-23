@@ -1,22 +1,8 @@
 {
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  inputs.zig-overlay = {
-    url = "github:mitchellh/zig-overlay";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-  inputs.zls = {
-    url = "github:zigtools/zls";
-    inputs.nixpkgs.follows = "nixpkgs";
-    inputs.zig-overlay.follows = "zig-overlay";
-  };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      zig-overlay,
-      zls,
-    }:
+    { self, nixpkgs }:
     let
       supportedSystems = [
         "aarch64-darwin"
@@ -42,10 +28,9 @@
         in
         pkgs.mkShell {
           packages = with pkgs; [
-            kcov
+            zig_0_16
+            zls
             python3
-            zig-overlay.packages.${system}."0.16.0"
-            zls.packages.${system}.zls
           ];
         }
       );
