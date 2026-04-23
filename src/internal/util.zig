@@ -3,6 +3,7 @@
 const builtin = @import("std").builtin;
 const debug = @import("std").debug;
 const mem = @import("std").mem;
+const Io = @import("std").Io;
 
 const colorpkg = @import("../color.zig");
 
@@ -13,7 +14,7 @@ const vector_length = @import("../z2d.zig").vector_length;
 /// Internal table test helper. Passes in an array of structs representing test
 /// cases. "name" is the only expected field, otherwise it's entirely handled
 /// by `f`.
-pub fn runCases(name: []const u8, cases: anytype, f: *const fn (case: anytype) TestingError!void) !void {
+pub fn runCases(name: []const u8, cases: anytype, comptime f: *const fn (case: anytype) TestingError!void) !void {
     for (cases) |tc| {
         f(tc) catch |err| {
             debug.print("FAIL: {s}/{s}\n", .{ name, tc.name });
@@ -38,24 +39,20 @@ pub const TestingError = error{
 /// `@Vector(vector_length, T)`, to allow for SIMD and ease of utilization by
 /// the compositor.
 pub fn vectorize(comptime T: type) type {
-    var new_fields: [@typeInfo(T).@"struct".fields.len]builtin.Type.StructField = undefined;
+    const num = @typeInfo(T).@"struct".fields.len;
+    var field_names: [num][]const u8 = undefined;
+    var field_types: [num]type = undefined;
+    var field_attrs: [num]builtin.Type.StructField.Attributes = undefined;
     for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
-        new_fields[i] = .{
-            .name = f.name,
-            .type = @Vector(vector_length, f.type),
+        field_names[i] = f.name;
+        field_types[i] = @Vector(vector_length, f.type);
+        field_attrs[i] = .{
+            .@"comptime" = false,
+            .@"align" = @alignOf(field_types[i]),
             .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(@Vector(vector_length, f.type)),
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &new_fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 /// Internal function for splatting, shorthand for
@@ -103,4 +100,43 @@ pub fn hasField(comptime T: type, field_name: []const u8) bool {
         }
     }
     return false;
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerInt(reader: *Io.Reader, comptime T: type, endian: builtin.Endian) Io.Reader.Error!T {
+    const bytes = try readerBytesNoEof(reader, @divExact(@typeInfo(T).int.bits, 8));
+    return mem.readInt(T, &bytes, endian);
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerByteSigned(reader: *Io.Reader) Io.Reader.Error!i8 {
+    return @as(i8, @bitCast(try readerByte(reader)));
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerByte(reader: *Io.Reader) Io.Reader.Error!u8 {
+    var result: [1]u8 = undefined;
+    try reader.readSliceAll(&result);
+    return result[0];
+}
+
+/// Pulled from old stdlib as this function has been removed.
+pub fn readerSkipBytes(reader: *Io.Reader, num_bytes: u64) Io.Reader.Error!void {
+    const buf_size = 512;
+
+    var buf: [buf_size]u8 = undefined;
+    var remaining = num_bytes;
+
+    while (remaining > 0) {
+        const amt = @min(remaining, buf_size);
+        try reader.readSliceAll(buf[0..amt]);
+        remaining -= amt;
+    }
+}
+
+/// Pulled from old stdlib as this function has been removed.
+fn readerBytesNoEof(reader: *Io.Reader, comptime num_bytes: usize) Io.Reader.Error![num_bytes]u8 {
+    var bytes: [num_bytes]u8 = undefined;
+    try reader.readSliceAll(&bytes);
+    return bytes;
 }

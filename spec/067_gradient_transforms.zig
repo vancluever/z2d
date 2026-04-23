@@ -2,6 +2,7 @@
 //   Copyright © 2025 Chris Marchesi
 
 //! Draws gradients with transformations set.
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -9,7 +10,7 @@ const z2d = @import("z2d");
 
 pub const filename = "067_gradient_transforms";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 200;
     const height = 200;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -23,7 +24,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
     try linear.addStop(alloc, 0, .{ .rgb = .{ 1, 0, 0 } });
     try linear.addStop(alloc, 0.5, .{ .rgb = .{ 0, 1, 0 } });
     try linear.addStop(alloc, 1, .{ .rgb = .{ 0, 0, 1 } });
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.scale(2, 2);
     context.setAntiAliasingMode(aa_mode);

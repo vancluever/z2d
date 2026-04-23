@@ -8,12 +8,12 @@ const crc32 = @import("std").hash.Crc32;
 const debug = @import("std").debug;
 const fmt = @import("std").fmt;
 const fs = @import("std").fs;
-const io = @import("std").io;
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 const sha256 = @import("std").crypto.hash.sha2.Sha256;
 const testing = @import("std").testing;
-const zlib = @import("internal/compat/compress/zlib.zig");
+const flate = @import("std").compress.flate;
 
 const color = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
@@ -25,19 +25,10 @@ const vector_length = @import("z2d.zig").vector_length;
 
 const native_endian = @import("builtin").cpu.arch.endian();
 
-/// Errors associated with exporting (e.g., to PNG et al).
-pub const Error = error{
+pub const BytesWrittenMismatchError = error{
     /// Error during streaming graphical data.
     BytesWrittenMismatch,
 };
-
-/// **Note for autodoc viewers:** Several members of this error set have been
-/// obfuscated due to being pruned from autodoc. Please view source for the
-/// full set.
-pub const WriteToPNGFileError = Error ||
-    fs.File.OpenError ||
-    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
-    fs.File.WriteError;
 
 pub const WriteToPNGFileOptions = struct {
     /// The RGB/color profile to use for exporting.
@@ -49,6 +40,13 @@ pub const WriteToPNGFileOptions = struct {
     color_profile: ?color.RGBProfile = null,
 };
 
+pub const WriteToPNGFileError = WritePNGMagicError ||
+    WritePNGIHDRError ||
+    WritePNGgAMAError ||
+    WritePNGIDATStreamError ||
+    WritePNGIENDError ||
+    Io.File.OpenError;
+
 /// Exports the surface to a PNG file supplied by filename.
 ///
 /// This is currently a very rudimentary export with default zlib compression
@@ -56,6 +54,7 @@ pub const WriteToPNGFileOptions = struct {
 ///
 /// Additional options to control the export can be supplied in opts.
 pub fn writeToPNGFile(
+    io: Io,
     sfc: surface.Surface,
     filename: []const u8,
     opts: WriteToPNGFileOptions,
@@ -67,25 +66,35 @@ pub fn writeToPNGFile(
     }
 
     // Open and create the file.
-    const file = try fs.cwd().createFile(filename, .{});
-    defer file.close();
+    const file = try Io.Dir.cwd().createFile(io, filename, .{});
+    defer file.close(io);
+
+    // NOTE: No buffer for now for writing (seems okay). We have a 16K buffer
+    // for our zlib stream, which is the only real area of the PNG export that
+    // will see significant pressure. Otherwise, it's all chunks that will only
+    // be written once. We can revisit this if need be.
+    var writer = file.writer(io, &.{});
 
     // Write out magic header, and various chunks.
-    try writePNGMagic(file);
-    try writePNGIHDR(file, sfc);
-    if (opts.color_profile) |profile| try writePNGgAMA(file, profile);
-    try writePNGIDATStream(file, sfc, opts.color_profile);
-    try writePNGIEND(file);
+    try writePNGMagic(&writer.interface);
+    try writePNGIHDR(&writer.interface, sfc);
+    if (opts.color_profile) |profile| try writePNGgAMA(&writer.interface, profile);
+    try writePNGIDATStream(&writer.interface, sfc, opts.color_profile);
+    try writePNGIEND(&writer.interface);
 }
+
+const WritePNGMagicError = BytesWrittenMismatchError || Io.Writer.Error;
 
 /// Writes the magic header for the PNG file.
-fn writePNGMagic(file: fs.File) (fs.File.WriteError || Error)!void {
+fn writePNGMagic(writer: *Io.Writer) WritePNGMagicError!void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
-    if (try file.write(header) != header.len) return error.BytesWrittenMismatch;
+    if (try writer.write(header) != header.len) return error.BytesWrittenMismatch;
 }
 
+const WritePNGIHDRError = WritePNGWriteChunkError;
+
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (fs.File.WriteError || Error)!void {
+fn writePNGIHDR(writer: *Io.Writer, sfc: surface.Surface) WritePNGIHDRError!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
@@ -107,7 +116,7 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (fs.File.WriteError || Erro
     const interlace: u8 = 0;
 
     try writePNGWriteChunk(
-        file,
+        writer,
         "IHDR".*,
         &(width ++
             height ++
@@ -119,7 +128,9 @@ fn writePNGIHDR(file: fs.File, sfc: surface.Surface) (fs.File.WriteError || Erro
     );
 }
 
-fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) (fs.File.WriteError || Error)!void {
+const WritePNGgAMAError = WritePNGWriteChunkError;
+
+fn writePNGgAMA(writer: *Io.Writer, profile: color.RGBProfile) WritePNGgAMAError!void {
     const gamma: u32 = @intFromFloat((switch (profile) {
         .linear => 1 / color.LinearRGB.gamma,
         .srgb => 1 / color.SRGB.gamma,
@@ -127,52 +138,64 @@ fn writePNGgAMA(file: fs.File, profile: color.RGBProfile) (fs.File.WriteError ||
     var gamma_bytes = [_]u8{0} ** 4;
     mem.writeInt(u32, &gamma_bytes, gamma, .big);
     try writePNGWriteChunk(
-        file,
+        writer,
         "gAMA".*,
         &gamma_bytes,
     );
 }
 
-const WritePNGIDATStreamError = Error ||
-    zlib.Compressor(io.FixedBufferStream([]u8).Writer).Error ||
-    fs.File.WriteError;
+const WritePNGIDATStreamError = Io.Writer.Error;
 
 /// Write the IDAT stream (pixel data) for the PNG file.
 ///
 /// This is currently a very rudimentary algorithm - default zlib
 /// compression and no pixel filtering.
 fn writePNGIDATStream(
-    file: fs.File,
+    writer: *Io.Writer,
     sfc: surface.Surface,
     profile: ?color.RGBProfile,
 ) WritePNGIDATStreamError!void {
     const sfc_width: i32 = sfc.getWidth();
     const sfc_height: i32 = sfc.getHeight();
 
-    // Set a minimum remaining buffer size here that is reasonably
-    // sized. This may not be 100% scientific, but should account for
-    // the 248 byte deflate buffer (see buffer sizes in the stdlib at
-    // deflate/huffman_bit_writer.zig) plus 1 full write.
-    //
-    // This may change when we start supporting filter algorithms, and
-    // have to start writing whole scanlines at once (multiple
-    // scanlines, in fact).
-    const min_remaining: usize = 248 + (4 * vector_length + 1);
+    const IDATStream = struct {
+        const buffer_size = 16384;
 
-    // Our zlib buffer is 16K, but we may add the ability to tune this
-    // in the future.
-    //
-    // NOTE: When allowing for modifications to this value, there
-    // likely will need to be a minimum buffer size of ~512 bytes or
-    // something else reasonable. This is due to the minimum size we
-    // need for headers (see above).
-    var zlib_buffer_underlying = [_]u8{0} ** 16384;
-    var zlib_buffer = io.fixedBufferStream(&zlib_buffer_underlying);
-    var zlib_stream = try zlib.compressor(zlib_buffer.writer(), .{});
+        output_file_writer: *Io.Writer,
+        idat_stream_writer: Io.Writer,
 
-    // Initialize our remaining buffer size. We keep track of this as
-    // we need to flush regularly to output IDAT chunks.
-    var zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
+        fn drain(w: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
+            switch (data.len) {
+                0 => @panic("at least one data entry must be provided"),
+                1 => if (splat == 0) return 0,
+                else => {},
+            }
+            const stream_writer: *@This() = @fieldParentPtr("idat_stream_writer", w);
+            writePNGIDATSingle(stream_writer.output_file_writer, w.buffer[0..w.end]) catch return error.WriteFailed;
+            const len: usize = @min(data[0].len, buffer_size);
+            @memcpy(w.buffer[0..len], data[0][0..len]);
+            w.end = len;
+            return len;
+        }
+    };
+
+    var idat_buffer = [_]u8{0} ** IDATStream.buffer_size;
+    var zlib_buffer = [_]u8{0} ** flate.max_window_len;
+    var idat_stream: IDATStream = .{
+        .output_file_writer = writer,
+        .idat_stream_writer = .{
+            .buffer = &idat_buffer,
+            .vtable = &.{
+                .drain = IDATStream.drain,
+            },
+        },
+    };
+    var zlib_stream: flate.Compress = try .init(
+        &idat_stream.idat_stream_writer,
+        &zlib_buffer,
+        .zlib,
+        flate.Compress.Options.default,
+    );
 
     // To encode, we read from our buffer, pixel-by-pixel, and convert
     // to a writable format (big-endian, no padding). We also need to
@@ -272,32 +295,9 @@ fn writePNGIDATStream(
                     },
                 }
             };
-            if (try zlib_stream.write(pixel_buffer[0..nbytes]) != nbytes) {
-                // If we didn't actually write everything, it's an error.
-                return error.BytesWrittenMismatch;
-            }
 
-            // New remaining at this point is current_remaining - what was
-            // written
-            zlib_buffer_remaining -= nbytes;
-
-            if (zlib_buffer_remaining < min_remaining) {
-                // If we possibly could have less remaining than our minimum
-                // buffer size, we need to flush. This should always succeed.
-                try zlib_stream.flush();
-
-                // We can now check to see how much remaining is in our
-                // underlying buffer.
-                if (try zlib_buffer.getEndPos() - try zlib_buffer.getPos() < min_remaining) {
-                    // We are now actually below the threshold, so write out an
-                    // IDAT chunk, and reset the buffer.
-                    try writePNGIDATSingle(file, zlib_buffer.getWritten());
-                    zlib_buffer.reset();
-                }
-
-                // Actual new remaining is now the amount remaining in the buffer.
-                zlib_buffer_remaining = try zlib_buffer.getEndPos() - try zlib_buffer.getPos();
-            }
+            // Write out the encoded pixels to the stream
+            try zlib_stream.writer.writeAll(pixel_buffer[0..nbytes]);
 
             // Reset nbytes for the next run.
             nbytes = 0;
@@ -306,7 +306,7 @@ fn writePNGIDATStream(
 
     // Close off and write the remaining bytes. This should always succeed.
     try zlib_stream.finish();
-    try writePNGIDATSingle(file, zlib_buffer.getWritten());
+    try idat_stream.idat_stream_writer.flush();
 }
 
 /// Returns a cast of u32 vectors to u8 (little endian).
@@ -323,7 +323,7 @@ fn encodeRGBAVec(
     comptime use_alpha: bool,
 ) [vector_length]u32 {
     var rgba_vector: pixel_vector.RGBA16 = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const rgba_scalar: if (in_argb) pixel.ARGB else pixel.RGBA = @bitCast(value[i]);
         rgba_vector.r[i] = rgba_scalar.r;
         rgba_vector.g[i] = rgba_scalar.g;
@@ -356,7 +356,7 @@ fn encodeRGBAVec(
 
     // Encode the value to return
     var result: @Vector(vector_length, u32) = undefined;
-    for (0..vector_length) |i| {
+    inline for (0..vector_length) |i| {
         const rgba_scalar: pixel.RGBA = .{
             .r = @intCast(rgba_vector.r[i]),
             .g = @intCast(rgba_vector.g[i]),
@@ -369,20 +369,26 @@ fn encodeRGBAVec(
     return result;
 }
 
+const WritePNGIDATSingleError = WritePNGWriteChunkError;
+
 /// Writes a single IDAT chunk. The data should be part of the zlib
 /// stream. See writePNG_IDAT_stream et al.
-fn writePNGIDATSingle(file: fs.File, data: []const u8) (fs.File.WriteError || Error)!void {
-    try writePNGWriteChunk(file, "IDAT".*, data);
+fn writePNGIDATSingle(writer: *Io.Writer, data: []const u8) WritePNGIDATSingleError!void {
+    try writePNGWriteChunk(writer, "IDAT".*, data);
 }
 
+const WritePNGIENDError = WritePNGWriteChunkError;
+
 /// Write the IEND chunk.
-fn writePNGIEND(file: fs.File) (fs.File.WriteError || Error)!void {
-    try writePNGWriteChunk(file, "IEND".*, "");
+fn writePNGIEND(writer: *Io.Writer) WritePNGIENDError!void {
+    try writePNGWriteChunk(writer, "IEND".*, "");
 }
+
+const WritePNGWriteChunkError = BytesWrittenMismatchError || Io.Writer.Error;
 
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
-fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) (fs.File.WriteError || Error)!void {
+fn writePNGWriteChunk(writer: *Io.Writer, chunk_type: [4]u8, data: []const u8) WritePNGWriteChunkError!void {
     if (data.len > math.maxInt(u32)) {
         @panic("bad PNG chunk data length (larger than 4GB). this is a bug, please report it");
     }
@@ -399,23 +405,10 @@ fn writePNGWriteChunk(file: fs.File, chunk_type: [4]u8, data: []const u8) (fs.Fi
     //
     // For now, this saves an extra ~16K on the stack.
 
-    if (try writeInt(file, u32, len, .big) != 4) return error.BytesWrittenMismatch;
-    if (try file.write(&chunk_type) != 4) return error.BytesWrittenMismatch;
-    if (try file.write(data) != data.len) return error.BytesWrittenMismatch;
-    if (try writeInt(file, u32, checksum, .big) != 4) return error.BytesWrittenMismatch;
-}
-
-/// Convenience method taken from std.Io.Writer so that we can use
-/// fs.File.write directly.
-fn writeInt(
-    file: fs.File,
-    comptime T: type,
-    value: T,
-    endian: builtin.Endian,
-) fs.File.WriteError!usize {
-    var bytes: [@divExact(@typeInfo(T).int.bits, 8)]u8 = undefined;
-    mem.writeInt(math.ByteAlignedInt(@TypeOf(value)), &bytes, value, endian);
-    return file.write(&bytes);
+    try writer.writeInt(u32, len, .big);
+    if (try writer.write(&chunk_type) != 4) return error.BytesWrittenMismatch;
+    if (try writer.write(data) != data.len) return error.BytesWrittenMismatch;
+    try writer.writeInt(u32, checksum, .big);
 }
 
 /// Calculates the CRC32 checksum for the chunk.
@@ -428,8 +421,9 @@ fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
 
 test "RGB/ARGB formats all export to same image" {
     const Context = @import("Context.zig");
-    const hash_bytes_int_T = @Type(.{ .int = .{ .signedness = .unsigned, .bits = sha256.digest_length * 8 } });
+    const hash_bytes_int_T = @Int(.unsigned, sha256.digest_length * 8);
     const alloc = testing.allocator;
+    const io = testing.io;
     const width = 300;
     const height = 300;
 
@@ -440,7 +434,7 @@ test "RGB/ARGB formats all export to same image" {
 
             var sfc = try surface.Surface.init(sfc_type, alloc, width, height);
             defer sfc.deinit(alloc);
-            var context = Context.init(alloc, &sfc);
+            var context = Context.init(io, alloc, &sfc);
             defer context.deinit();
             context.setSourceToPixel(.{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } });
             context.setAntiAliasingMode(.default);
@@ -453,17 +447,19 @@ test "RGB/ARGB formats all export to same image" {
 
             var tmp_dir = testing.tmpDir(.{});
             defer tmp_dir.cleanup();
-            const parent_path = try tmp_dir.dir.realpathAlloc(alloc, ".");
-            defer alloc.free(parent_path);
+            var parent_path_bytes: [512]u8 = undefined;
+            const parent_path_len = try tmp_dir.dir.realPath(io, &parent_path_bytes);
+            const parent_path = parent_path_bytes[0..parent_path_len];
             const target_path = try fs.path.join(alloc, &.{ parent_path, "z2d_test.png" });
             defer alloc.free(target_path);
             try writeToPNGFile(
+                io,
                 sfc,
                 target_path,
                 .{},
             );
 
-            const actual_data = try fs.cwd().readFileAlloc(alloc, target_path, 10240000);
+            const actual_data = try Io.Dir.cwd().readFileAlloc(io, target_path, alloc, .limited(10240000));
             defer alloc.free(actual_data);
             if (expected_hash_) |expected_hash| {
                 var actual_hash: [sha256.digest_length]u8 = undefined;

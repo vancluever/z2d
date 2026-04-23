@@ -3,18 +3,19 @@
 
 //! Case: Renders and fills multiple shapes using a single path operation, used
 //! to ensure we can do this without having to fill each polygon individually.
+const Io = @import("std").Io;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
 
 pub const filename = "013_fill_combined";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
     const height = 400;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } });
     context.setAntiAliasingMode(aa_mode);

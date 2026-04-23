@@ -7,6 +7,7 @@
 //! https://www.w3.org/TR/SVG11/paths.html#PathDataEllipticalArcCommands.
 //! Copyright © 2011 World Wide Web Consortium.
 //! https://www.w3.org/copyright/software-license-2023/
+const Io = @import("std").Io;
 const math = @import("std").math;
 const mem = @import("std").mem;
 
@@ -14,7 +15,7 @@ const z2d = @import("z2d");
 
 pub const filename = "035_arc_command";
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
     var sfc = try z2d.Surface.initPixel(
@@ -24,7 +25,7 @@ pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Sur
         height,
     );
 
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xFF, .g = 0x00, .b = 0x00 } });
     context.setAntiAliasingMode(aa_mode);

@@ -16,57 +16,29 @@ const Font = @This();
 
 const std = @import("std");
 const debug = @import("std").debug;
-const io = @import("std").io;
+const Io = @import("std").Io;
 const fs = @import("std").fs;
 const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
+const readerInt = @import("internal/util.zig").readerInt;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
-file: io.FixedBufferStream([]const u8),
+file: Io.Reader,
 dir: Directory,
 meta: Meta,
 
 /// Errors associated with loading a font from a file.
-pub const LoadFileError = LoadBufferError ||
-    fs.File.OpenError ||
-    mem.Allocator.Error ||
-    fs.File.ReadError ||
-    error{
-        /// The amount of bytes read did not match the size of the file.
-        BytesReadMismatch,
-
-        /// The file is larger than ~2GB (exactly 0x7FFFF000 bytes) and cannot
-        /// be used with `loadFile`. Note that this is a hard limit on the size
-        /// we can allocate, but you are likely going to break due to other
-        /// reasons if you hit this limit.
-        FileTooLarge,
-    };
+pub const LoadFileError = LoadBufferError || Io.Dir.ReadFileAllocError;
 
 /// Loads and validates a font from a file.
 ///
 /// The file is read in its entirety into memory. `deinit` must be called to
 /// free the memory when you are finished with the font data.
-pub fn loadFile(alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
-    const size_raw = (try fs.cwd().statFile(filename)).size;
-    if (size_raw > 0x7FFFF000) {
-        // Our size limit here is a Linux limitation on the maximum size of
-        // read (2147479552 bytes).
-        return error.FileTooLarge;
-    }
-    const size: usize = @intCast(size_raw);
-    const file = try fs.cwd().openFile(filename, .{});
-    defer file.close();
-
-    const buffer = try alloc.alloc(u8, size);
-    errdefer alloc.free(buffer);
-    const len_read = try file.read(buffer);
-    if (len_read != size) {
-        return error.BytesReadMismatch;
-    }
-    return loadBuffer(buffer);
+pub fn loadFile(io: Io, alloc: mem.Allocator, filename: []const u8) LoadFileError!Font {
+    return loadBuffer(try Io.Dir.cwd().readFileAlloc(io, filename, alloc, .unlimited));
 }
 
 /// Errors associated with loading a font from a buffer.
@@ -75,12 +47,12 @@ pub const LoadBufferError = ValidateMagicError || Directory.InitError || Meta.In
 /// Loads and validates a font from a buffer. Do not use `deinit` when using
 /// this function, as it will produce illegal behavior.
 pub fn loadBuffer(buffer: []const u8) LoadBufferError!Font {
-    var file = io.fixedBufferStream(buffer);
+    var file = Io.Reader.fixed(buffer);
     try validateMagic(&file);
     const dir = try Directory.init(&file);
     const meta = try Meta.init(&file, dir);
     // Reset our stream before we return it
-    try file.seekTo(0);
+    file.seek = 0;
 
     return .{
         .file = file,
@@ -98,18 +70,18 @@ pub fn deinit(self: *Font, alloc: mem.Allocator) void {
 
 /// Errors associated with reading font file data, generally an alias for file
 /// and stream read operations.
-pub const FileError = error{EndOfStream};
+pub const FileError = error{ EndOfStream, ReadFailed };
 
 /// Errors associated with validating the font file type.
 const ValidateMagicError = error{
     /// The font file's magic number (first u32) does not match a supported
     /// format.
     InvalidFormat,
-} || FileError;
+} || Io.Reader.Error;
 
-fn validateMagic(file: *io.FixedBufferStream([]const u8)) ValidateMagicError!void {
+fn validateMagic(file: *Io.Reader) ValidateMagicError!void {
     var header = [_]u8{0} ** 4;
-    try file.reader().readNoEof(&header);
+    try file.readSliceAll(&header);
     var header_ok: bool = false;
     if (mem.eql(u8, &header, &.{ '1', 0, 0, 0 })) header_ok = true;
     if (mem.eql(u8, &header, "OTTO")) header_ok = true;
@@ -140,9 +112,9 @@ const Directory = struct {
 
         /// A required table is missing in the font's directory.
         MissingRequiredTable,
-    } || FileError;
+    } || Io.Reader.Error;
 
-    fn init(file: *io.FixedBufferStream([]const u8)) InitError!Directory {
+    fn init(file: *Io.Reader) InitError!Directory {
         var result: Directory = result: {
             var r: Directory = undefined;
             inline for (@typeInfo(Directory).@"struct".fields) |f| {
@@ -159,20 +131,20 @@ const Directory = struct {
         const table_dir_offset = 12;
         const table_dir_entry_len = 16;
 
-        try file.seekTo(table_num_offset);
-        const num_tables = try file.reader().readInt(u16, .big);
+        file.seek = table_num_offset;
+        const num_tables = try readerInt(file, u16, .big);
 
-        try file.seekTo(table_dir_offset);
+        file.seek = table_dir_offset;
 
         for (0..num_tables) |dir_idx| {
-            try file.seekTo(dir_idx * table_dir_entry_len + table_dir_offset);
+            file.seek = dir_idx * table_dir_entry_len + table_dir_offset;
             var entry_tag: [4]u8 = undefined;
-            try file.reader().readNoEof(&entry_tag);
+            try file.readSliceAll(&entry_tag);
             inline for (@typeInfo(Directory).@"struct".fields) |f| {
                 if (mem.eql(u8, &entry_tag, f.name)) {
-                    const checksum: u32 = try file.reader().readInt(u32, .big);
-                    const offset: u32 = try file.reader().readInt(u32, .big);
-                    const len: u32 = try file.reader().readInt(u32, .big);
+                    const checksum: u32 = try readerInt(file, u32, .big);
+                    const offset: u32 = try readerInt(file, u32, .big);
+                    const len: u32 = try readerInt(file, u32, .big);
 
                     // Validate the checksum of the table. This is a simple
                     // addition of the u32 (padded) words in the table,
@@ -183,15 +155,15 @@ const Directory = struct {
                     // checksumAdjustment value of zero when calculating for
                     // the "head" table.
                     var actual_checksum: u32 = 0;
-                    try file.seekTo(offset);
+                    file.seek = offset;
                     const is_head = mem.eql(u8, f.name, "head");
                     for (0..((len + 3) / 4)) |j| {
                         if (is_head and j == 2)
-                            _ = try file.reader().readInt(u32, .big)
+                            _ = try readerInt(file, u32, .big)
                         else
                             actual_checksum, _ = @addWithOverflow(
                                 actual_checksum,
-                                try file.reader().readInt(u32, .big),
+                                try readerInt(file, u32, .big),
                             );
                     }
 
@@ -277,9 +249,9 @@ const Meta = struct {
         /// value (neither 0 or 1). This likely means that the font is
         /// corrupted.
         InvalidIndexToLocFormat,
-    } || FileError;
+    } || Io.Reader.Error;
 
-    fn init(file: *io.FixedBufferStream([]const u8), dir: Directory) InitError!Meta {
+    fn init(file: *Io.Reader, dir: Directory) InitError!Meta {
         const cmap_subtable_offset: CmapSubtable = cmap_subtable_offset: {
             // We don't really do a lot of hard work here to look for the table; we
             // just look for either Windows or Unicode platform with the appropriate
@@ -299,13 +271,13 @@ const Meta = struct {
             const windows_encoding_bmp = 1;
             const windows_encoding_full = 10;
 
-            try file.seekTo(table_num_offset);
-            const num_tables = try file.reader().readInt(u16, .big);
+            file.seek = table_num_offset;
+            const num_tables = try readerInt(file, u16, .big);
 
             for (0..num_tables) |_| {
-                const platform_id = try file.reader().readInt(u16, .big);
-                const encoding_id = try file.reader().readInt(u16, .big);
-                const subtable_offset = try file.reader().readInt(u32, .big) + dir.cmap;
+                const platform_id = try readerInt(file, u16, .big);
+                const encoding_id = try readerInt(file, u16, .big);
+                const subtable_offset = try readerInt(file, u32, .big) + dir.cmap;
 
                 if (platform_id == encoding_platform_unicode) {
                     switch (encoding_id) {
@@ -335,22 +307,22 @@ const Meta = struct {
         const head_flags = dir.head + 14;
         const units_per_em_offset = dir.head + 18;
         const index_to_loc_format_offset = dir.head + 50;
-        try file.seekTo(head_flags);
+        file.seek = head_flags;
         const lsb_is_at_x_zero: bool = @bitCast(@as(
             u1,
-            @intCast(try file.reader().readInt(u16, .big) & 2 >> 1),
+            @intCast(try readerInt(file, u16, .big) & 2 >> 1),
         ));
-        try file.seekTo(index_to_loc_format_offset);
-        const index_to_loc_format = try file.reader().readInt(u16, .big);
-        try file.seekTo(units_per_em_offset);
-        const units_per_em = try file.reader().readInt(u16, .big);
+        file.seek = index_to_loc_format_offset;
+        const index_to_loc_format = try readerInt(file, u16, .big);
+        file.seek = units_per_em_offset;
+        const units_per_em = try readerInt(file, u16, .big);
 
         const advance_width_max_offset = dir.hhea + 10;
         const number_of_hmetrics_offset = dir.hhea + 34;
-        try file.seekTo(advance_width_max_offset);
-        const advance_width_max = try file.reader().readInt(u16, .big);
-        try file.seekTo(number_of_hmetrics_offset);
-        const number_of_hmetrics = try file.reader().readInt(u16, .big);
+        file.seek = advance_width_max_offset;
+        const advance_width_max = try readerInt(file, u16, .big);
+        file.seek = number_of_hmetrics_offset;
+        const number_of_hmetrics = try readerInt(file, u16, .big);
 
         return .{
             .cmap_subtable_offset = cmap_subtable_offset,
@@ -407,6 +379,7 @@ test "Font.loadFile, loadBuffer" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             var actual: Font = loadFile(
+                testing.io,
                 testing.allocator,
                 tc.path,
             ) catch |err| {

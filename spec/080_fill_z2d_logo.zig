@@ -34,6 +34,7 @@
 //!         try z2d.png_exporter.writeToPNGFile(sfc, "z2d-logo.png", .{});
 //!     }
 //!
+const Io = @import("std").Io;
 const mem = @import("std").mem;
 
 const z2d = @import("z2d");
@@ -43,12 +44,12 @@ pub const filename = "080_fill_z2d_logo";
 const title_font = @embedFile("./test-fonts/Montserrat-ExtraBold.ttf");
 const subtitle_font = @embedFile("./test-fonts/Montserrat-Bold.ttf");
 
-pub fn render(alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 601;
     const height = 172;
     var sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);
 
-    var context = z2d.Context.init(alloc, &sfc);
+    var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xF7, .g = 0xA4, .b = 0x1D } });
     context.setAntiAliasingMode(aa_mode);
