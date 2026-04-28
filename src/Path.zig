@@ -31,6 +31,8 @@ const testing = @import("std").testing;
 
 const arcpkg = @import("internal/arc.zig");
 const options = @import("options.zig");
+const offsetpkg = @import("internal/path_fx/offset.zig");
+const simplifypkg = @import("internal/path_fx/simplify.zig");
 
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const PathVTable = @import("internal/PathVTable.zig");
@@ -478,6 +480,93 @@ pub fn isClosed(self: *const Path) bool {
     return PathNode.isClosedNodeSet(self.nodes.items);
 }
 
+pub const SimplifyError = simplifypkg.Error;
+
+/// Returns a new `Path` with simplified versions of all closed subpaths from
+/// the original; i.e., said subpaths will not self-intersect. They will also
+/// be aligned to their first leftmost point so the guaranteed starting point
+/// is convex.
+///
+/// Will only return the outer polygon if inner closed polygons are
+/// encountered, i.e., complex polygons that create holes or other kinds of
+/// sub-polygons will not be returned. A typical example would be a 5-point
+/// self-intersecting star; in this case, only the outer 10-point path will be
+/// returned, not the inner pentagon or the 5 composite triangles.
+///
+/// Conversely, any independent self-sealing outer polygons will be returned
+/// (e.g., 2 triangles created by a self-intersecting single line).
+///
+/// Unclosed paths are ignored and returned unmodified, minus some possible
+/// optimizations (e.g., consolidation of co-linear segments).
+///
+/// The returned `Path` is a completely new path that the caller owns - call
+/// `deinit` to release as normal.
+pub fn simplify(self: *Path, alloc: mem.Allocator) SimplifyError!Path {
+    const result_nodes = try simplifypkg.run(alloc, self.nodes.items, self.tolerance);
+    var result: Path = .{
+        .nodes = .fromOwnedSlice(result_nodes),
+        .tolerance = self.tolerance,
+        .transformation = self.transformation,
+    };
+    result.fixState();
+    return result;
+}
+
+pub const OffsetError = simplifypkg.Error;
+
+/// Returns a new `Path` with all paths offset by the supplied `value`
+/// (negative is inset, positive is outset). All closed paths will also be
+/// aligned to their first leftmost convex point.
+///
+/// The direction of the offset is determined by the direction of the starting
+/// join. This assumes that all supplied paths have no self-intersections.
+/// Paths with self-intersections will still be processed but will produce
+/// undesirable results; consider using `simplify` first to remove the
+/// self-intersections.
+///
+/// All single-segment paths are considered clockwise for the purposes of
+/// offsetting.
+///
+/// The returned `Path` is a completely new path that the caller owns - call
+/// `deinit` to release as normal.
+pub fn offset(self: *Path, alloc: mem.Allocator, value: f64) OffsetError!Path {
+    const result_nodes = try offsetpkg.run(alloc, self.nodes.items, self.tolerance, value);
+    var result: Path = .{
+        .nodes = .fromOwnedSlice(result_nodes),
+        .tolerance = self.tolerance,
+        .transformation = self.transformation,
+    };
+    result.fixState();
+    return result;
+}
+
+/// "Replays" the path so that initial_point and current_point are correctly
+/// set when a path is initialized from existing nodes.
+///
+/// Asserts a well-formed path (move_to before anything else particularly).
+fn fixState(self: *Path) void {
+    for (self.nodes.items) |node| {
+        switch (node) {
+            .move_to => |n| {
+                self.initial_point = n.point;
+                self.current_point = n.point;
+            },
+            .line_to => |n| {
+                debug.assert(self.initial_point != null);
+                self.current_point = n.point;
+            },
+            .curve_to => |n| {
+                debug.assert(self.initial_point != null);
+                self.current_point = n.p3;
+            },
+            .close_path => {
+                debug.assert(self.initial_point != null);
+                self.current_point = self.initial_point;
+            },
+        }
+    }
+}
+
 fn clampI24(x: f64) f64 {
     return math.clamp(x, math.minInt(i24), math.maxInt(i24));
 }
@@ -823,4 +912,75 @@ test "relative helpers with transformations" {
             .p3 = .{ .x = 50, .y = 140 },
         },
     }, p.nodes.items[1]);
+}
+
+test "fixState" {
+    {
+        // Closed
+        var nodes = [_]PathNode{
+            .{ .move_to = .{ .point = .{ .x = 25, .y = 5 } } },
+            .{ .line_to = .{ .point = .{ .x = 32, .y = 25 } } },
+            .{ .line_to = .{ .point = .{ .x = 15, .y = 13 } } },
+            .{ .line_to = .{ .point = .{ .x = 35, .y = 13 } } },
+            .{ .line_to = .{ .point = .{ .x = 18, .y = 25 } } },
+            .{ .close_path = .{} },
+            .{ .move_to = .{ .point = .{ .x = 25, .y = 5 } } },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        got.fixState();
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
+    }
+    {
+        // Open (line_to)
+        var nodes = [_]PathNode{
+            .{ .move_to = .{ .point = .{ .x = 25, .y = 5 } } },
+            .{ .line_to = .{ .point = .{ .x = 32, .y = 25 } } },
+            .{ .line_to = .{ .point = .{ .x = 15, .y = 13 } } },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        got.fixState();
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try testing.expectEqualDeep(Point{ .x = 15, .y = 13 }, got.current_point);
+    }
+    {
+        // Open (curve_to)
+        var nodes = [_]PathNode{
+            .{ .move_to = .{ .point = .{ .x = 25, .y = 5 } } },
+            .{
+                .curve_to = .{
+                    .p1 = .{ .x = 2, .y = 2 },
+                    .p2 = .{ .x = 3, .y = 3 },
+                    .p3 = .{ .x = 4, .y = 4 },
+                },
+            },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        got.fixState();
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try testing.expectEqualDeep(Point{ .x = 4, .y = 4 }, got.current_point);
+    }
+    {
+        // Closed w/o move_to after
+        var nodes = [_]PathNode{
+            .{ .move_to = .{ .point = .{ .x = 25, .y = 5 } } },
+            .{ .line_to = .{ .point = .{ .x = 32, .y = 25 } } },
+            .{ .line_to = .{ .point = .{ .x = 15, .y = 13 } } },
+            .{ .line_to = .{ .point = .{ .x = 35, .y = 13 } } },
+            .{ .line_to = .{ .point = .{ .x = 18, .y = 25 } } },
+            .{ .close_path = .{} },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        got.fixState();
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
+    }
 }

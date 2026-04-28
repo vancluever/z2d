@@ -548,6 +548,45 @@ pub fn isPathClosed(self: *Context) bool {
     return self.path.isClosed();
 }
 
+/// Replaces the current path with one that has simplified versions of all
+/// closed subpaths from the original; i.e., said subpaths will not
+/// self-intersect. They will also be aligned to their first leftmost point so
+/// the guaranteed starting point is convex.
+///
+/// Will only return the outer polygon if inner closed polygons are
+/// encountered, i.e., complex polygons that create holes or other kinds of
+/// sub-polygons will not be returned. A typical example would be a 5-point
+/// self-intersecting star; in this case, only the outer 10-point path will be
+/// returned, not the inner pentagon or the 5 composite triangles.
+///
+/// Conversely, any independent self-sealing outer polygons will be returned
+/// (e.g., 2 triangles created by a self-intersecting single line).
+///
+/// Unclosed paths are ignored and returned unmodified.
+pub fn simplifyPath(self: *Context) Path.SimplifyError!void {
+    const new_path = try self.path.simplify(self.alloc);
+    self.path.deinit(self.alloc);
+    self.path = new_path;
+}
+
+/// Replaces the current path with one that has all paths offset by the
+/// supplied `offset` (negative is inset, positive is outset). All closed paths
+/// will also be aligned to their first leftmost convex point.
+///
+/// The direction of the offset is determined by the direction of the starting
+/// join. This assumes that all supplied paths have no self-intersections.
+/// Paths with self-intersections will still be processed but will produce
+/// undesirable results; consider using `simplify` first to remove the
+/// self-intersections.
+///
+/// All single-segment paths are considered clockwise for the purposes of
+/// offsetting.
+pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
+    const new_path = try self.path.offset(self.alloc, offset);
+    self.path.deinit(self.alloc);
+    self.path = new_path;
+}
+
 /// Runs a fill operation for the current path and any subpaths. All paths in
 /// the set must be closed. This is a no-op if there are no nodes.
 pub fn fill(self: *Context) painter.FillError!void {
