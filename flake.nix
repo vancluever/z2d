@@ -28,6 +28,7 @@
         in
         pkgs.mkShell {
           packages = with pkgs; [
+            kcov
             zig_0_16
             zls
             python3

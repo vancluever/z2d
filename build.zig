@@ -111,9 +111,12 @@ pub fn coverStep(b: *std.Build, artifact: *std.Build.Step.Compile, clean: bool) 
     const coverage_command = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=z2d", dir });
     coverage_command.addArtifactArg(artifact);
 
+    const mkdir_command = b.addSystemCommand(&.{ "mkdir", "-p", dir });
+    coverage_command.step.dependOn(&mkdir_command.step);
+
     if (clean) {
         const clean_command = b.addSystemCommand(&.{ "rm", "-rf", dir });
-        coverage_command.step.dependOn(&clean_command.step);
+        mkdir_command.step.dependOn(&clean_command.step);
     }
 
     const open_command = b.addSystemCommand(&.{

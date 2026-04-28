@@ -531,7 +531,7 @@ fn compositorExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {
     );
     defer alloc.free(filename);
 
-    var surface = try subject.render(alloc, io);
+    var surface = try subject.render(io, alloc);
     defer surface.deinit(alloc);
 
     try specExportPNG(
@@ -563,9 +563,9 @@ fn pathExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {
     );
     defer alloc.free(filename_smooth_msaa);
 
-    var surface_pixelated = try subject.render(alloc, io, .none);
+    var surface_pixelated = try subject.render(io, alloc, .none);
     defer surface_pixelated.deinit(alloc);
-    var surface_smooth = try subject.render(alloc, io, .supersample_4x);
+    var surface_smooth = try subject.render(io, alloc, .supersample_4x);
     defer surface_smooth.deinit(alloc);
 
     try specExportPNG(
@@ -587,7 +587,7 @@ fn pathExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {
     // image, but there are a few files that have divergences. During update,
     // we want to check if there's a difference, and only save a file if there
     // is.
-    var surface_smooth_msaa = try subject.render(alloc, io, .multisample_4x);
+    var surface_smooth_msaa = try subject.render(io, alloc, .multisample_4x);
     defer surface_smooth_msaa.deinit(alloc);
     const target_path = try fs.path.join(alloc, &.{ "spec/files", filename_smooth_msaa });
     defer alloc.free(target_path);
@@ -600,7 +600,7 @@ fn pathExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {
         if (@hasDecl(subject, "color_profile")) subject.color_profile else null,
     );
     defer exported_file_smooth_msaa.cleanup(io);
-    compareFiles(alloc, io, exported_file_smooth_msaa.target_path, false) catch |err| {
+    compareFiles(io, alloc, exported_file_smooth_msaa.target_path, false) catch |err| {
         if (err == error.SpecTestFileMismatch) {
             try specExportPNG(
                 alloc,

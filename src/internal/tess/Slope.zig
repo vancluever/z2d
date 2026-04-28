@@ -151,9 +151,9 @@ pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f
     // Normalize our slopes, if not done already.
     //
     // TODO: This can probably be taken out. We never *not* normalize slopes
-    // anymore, so if this is particularly costly it probably be removed (in
-    // favor of setting the expectation that we always expect normalized slopes
-    // here).
+    // anymore, so if this is particularly costly it should probably be removed
+    // (in favor of setting the expectation that we always expect normalized
+    // slopes here).
     const in_slope_normal = in_normal: {
         var s = in_slope;
         _ = s.normalize();

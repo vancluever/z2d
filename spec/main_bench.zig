@@ -243,7 +243,7 @@ fn CompositorBenchmark(
         ) void {
             var threaded: Io.Threaded = .init_single_threaded;
             const io = threaded.io();
-            var sfc = subject.render(alloc, io) catch |err| {
+            var sfc = subject.render(io, alloc) catch |err| {
                 debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };
@@ -260,7 +260,7 @@ fn PathBenchmark(
         fn f(alloc: mem.Allocator) void {
             var threaded: Io.Threaded = .init_single_threaded;
             const io = threaded.io();
-            var sfc = subject.render(alloc, io, aa_mode) catch |err| {
+            var sfc = subject.render(io, alloc, aa_mode) catch |err| {
                 debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };
