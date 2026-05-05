@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: 0BSD
+// SPDX-License-Identifier: MIT
 //   Copyright © 2024-2026 Chris Marchesi
 //   Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors
 
