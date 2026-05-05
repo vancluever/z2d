@@ -1,6 +1,26 @@
-## 0.11.1-pre (Unreleased)
+## 0.12.0 (Unreleased)
 
-Bumped version for dev.
+PATH EFFECTS
+
+0.12.0 introduces a *path effects* feature to the library; informally so named
+to term new features that will be added to `Path` to transform existing paths
+into different versions of themselves in particular ways.
+
+We currently are shipping two said functions, one supporting the other:
+
+* `simplify`: This function simplifies self-intersecting closed paths,
+  returning either outline polygons, or possibly multiple polygons in the event
+  of self-sealing paths. All result polygons should have no self-intersections.
+
+* `offset`: This applies an offset to both closed and open paths. Positive
+  values will outset a path, negative values will inset. The direction is
+  determined by the inside of a polygon in the event of closed paths, and the
+  initial direction/orientation of the first join in the event of open paths.
+  Both scenarios assume that paths do not self-intersect.
+
+These functions have been added to both `Path` and `Context`, with `Path`'s
+version returning new paths and `Context`'s version replacing the existing
+path. See the documentation for further details.
 
 ## 0.11.0 (April 23, 2026)
 
