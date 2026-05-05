@@ -96,6 +96,8 @@ const _079_fill_degenerate_lineto = @import("079_fill_degenerate_lineto.zig");
 const _080_fill_z2d_logo = @import("080_fill_z2d_logo.zig");
 const _081_stroke_hairline = @import("081_stroke_hairline.zig");
 const _082_stroke_hairline_clip = @import("082_stroke_hairline_clip.zig");
+const _083_star_simplify_offset = @import("083_star_simplify_offset.zig");
+const _084_offset_ghostty_conformance = @import("084_offset_ghostty_conformance.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -189,6 +191,8 @@ pub fn main() !void {
     try pathExportRun(io, alloc, _080_fill_z2d_logo);
     try pathExportRun(io, alloc, _081_stroke_hairline);
     try pathExportRun(io, alloc, _082_stroke_hairline_clip);
+    try pathExportRun(io, alloc, _083_star_simplify_offset);
+    try pathExportRun(io, alloc, _084_offset_ghostty_conformance);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -521,6 +525,13 @@ test "082_stroke_hairline_clip" {
     try pathTestRun(testing.io, testing.allocator, _082_stroke_hairline_clip);
 }
 
+test "083_star_simplify_offset" {
+    try pathTestRun(testing.io, testing.allocator, _083_star_simplify_offset);
+}
+
+test "084_offset_ghostty_conformance" {
+    try pathTestRun(testing.io, testing.allocator, _084_offset_ghostty_conformance);
+}
 //////////////////////////////////////////////////////////////////////////////
 
 fn compositorExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {
