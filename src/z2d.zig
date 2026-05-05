@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! z2d is a 2D graphics library whose main purpose is to raster shapes
 //! composed of vector primitives: lines and cubic Beziers, e.g., things you

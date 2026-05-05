@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 //
 // Some of the code in this file (particularly the glyph search algorithms) was
 // adapted from stb_truetype.h, found at https://github.com/nothings/stb.

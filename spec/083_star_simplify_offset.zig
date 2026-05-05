@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Takes our self-intersecting star example and demonstrates how one can
 //! use the path simplification functionality to remove the self-intersections.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 //   Copyright 2006 The Android Open Source Project
 //   Copyright 2020 Yevhenii Reizner
 //

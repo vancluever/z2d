@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Interrogates out-of-bounds drawing under various cases, drawing rects
 //! completely out-of-bounds in various places. This is ultimately a no-op

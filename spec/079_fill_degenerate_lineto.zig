@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Test degenerate line_to cases for fill. These produce edges, but they
 //! should be discarded during rasterization or otherwise create odd images,

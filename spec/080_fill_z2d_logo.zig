@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Renders the z2d logo.
 //!
-//! The z2d logo is Copyright © 2024-2025 Chris Marchesi and licensed CC-BY-SA
+//! The z2d logo is Copyright © 2024-2026 Chris Marchesi and licensed CC-BY-SA
 //! 4.0. Portions of the z2d logo are derived from the [Zig
 //! logo](https://github.com/ziglang/logo) and logomark, which are also
 //! licensed CC-BY-SA 4.0. To view a copy of the license, visit

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Renders and strokes a square on a 300x300 surface, but has a lineTo
 //! back to the initial point before the close. Correct rendering of the square

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Represents all static font data (loaded font based on family selection
 //! data, table directory, metrics, etc), including any file handles associated

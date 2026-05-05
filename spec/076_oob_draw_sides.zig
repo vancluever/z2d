@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: 0BSD
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Interrogates out-of-bounds drawing under various cases, drawing
 //! overlapping images on each four sides. The image should be clipped on the

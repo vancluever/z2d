@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 
 //! Various hairline stroking functions. These functions draw at the minimum
 //! technical stroke width (1 pixel). Note that it is possible to get widths
