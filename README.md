@@ -99,7 +99,7 @@ z2d itself is licensed MPL 2.0; see the LICENSE file for further details.
 Code examples in the [`spec/`](spec/) directory are licensed 0BSD, this means
 you can use them freely to integrate z2d.
 
-The z2d logo is Copyright © 2024-2025 Chris Marchesi and licensed CC-BY-SA 4.0.
+The z2d logo is Copyright © 2024-2026 Chris Marchesi and licensed CC-BY-SA 4.0.
 Portions of the z2d logo are derived from the [Zig
 logo](https://github.com/ziglang/logo) and logomark, which are also licensed
 CC-BY-SA 4.0. To view a copy of the license, visit
