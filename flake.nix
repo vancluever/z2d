@@ -28,11 +28,10 @@
         in
         pkgs.mkShell {
           packages = with pkgs; [
-            kcov
             zig_0_16
             zls
             python3
-          ];
+          ] ++ (if pkgs.stdenv.hostPlatform.isLinux then [ pkgs.kcov ] else []);
         }
       );
     };
