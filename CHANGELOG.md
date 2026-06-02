@@ -22,6 +22,12 @@ These functions have been added to both `Path` and `Context`, with `Path`'s
 version returning new paths and `Context`'s version replacing the existing
 path. See the documentation for further details.
 
+BUG FIXES:
+
+* Any path that ultimately has a bounding box with a negative bottom or right
+  side will now correctly skip drawing.
+  [#174](https://github.com/vancluever/z2d/pull/174))
+
 ## 0.11.0 (April 23, 2026)
 
 ZIG 0.16.0 REQUIRED
