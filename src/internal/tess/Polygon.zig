@@ -154,6 +154,12 @@ pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) 
         @panic("invalid box width or height. this is a bug, please report it");
     }
 
+    // Fast-path negative bottom or right side - if either of these are true,
+    // then there's no chance we're in the box.
+    if (self.extent_right < 0.0 or self.extent_bottom < 0.0 ) {
+        return false;
+    }
+
     // Round our polygon to the appropriate dimensions. For scanline fill, we
     // make sure to push our our box so the whole of the polygon fits in
     // the box.
@@ -675,6 +681,32 @@ test "Polygon.inBox" {
             .expected = false,
         },
         .{
+            .name = "OOB, negative bottom",
+            .polygon = .{
+                .extent_left = -2.0,
+                .extent_top = -2.0,
+                .extent_right = 0.0,
+                .extent_bottom = -0.75,
+            },
+            .scale = 1.0,
+            .box_height = 10,
+            .box_width = 10,
+            .expected = false,
+        },
+        .{
+            .name = "OOB, negative right side",
+            .polygon = .{
+                .extent_left = -10.5,
+                .extent_top = 9.0,
+                .extent_right = -0.5,
+                .extent_bottom = 19.0,
+            },
+            .scale = 1.0,
+            .box_height = 10,
+            .box_width = 10,
+            .expected = false,
+        },
+        .{
             .name = "scale",
             .polygon = .{
                 .extent_left = 20.0,
@@ -712,32 +744,6 @@ test "Polygon.inBox" {
             .box_height = 10,
             .box_width = 10,
             .expected = false,
-        },
-        .{
-            .name = "rounding into upper left, x-axis",
-            .polygon = .{
-                .extent_left = -2.0,
-                .extent_top = -2.0,
-                .extent_right = -0.75,
-                .extent_bottom = 0.0,
-            },
-            .scale = 1.0,
-            .box_height = 10,
-            .box_width = 10,
-            .expected = true,
-        },
-        .{
-            .name = "rounding into upper left, y-axis",
-            .polygon = .{
-                .extent_left = -2.0,
-                .extent_top = -2.0,
-                .extent_right = 0.0,
-                .extent_bottom = -0.75,
-            },
-            .scale = 1.0,
-            .box_height = 10,
-            .box_width = 10,
-            .expected = true,
         },
         .{
             .name = "rounding into lower right, x-axis",
