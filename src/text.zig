@@ -39,7 +39,10 @@ pub const ShowTextOptions = struct {
     size: f64 = 16.0,
 
     /// Options passed down to the underlying `fill` operation.
-    fill_opts: painter.FillOptions,
+    fill_opts: painter.FillOptions = .default,
+
+    /// Can be used to denote the default option set.
+    pub const default: ShowTextOptions = .{};
 };
 
 pub const ShowTextError = error{
