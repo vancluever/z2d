@@ -42,6 +42,9 @@ pub const FillOptions = struct {
     /// higher tolerance will give better performance, but "blockier" curves.
     /// The default tolerance should be sufficient for most cases.
     tolerance: f64 = options.default_tolerance,
+
+    /// Can be used to denote the default option set.
+    pub const default: FillOptions = .{};
 };
 
 /// Errors related to the `fill` operation.
@@ -189,6 +192,9 @@ pub const StrokeOptions = struct {
     /// modes, and other associated options such as miter limit, line width,
     /// and the transformation matrix.
     hairline: bool = false,
+
+    /// Can be used to denote the default option set.
+    pub const default: StrokeOptions = .{};
 };
 
 /// Errors related to the `stroke` operation.
