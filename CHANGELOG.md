@@ -27,6 +27,9 @@ BUG FIXES:
 * Any path that ultimately has a bounding box with a negative bottom or right
   side will now correctly skip drawing.
   [#174](https://github.com/vancluever/z2d/pull/174))
+* Invalid end or starting points are now skipped when processing glyph outlines
+  when rendering text, instead of producing an error.
+  [#177](https://github.com/vancluever/z2d/pull/177))
 
 ## 0.11.0 (April 23, 2026)
 
