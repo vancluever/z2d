@@ -98,6 +98,7 @@ const _081_stroke_hairline = @import("081_stroke_hairline.zig");
 const _082_stroke_hairline_clip = @import("082_stroke_hairline_clip.zig");
 const _083_star_simplify_offset = @import("083_star_simplify_offset.zig");
 const _084_offset_ghostty_conformance = @import("084_offset_ghostty_conformance.zig");
+const _085_deja_sans_ignore_invalid_points = @import("085_deja_sans_ignore_invalid_points.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -193,6 +194,7 @@ pub fn main() !void {
     try pathExportRun(io, alloc, _082_stroke_hairline_clip);
     try pathExportRun(io, alloc, _083_star_simplify_offset);
     try pathExportRun(io, alloc, _084_offset_ghostty_conformance);
+    try pathExportRun(io, alloc, _085_deja_sans_ignore_invalid_points);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -532,6 +534,11 @@ test "083_star_simplify_offset" {
 test "084_offset_ghostty_conformance" {
     try pathTestRun(testing.io, testing.allocator, _084_offset_ghostty_conformance);
 }
+
+test "085_deja_sans_ignore_invalid_points" {
+    try pathTestRun(testing.io, testing.allocator, _085_deja_sans_ignore_invalid_points);
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 fn compositorExportRun(io: Io, alloc: mem.Allocator, subject: anytype) !void {

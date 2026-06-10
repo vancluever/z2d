@@ -734,7 +734,13 @@ pub const Outline = struct {
                 sw: switch (state) {
                     .move_to => {
                         if (!flags.items[i].on_curve or end_points_of_contours.contains(i)) {
-                            return error.MalformedGlyph;
+                            // This is an invalid point - either it is the
+                            // first point of a contour and should be on-curve,
+                            // or it's an end point that has immediately
+                            // followed another end point. Either way, there's
+                            // nothing we can technically do with this, so we
+                            // just drop it and move on.
+                            continue;
                         }
                         try path.moveTo(
                             alloc,
