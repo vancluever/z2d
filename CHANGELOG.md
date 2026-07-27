@@ -1,6 +1,9 @@
-## 0.12.1-pre (Unreleased)
+## 0.12.1 (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Path `simplify` and `offset` functions have been fixed to ensure they can
+  take `const` paths.
 
 ## 0.12.0 (July 27, 2026)
 
