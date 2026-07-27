@@ -1,3 +1,7 @@
+## 0.12.2-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.12.1 (July 27, 2026)
 
 BUG FIXES:
