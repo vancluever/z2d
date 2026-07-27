@@ -501,7 +501,7 @@ pub const SimplifyError = simplifypkg.Error;
 ///
 /// The returned `Path` is a completely new path that the caller owns - call
 /// `deinit` to release as normal.
-pub fn simplify(self: *Path, alloc: mem.Allocator) SimplifyError!Path {
+pub fn simplify(self: *const Path, alloc: mem.Allocator) SimplifyError!Path {
     const result_nodes = try simplifypkg.run(alloc, self.nodes.items, self.tolerance);
     var result: Path = .{
         .nodes = .fromOwnedSlice(result_nodes),
@@ -529,7 +529,7 @@ pub const OffsetError = simplifypkg.Error;
 ///
 /// The returned `Path` is a completely new path that the caller owns - call
 /// `deinit` to release as normal.
-pub fn offset(self: *Path, alloc: mem.Allocator, value: f64) OffsetError!Path {
+pub fn offset(self: *const Path, alloc: mem.Allocator, value: f64) OffsetError!Path {
     const result_nodes = try offsetpkg.run(alloc, self.nodes.items, self.tolerance, value);
     var result: Path = .{
         .nodes = .fromOwnedSlice(result_nodes),
