@@ -156,7 +156,7 @@ pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) 
 
     // Fast-path negative bottom or right side - if either of these are true,
     // then there's no chance we're in the box.
-    if (self.extent_right < 0.0 or self.extent_bottom < 0.0 ) {
+    if (self.extent_right <= 0.0 or self.extent_bottom <= 0.0) {
         return false;
     }
 
@@ -704,6 +704,32 @@ test "Polygon.inBox" {
             .scale = 1.0,
             .box_height = 10,
             .box_width = 10,
+            .expected = false,
+        },
+        .{
+            .name = "OOB, bottom adjacent at exactly zero",
+            .polygon = .{
+                .extent_left = -37.0,
+                .extent_top = -29.0,
+                .extent_right = 21.0,
+                .extent_bottom = 0.0,
+            },
+            .scale = 1.0,
+            .box_height = 100,
+            .box_width = 100,
+            .expected = false,
+        },
+        .{
+            .name = "OOB, right side adjacent at exactly zero",
+            .polygon = .{
+                .extent_left = -37.0,
+                .extent_top = -29.0,
+                .extent_right = 0.0,
+                .extent_bottom = 21.0,
+            },
+            .scale = 1.0,
+            .box_height = 100,
+            .box_width = 100,
             .expected = false,
         },
         .{
