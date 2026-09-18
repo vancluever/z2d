@@ -223,12 +223,16 @@ pub fn main() !void {
 }
 
 fn addCompositorBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
-    if (!mem.containsAtLeast(u8, subject.filename, 1, options.filter)) return;
+    if (options.filter) |filter| {
+        if (filter.len != 0 and !mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
+    }
     try bench.add("(NOAA) " ++ subject.filename, CompositorBenchmark(subject).f, .{});
 }
 
 fn addPathBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
-    if (!mem.containsAtLeast(u8, subject.filename, 1, options.filter)) return;
+    if (options.filter) |filter| {
+        if (filter.len != 0 and !mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
+    }
     try bench.add("(NOAA) " ++ subject.filename, PathBenchmark(subject, .none).f, .{});
     try bench.add("(SSAA) " ++ subject.filename, PathBenchmark(subject, .supersample_4x).f, .{});
     try bench.add("(MSAA) " ++ subject.filename, PathBenchmark(subject, .multisample_4x).f, .{});
