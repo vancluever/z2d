@@ -4,52 +4,56 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 /// Returns a step that generates our documentation, with all unnecessary
-/// dependencies filtered out (currently this is "std" and "builtin").
+/// dependencies filtered out (currently this is just "std").
 ///
 /// NOTE: This relies on system tools right now, but eventually once the stdlib
 /// gets better, I'd love to move this to pure Zig.
-pub fn docsStep(
+fn docsStep(
     b: *std.Build,
     mod: *std.Build.Module,
-) *std.Build.Step {
-    const dir = b.addInstallDirectory(.{
-        .source_dir = b.addObject(.{
-            .name = "z2d",
-            .root_module = mod,
-        }).getEmittedDocs(),
-        .install_dir = .prefix,
-        .install_subdir = "docs",
-    });
+) !std.Build.LazyPath {
+    const docs_dir_name = "docs-generated";
 
-    const in_tar = b.pathJoin(
-        &.{ b.install_prefix, "docs", "sources.tar" },
-    );
-    const out_tar = b.pathJoin(
-        &.{ b.install_prefix, "docs", "sources.tar.new" },
-    );
+    // This should generate a directory named "z2d-docs" with the documentation
+    // as emitted by getEmittedDocs. Unfortunately the name generated here
+    // determines the root namespace, so we have to keep it this way; we try to
+    // keep every other directory named something else unique though so that
+    // things are easily identifiable in the cache.
+    const emitted_docs_dir = b.addObject(.{
+        .name = "z2d",
+        .root_module = mod,
+    }).getEmittedDocs();
+
+    const in_tar = try emitted_docs_dir.join(b.allocator, "sources.tar");
     const tar = b.addSystemCommand(&.{"sh"});
     tar.addArgs(&.{
         "-c",
-        b.fmt("cat {s} | tar --delete std > {s}", .{ in_tar, out_tar }),
+        "cat \"$1\" | tar --delete std > \"$2\"",
+        "--",
     });
+    tar.addFileArg(in_tar);
+    const out_tar = tar.addOutputFileArg("z2d-sources.tar");
 
-    const mv = b.addSystemCommand(&.{ "mv", out_tar, in_tar });
+    const wf = b.addWriteFiles();
+    const out_docs_dir = try wf.getDirectory().join(b.allocator, docs_dir_name);
+    inline for (.{ "main.js", "main.wasm", "index.html" }) |file| {
+        _ = wf.addCopyFile(
+            try emitted_docs_dir.join(b.allocator, file),
+            b.fmt("{s}/{s}", .{ docs_dir_name, file }),
+        );
+    }
+    _ = wf.addCopyFile(out_tar, b.fmt("{s}/{s}", .{ docs_dir_name, "sources.tar" }));
 
-    tar.step.dependOn(&dir.step);
-    mv.step.dependOn(&tar.step);
-    return &mv.step;
+    return out_docs_dir;
 }
 
 /// Serves the "docs" directory. Relies on python3 being installed.
 ///
 /// NOTE: This relies on system tools right now, but eventually once the stdlib
 /// gets better, I'd love to move this to pure Zig.
-pub fn docsServeStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step {
+fn docsServeStep(b: *std.Build, docs_dir: std.Build.LazyPath) *std.Build.Step {
     const server = b.addSystemCommand(&.{ "python3", "-m", "http.server" });
-    // No idea how to access the build prefix otherwise right now, so we have
-    // to set this manually
-    server.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.install_prefix, "docs" }) });
-    server.step.dependOn(docs_step);
+    server.setCwd(docs_dir);
     return &server.step;
 }
 
@@ -57,78 +61,72 @@ pub fn docsServeStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step 
 ///
 /// NOTE: This relies on system tools right now, but eventually once the stdlib
 /// gets better, I'd love to move this to pure Zig.
-///
-/// If branch is specified, ensures that main.js, main.wasm, and sources.tar
-/// reference that branch.
-pub fn docsBundleStep(b: *std.Build, docs_step: *std.Build.Step) *std.Build.Step {
-    const dir = b.pathJoin(
-        &.{ b.install_prefix, "docs" },
-    );
-    const target = b.pathJoin(
-        &.{ b.install_prefix, "z2d-docs.tar.gz" },
-    );
-    const tar = b.addSystemCommand(&.{
-        "tar",
-        "--create",
-        "--gzip",
-        b.fmt("--directory={s}", .{dir}),
-        b.fmt("--file={s}", .{target}),
-        ".",
+fn docsBundleStep(b: *std.Build, docs_dir: std.Build.LazyPath) !*std.Build.Step {
+    const out_file_name = "z2d-docs.tar.gz";
+    const bundle_dir_name = "docs-bundle";
+
+    const wf = b.addWriteFiles();
+    const bundle_dir = try wf.getDirectory().join(b.allocator, bundle_dir_name);
+
+    inline for (.{ "main.wasm", "sources.tar" }) |file| {
+        _ = wf.addCopyFile(
+            try docs_dir.join(b.allocator, file),
+            b.fmt("{s}/{s}", .{ bundle_dir_name, file }),
+        );
+    }
+
+    const index_html_sed = b.addSystemCommand(&.{
+        "sed",
+        "s#main.js#/docs/main.js#g",
     });
+    index_html_sed.addFileArg(try docs_dir.join(b.allocator, "index.html"));
+    _ = wf.addCopyFile(
+        index_html_sed.captureStdOut(.{ .basename = "index.bundle.html" }),
+        b.fmt("{s}/{s}", .{ bundle_dir_name, "index.html" }),
+    );
 
     const main_js_sed = b.addSystemCommand(&.{
         "sed",
-        "--in-place",
-        "s#main.js#/docs/main.js#g",
-        b.pathJoin(&.{ dir, "index.html" }),
+        "s#main.wasm#/docs/main.wasm#g; s#sources.tar#/docs/sources.tar#g",
     });
-    const main_wasm_sed = b.addSystemCommand(&.{
-        "sed",
-        "--in-place",
-        "s#main.wasm#/docs/main.wasm#g",
-        b.pathJoin(&.{ dir, "main.js" }),
+    main_js_sed.addFileArg(try docs_dir.join(b.allocator, "main.js"));
+    _ = wf.addCopyFile(
+        main_js_sed.captureStdOut(.{ .basename = "main.bundle.js" }),
+        b.fmt("{s}/{s}", .{ bundle_dir_name, "main.js" }),
+    );
+
+    const tar = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        "tar --create --gzip --directory=\"$1\" --file=\"$2\" .",
+        "--",
     });
-    const sources_tar_sed = b.addSystemCommand(&.{
-        "sed",
-        "--in-place",
-        "s#sources.tar#/docs/sources.tar#g",
-        b.pathJoin(&.{ dir, "main.js" }),
-    });
-    main_js_sed.step.dependOn(docs_step);
-    main_wasm_sed.step.dependOn(&main_js_sed.step);
-    sources_tar_sed.step.dependOn(&main_wasm_sed.step);
-    tar.step.dependOn(&sources_tar_sed.step);
-    return &tar.step;
+    tar.addDirectoryArg(bundle_dir);
+    const out_file = tar.addOutputFileArg(out_file_name);
+
+    const install_tar = b.addInstallFile(out_file, out_file_name);
+    return &install_tar.step;
 }
 
 /// A step that runs kcov on an artifact binary (requires kcov to be
 /// installed).
-pub fn coverStep(b: *std.Build, artifact: *std.Build.Step.Compile, clean: bool) *std.Build.Step {
-    const dir = b.pathJoin(
-        &.{ b.install_prefix, "cover" },
-    );
+fn coverStep(b: *std.Build, artifact: *std.Build.Step.Compile, clean: bool) !*std.Build.Step {
+    _ = clean;
 
-    const coverage_command = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=z2d", dir });
+    const coverage_command = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=z2d" });
+    const output_dir = coverage_command.addOutputDirectoryArg("z2d-cover");
     coverage_command.addArtifactArg(artifact);
-
-    const mkdir_command = b.addSystemCommand(&.{ "mkdir", "-p", dir });
-    coverage_command.step.dependOn(&mkdir_command.step);
-
-    if (clean) {
-        const clean_command = b.addSystemCommand(&.{ "rm", "-rf", dir });
-        mkdir_command.step.dependOn(&clean_command.step);
-    }
 
     const open_command = b.addSystemCommand(&.{
         if (builtin.target.os.tag == .linux) "xdg-open" else "open",
-        b.pathJoin(&.{ dir, "index.html" }),
     });
+    open_command.addFileArg(try output_dir.join(b.allocator, "index.html"));
 
     open_command.step.dependOn(&coverage_command.step);
     return &open_command.step;
 }
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -185,7 +183,7 @@ pub fn build(b: *std.Build) void {
     });
     const test_step = b.step("test", "Run unit tests");
     if (cover) {
-        const cover_step = coverStep(b, test_compile, clean);
+        const cover_step = try coverStep(b, test_compile, clean);
         test_step.dependOn(cover_step);
     } else {
         const test_run = b.addRunArtifact(test_compile);
@@ -244,8 +242,7 @@ pub fn build(b: *std.Build) void {
     /////////////////////////////////////////////////////////////////////////
     // Docs
     /////////////////////////////////////////////////////////////////////////
-    const docs_step = docsStep(b, z2d);
-    b.step("docs", "Generate documentation").dependOn(docs_step);
-    b.step("docs-serve", "Serve documentation").dependOn(docsServeStep(b, docs_step));
-    b.step("docs-bundle", "Bundle documentation").dependOn(docsBundleStep(b, docs_step));
+    const docs_dir = try docsStep(b, z2d);
+    b.step("docs-serve", "Serve documentation").dependOn(docsServeStep(b, docs_dir));
+    b.step("docs-bundle", "Bundle documentation").dependOn(try docsBundleStep(b, docs_dir));
 }
