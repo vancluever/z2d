@@ -80,6 +80,8 @@ vector rasterization, suitable for UI design and other similar tasks.
 Note that Zig 0.16.0 or higher is required. For Zig 0.15.x support, the last
 supported version is 0.10.0.
 
+The `zig-0.17` branch can be used for the current development version of Zig.
+
 ## Documentation and examples
 
 View the documentation for the latest release at:
