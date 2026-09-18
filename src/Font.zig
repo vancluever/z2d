@@ -80,7 +80,7 @@ const ValidateMagicError = error{
 } || Io.Reader.Error;
 
 fn validateMagic(file: *Io.Reader) ValidateMagicError!void {
-    var header = [_]u8{0} ** 4;
+    var header: [4]u8 = @splat(0);
     try file.readSliceAll(&header);
     var header_ok: bool = false;
     if (mem.eql(u8, &header, &.{ '1', 0, 0, 0 })) header_ok = true;

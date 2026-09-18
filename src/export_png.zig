@@ -95,8 +95,8 @@ const WritePNGIHDRError = WritePNGWriteChunkError;
 
 /// Writes the IHDR chunk for the PNG file.
 fn writePNGIHDR(writer: *Io.Writer, sfc: surface.Surface) WritePNGIHDRError!void {
-    var width = [_]u8{0} ** 4;
-    var height = [_]u8{0} ** 4;
+    var width: [4]u8 = @splat(0);
+    var height: [4]u8 = @splat(0);
 
     mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
     mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
@@ -135,7 +135,7 @@ fn writePNGgAMA(writer: *Io.Writer, profile: color.RGBProfile) WritePNGgAMAError
         .linear => 1 / color.LinearRGB.gamma,
         .srgb => 1 / color.SRGB.gamma,
     }) * 100000);
-    var gamma_bytes = [_]u8{0} ** 4;
+    var gamma_bytes: [4]u8 = @splat(0);
     mem.writeInt(u32, &gamma_bytes, gamma, .big);
     try writePNGWriteChunk(
         writer,
@@ -179,8 +179,8 @@ fn writePNGIDATStream(
         }
     };
 
-    var idat_buffer = [_]u8{0} ** IDATStream.buffer_size;
-    var zlib_buffer = [_]u8{0} ** flate.max_window_len;
+    var idat_buffer: [IDATStream.buffer_size]u8 = @splat(0);
+    var zlib_buffer: [flate.max_window_len]u8 = @splat(0);
     var idat_stream: IDATStream = .{
         .output_file_writer = writer,
         .idat_stream_writer = .{
@@ -210,7 +210,7 @@ fn writePNGIDATStream(
         //
         // Buffer is 4 * vector_length + 1 bytes to accommodate both scanline
         // header and current maximum bpp (which is a u32).
-        var pixel_buffer = [_]u8{0} ** (4 * vector_length + 1);
+        var pixel_buffer: [4 * vector_length + 1]u8 = @splat(0);
         var nbytes: usize = 1; // Adds scanline header (0x00 - no filtering)
 
         const stride = sfc.getStride(0, y, @max(0, sfc_width));
@@ -235,7 +235,7 @@ fn writePNGIDATStream(
 
                 switch (stride) {
                     inline .xrgb, .rgb => |s| {
-                        var stride_vec = [_]u32{0} ** vector_length;
+                        var stride_vec: [vector_length]u32 = @splat(0);
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
                         stride_vec = encodeRGBAVec(
                             stride_vec,
@@ -252,7 +252,7 @@ fn writePNGIDATStream(
                         break :written stride_len * 3;
                     },
                     inline .argb, .rgba => |s| {
-                        var stride_vec = [_]u32{0} ** vector_length;
+                        var stride_vec: [vector_length]u32 = @splat(0);
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
                         stride_vec = encodeRGBAVec(
                             stride_vec,

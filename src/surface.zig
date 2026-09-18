@@ -454,7 +454,7 @@ pub fn ImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
+                    var pixels: [scale * scale]T = @splat(mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -694,7 +694,7 @@ pub fn PackedImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels = [_]T{mem.zeroes(T)} ** (scale * scale);
+                    var pixels: [scale * scale]T = @splat(mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -989,14 +989,15 @@ test "ImageSurface, init, deinit" {
     var sfc = try sfc_T.init(testing.allocator, 10, 20, null);
     defer sfc.deinit(testing.allocator);
 
+    const expected_buffer: [200]pixel.RGBA = @splat(.{ .r = 0, .g = 0, .b = 0, .a = 0 });
     try testing.expectEqual(20, sfc.height);
     try testing.expectEqual(10, sfc.width);
     try testing.expectEqual(200, sfc.buf.len);
     try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
     try testing.expectEqualSlices(
         pixel.RGBA,
+        &expected_buffer,
         sfc.buf,
-        &[_]pixel.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
     );
 }
 
