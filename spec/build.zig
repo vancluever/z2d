@@ -8,8 +8,8 @@ pub fn build(b: *std.Build) void {
         []const u8,
         "filter",
         "Filter benchmark(s) to this string",
-    ) orelse &.{};
-    options.addOption([]const u8, "filter", filter);
+    );
+    options.addOption(?[]const u8, "filter", filter);
 
     const z2d_dep = b.dependency("z2d", .{
         .target = target,

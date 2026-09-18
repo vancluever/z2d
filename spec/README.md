@@ -78,7 +78,7 @@ is necessary to get memory readings, which are disabled in `Debug` and
 
 To filter, run `zig build -Doptimize=ReleaseFast -Dfilter=STRING`. This filters
 on `STRING`, similar to the acceptance tests, except that only one filter can
-be specified.
+be specified. Note that an empty string is the same as no filter.
 
 ### A couple of notes on benchmarks
 
