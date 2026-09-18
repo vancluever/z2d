@@ -557,7 +557,7 @@ fn Alpha(comptime fmt: Format) type {
 
         /// The underlying integer for the alpha channel (and the packed
         /// struct).
-        pub const IntType = meta.Int(.unsigned, NumBits);
+        pub const IntType = @Int(.unsigned, NumBits);
 
         /// The format descriptor for this pixel format.
         pub const format: Format = fmt;

@@ -922,8 +922,8 @@ test "Surface interface" {
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
 
         // Standard tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
@@ -943,8 +943,8 @@ test "Surface interface" {
         }
 
         // initPixel tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
@@ -961,8 +961,8 @@ test "Surface interface" {
         }
 
         // Bring-your-own-buffer tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const buffer_type = surface_type.toBufferType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
@@ -1683,20 +1683,21 @@ test "PackedImageSurface.downsample, edge cases" {
 
 test "getStride, OOB" {
     const alloc = testing.allocator;
-    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
-        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+    const info = @typeInfo(SurfaceType).@"enum";
+    inline for (info.field_names, info.field_values) |f_name, f_value| {
+        var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
         defer sfc.deinit(alloc);
         inline for (.{ -10, 5, 20 }) |x| {
             inline for (.{ -10, 5, 20 }) |y| {
                 const got = sfc.getStride(x, y, 2);
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
                     testing.expectEqual(0, got.pxLen()) catch |err| {
-                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 } else {
                     testing.expectEqual(2, got.pxLen()) catch |err| {
-                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 }
@@ -1707,8 +1708,9 @@ test "getStride, OOB" {
 
 test "compositeStride, simple test w/OOB" {
     const alloc = testing.allocator;
-    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
-        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+    const info = @typeInfo(SurfaceType).@"enum";
+    inline for (info.field_values) |f_value| {
+        var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
         defer sfc.deinit(alloc);
         inline for (.{ -10, 5, 20 }) |x| {
             inline for (.{ -10, 5, 20 }) |y| {
@@ -1721,7 +1723,7 @@ test "compositeStride, simple test w/OOB" {
                     .src,
                     255,
                 );
-                const sfc_type_enum: SurfaceType = @enumFromInt(sfc_type.value);
+                const sfc_type_enum: SurfaceType = @enumFromInt(f_value);
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
                     for (0..10) |want_y_u| {
                         for (0..10) |want_x_u| {

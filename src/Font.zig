@@ -117,8 +117,8 @@ const Directory = struct {
     fn init(file: *Io.Reader) InitError!Directory {
         var result: Directory = result: {
             var r: Directory = undefined;
-            inline for (@typeInfo(Directory).@"struct".fields) |f| {
-                @field(r, f.name) = 0;
+            inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
+                @field(r, f_name) = 0;
             }
 
             break :result r;
@@ -140,8 +140,8 @@ const Directory = struct {
             file.seek = dir_idx * table_dir_entry_len + table_dir_offset;
             var entry_tag: [4]u8 = undefined;
             try file.readSliceAll(&entry_tag);
-            inline for (@typeInfo(Directory).@"struct".fields) |f| {
-                if (mem.eql(u8, &entry_tag, f.name)) {
+            inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
+                if (mem.eql(u8, &entry_tag, f_name)) {
                     const checksum: u32 = try readerInt(file, u32, .big);
                     const offset: u32 = try readerInt(file, u32, .big);
                     const len: u32 = try readerInt(file, u32, .big);
@@ -156,7 +156,7 @@ const Directory = struct {
                     // the "head" table.
                     var actual_checksum: u32 = 0;
                     file.seek = offset;
-                    const is_head = mem.eql(u8, f.name, "head");
+                    const is_head = mem.eql(u8, f_name, "head");
                     for (0..((len + 3) / 4)) |j| {
                         if (is_head and j == 2)
                             _ = try readerInt(file, u32, .big)
@@ -171,21 +171,21 @@ const Directory = struct {
                         return error.ChecksumMismatch;
                     }
 
-                    @field(result, f.name) = offset;
+                    @field(result, f_name) = offset;
                 }
             }
         }
 
         // We currently require all tables, so just go over them and make sure
         // all entries are present.
-        inline for (@typeInfo(Directory).@"struct".fields) |f| {
+        inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
             comptime {
-                if (mem.eql(u8, f.name, "kern") or mem.eql(u8, f.name, "GPOS")) {
+                if (mem.eql(u8, f_name, "kern") or mem.eql(u8, f_name, "GPOS")) {
                     continue;
                 }
             }
 
-            if (@field(result, f.name) == 0) {
+            if (@field(result, f_name) == 0) {
                 return error.MissingRequiredTable;
             }
         }

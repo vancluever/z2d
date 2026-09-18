@@ -1,7 +1,7 @@
 //! Utility package for miscellaneous functions.
 
-const builtin = @import("std").builtin;
 const debug = @import("std").debug;
+const lang = @import("std").lang;
 const mem = @import("std").mem;
 const Io = @import("std").Io;
 
@@ -39,20 +39,19 @@ pub const TestingError = error{
 /// `@Vector(vector_length, T)`, to allow for SIMD and ease of utilization by
 /// the compositor.
 pub fn vectorize(comptime T: type) type {
-    const num = @typeInfo(T).@"struct".fields.len;
-    var field_names: [num][]const u8 = undefined;
+    const info = @typeInfo(T).@"struct";
+    const num = info.field_names.len;
     var field_types: [num]type = undefined;
-    var field_attrs: [num]builtin.Type.StructField.Attributes = undefined;
-    for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
-        field_names[i] = f.name;
-        field_types[i] = @Vector(vector_length, f.type);
+    var field_attrs: [num]lang.Type.Struct.FieldAttributes = undefined;
+    for (info.field_types, 0..) |f_type, i| {
+        field_types[i] = @Vector(vector_length, f_type);
         field_attrs[i] = .{
             .@"comptime" = false,
             .@"align" = @alignOf(field_types[i]),
             .default_value_ptr = null,
         };
     }
-    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
+    return @Struct(.auto, null, info.field_names, &field_types, &field_attrs);
 }
 
 /// Internal function for splatting, shorthand for
@@ -94,8 +93,8 @@ pub const zero_color_vec: [vector_length]colorpkg.Color = zero_color_vec: {
 /// Returns `true` if the field `name` exists in the supplied type. `T` must be
 /// a struct.
 pub fn hasField(comptime T: type, field_name: []const u8) bool {
-    inline for (@typeInfo(T).@"struct".fields) |f| {
-        if (mem.eql(u8, f.name, field_name)) {
+    inline for (@typeInfo(T).@"struct".field_names) |f_name| {
+        if (mem.eql(u8, f_name, field_name)) {
             return true;
         }
     }
@@ -103,7 +102,7 @@ pub fn hasField(comptime T: type, field_name: []const u8) bool {
 }
 
 /// Pulled from old stdlib as this function has been removed.
-pub fn readerInt(reader: *Io.Reader, comptime T: type, endian: builtin.Endian) Io.Reader.Error!T {
+pub fn readerInt(reader: *Io.Reader, comptime T: type, endian: lang.Endian) Io.Reader.Error!T {
     const bytes = try readerBytesNoEof(reader, @divExact(@typeInfo(T).int.bits, 8));
     return mem.readInt(T, &bytes, endian);
 }
