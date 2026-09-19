@@ -100,6 +100,7 @@ const _082_stroke_hairline_clip = @import("082_stroke_hairline_clip.zig");
 const _083_star_simplify_offset = @import("083_star_simplify_offset.zig");
 const _084_offset_ghostty_conformance = @import("084_offset_ghostty_conformance.zig");
 const _085_deja_sans_ignore_invalid_points = @import("085_deja_sans_ignore_invalid_points.zig");
+const _086_stroke_dash_close_multiple_join = @import("086_stroke_dash_close_multiple_join.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -222,6 +223,7 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _083_star_simplify_offset);
     try addPathBenchmark(&bench, _084_offset_ghostty_conformance);
     try addPathBenchmark(&bench, _085_deja_sans_ignore_invalid_points);
+    try addPathBenchmark(&bench, _086_stroke_dash_close_multiple_join);
 
     var threaded: Io.Threaded = .init_single_threaded;
     const io = threaded.io();
