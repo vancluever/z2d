@@ -1,6 +1,14 @@
 ## 0.12.2-pre (Unreleased)
 
-Bumped version for dev.
+BUG FIXES:
+
+* Any path that ultimately has a bounding box with a bottom or right side
+  coordinate of *exactly* zero will now correctly skip drawing. This is a
+  follow-on of [#173](https://github.com/vancluever/z2d/pull/173), fixed in
+  0.12.0. ([#184](https://github.com/vancluever/z2d/pull/184))
+* Dashed strokes where the final segment joins on both the final an initial
+  points will now correctly render without artifacts.
+  ([#187](https://github.com/vancluever/z2d/pull/187))
 
 ## 0.12.1 (July 27, 2026)
 
@@ -37,10 +45,10 @@ BUG FIXES:
 
 * Any path that ultimately has a bounding box with a negative bottom or right
   side will now correctly skip drawing.
-  [#174](https://github.com/vancluever/z2d/pull/174))
+  ([#173](https://github.com/vancluever/z2d/pull/173))
 * Invalid end or starting points are now skipped when processing glyph outlines
   when rendering text, instead of producing an error.
-  [#177](https://github.com/vancluever/z2d/pull/177))
+  ([#177](https://github.com/vancluever/z2d/pull/177))
 
 ## 0.11.0 (April 23, 2026)
 
