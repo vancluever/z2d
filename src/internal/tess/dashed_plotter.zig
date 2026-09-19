@@ -580,6 +580,8 @@ const Plotter = struct {
             // We need to replace the initial polygon with the outer due to the
             // direction of the concat happened in.
             self.initial_polygon.on.outer = self.outer;
+            // Retain clockwise direction from existing polygon
+            self.initial_polygon.on.clockwise_ = self.clockwise_;
 
             // Our first cap points are based entirely off of the plotter state
             // (not the initial state).
