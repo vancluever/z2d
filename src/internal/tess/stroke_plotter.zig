@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const debug = @import("std").debug;
+const fmt = @import("std").fmt;
 const math = @import("std").math;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
@@ -270,7 +271,7 @@ pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
         },
         self.opts.cap_mode,
         true,
-        self.pen,
+        unwrapPen(self),
     );
     try cap_points.cap_p1(
         &.{
@@ -279,7 +280,7 @@ pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
         },
         self.opts.cap_mode,
         true,
-        self.pen,
+        unwrapPen(self),
     );
 
     // Convert our contour to edges
@@ -332,7 +333,7 @@ pub fn plotOpenJoined(
         },
         self.opts.cap_mode,
         clockwise,
-        self.pen,
+        unwrapPen(self),
     );
 
     // End point
@@ -344,7 +345,7 @@ pub fn plotOpenJoined(
         },
         self.opts.cap_mode,
         clockwise,
-        self.pen,
+        unwrapPen(self),
     );
 
     // Now, concat the end of the inner contour to the end of the outer to give
@@ -573,6 +574,17 @@ const CapPlotterCtx = struct {
         };
     }
 };
+
+inline fn unwrapPen(plotter: anytype) ?*const Pen {
+    switch (@TypeOf(plotter.pen)) {
+        ?Pen => {
+            if (plotter.pen == null) return null;
+            return &plotter.pen.?;
+        },
+        ?*const Pen => return plotter.pen,
+        else => @compileError("unknown pen type"),
+    }
+}
 
 test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
