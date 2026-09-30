@@ -9,6 +9,9 @@ BUG FIXES:
 * Dashed strokes where the final segment joins on both the final an initial
   points will now correctly render without artifacts.
   ([#187](https://github.com/vancluever/z2d/pull/187))
+* Fixed a memory leak in the dashed plotter that can happen when a stroke
+  operation runs out of memory during plotting.
+  ([#188](https://github.com/vancluever/z2d/pull/188))
 
 ## 0.12.1 (July 27, 2026)
 
