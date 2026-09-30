@@ -156,7 +156,7 @@ pub fn cap_p0(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-    pen: ?Pen,
+    pen: ?*const Pen,
 ) PlotterVTable.Error!void {
     const reversed = init(self.p1, self.p0, self.width, self.ctm);
     return reversed.cap(
@@ -172,7 +172,7 @@ pub fn cap_p1(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-    pen: ?Pen,
+    pen: ?*const Pen,
 ) PlotterVTable.Error!void {
     return self.cap(
         plotter_impl,
@@ -187,7 +187,7 @@ fn cap(
     plotter_impl: *const PlotterVTable,
     cap_mode: options.CapMode,
     clockwise: bool,
-    pen: ?Pen,
+    pen: ?*const Pen,
 ) PlotterVTable.Error!void {
     switch (cap_mode) {
         .butt => {
@@ -253,7 +253,7 @@ fn capRound(
     self: Face,
     plotter_impl: *const PlotterVTable,
     clockwise: bool,
-    pen: ?Pen,
+    pen: ?*const Pen,
 ) PlotterVTable.Error!void {
     // We need to calculate our fan along the end as if we were
     // dealing with a 180 degree joint. So, treat it as if there
