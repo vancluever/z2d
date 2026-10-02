@@ -140,3 +140,9 @@ fn readerBytesNoEof(reader: *Io.Reader, comptime num_bytes: usize) Io.Reader.Err
     try reader.readSliceAll(&bytes);
     return bytes;
 }
+
+/// Changes the seek position of the supplied reader, returning an error if it is past the end.
+pub fn readerSeek(reader: *Io.Reader, seek: usize) error{InvalidSeek}!void {
+    if (seek > reader.end) return error.InvalidSeek;
+    reader.seek = seek;
+}

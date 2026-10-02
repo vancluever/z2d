@@ -50,9 +50,6 @@
 //! provide transitions between colors in various patterns (linear, radial, and
 //! conic).
 //!
-//! * `Font` - functionality for loading TrueType/OpenType fonts for text
-//! rendering.
-//!
 //! * `Transformation` - An affine transformation matrix that transforms
 //! co-ordinates between user space and device space in `Context` and `Path`.
 //!
@@ -64,6 +61,9 @@
 //! * `compositor` - Provides access to the compositor, both the short-hand
 //! functions that are aliased within the `pixel` and `surface` packages, and
 //! also to lower-level multi-step compositor functions.
+//!
+//! * `font` - functionality for loading TrueType/OpenType fonts for text
+//! rendering.
 //!
 //! * `text` - Contains the unmanaged text rendering functionality.
 //!
@@ -92,6 +92,7 @@ pub const surface = @import("surface.zig");
 pub const pattern = @import("pattern.zig");
 pub const painter = @import("painter.zig");
 pub const compositor = @import("compositor.zig");
+pub const font = @import("font.zig");
 pub const text = @import("text.zig");
 pub const pixel = @import("pixel.zig");
 pub const color = @import("color.zig");
@@ -107,7 +108,6 @@ pub const Pixel = pixel.Pixel;
 pub const Color = color.Color;
 pub const Gradient = gradient.Gradient;
 pub const Surface = surface.Surface;
-pub const Font = @import("Font.zig");
 pub const Transformation = @import("Transformation.zig");
 
 /// The length of vector operations, based around the amount of 16-bit values
