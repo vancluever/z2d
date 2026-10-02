@@ -16,7 +16,8 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     _ = io;
 
     var sfc: z2d.Surface = try .init(.image_surface_rgb, alloc, 58, 62);
-    var font = try z2d.Font.loadBuffer(@embedFile("test-fonts/DejaVuSans.ttf"));
+    const font_file = try z2d.font.File.loadBuffer(@embedFile("test-fonts/DejaVuSans.ttf"));
+    var font = try font_file.loadFontIndex(0);
     const pattern: z2d.Pattern = .{ .opaque_pattern = .{ .pixel = .fromColor(.{ .rgb = .{ 1, 1, 1 } }) } };
     try z2d.text.show(
         alloc,

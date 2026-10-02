@@ -13,7 +13,9 @@ const Io = @import("std").Io;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
-const Font = @import("../Font.zig");
+const fontpkg = @import("../font.zig");
+
+const Font = fontpkg.Font;
 const Path = @import("../Path.zig");
 const Transformation = @import("../Transformation.zig");
 
@@ -21,6 +23,7 @@ const readerByte = @import("util.zig").readerByte;
 const readerByteSigned = @import("util.zig").readerByteSigned;
 const readerInt = @import("util.zig").readerInt;
 const readerSkipBytes = @import("util.zig").readerSkipBytes;
+const readerSeek = @import("util.zig").readerSeek;
 const runCases = @import("util.zig").runCases;
 const TestingError = @import("util.zig").TestingError;
 
@@ -33,7 +36,7 @@ outline: union(enum) {
 },
 
 /// Looks up the glyph for a unicode character.
-pub fn init(font: *Font, codepoint: u21) Font.FileError!Glyph {
+pub fn init(font: *Font, codepoint: u21) fontpkg.ReaderError!Glyph {
     // Glyph index
     const index = switch (font.meta.cmap_subtable_offset) {
         .bmp => |offset| try findGlyphIndexBMP(&font.file, offset, codepoint),
@@ -43,26 +46,26 @@ pub fn init(font: *Font, codepoint: u21) Font.FileError!Glyph {
     return byIndex(font, index);
 }
 
-pub fn byIndex(font: *Font, index: u32) Font.FileError!Glyph {
+pub fn byIndex(font: *Font, index: u32) fontpkg.ReaderError!Glyph {
     // Glyph hmetrics
     var advance: u16 = undefined;
     var lsb: i16 = undefined;
     if (index < font.meta.number_of_hmetrics) {
         // Full hmetric entry
         const h_metric_offset = font.dir.hmtx + index * 4;
-        font.file.seek = h_metric_offset;
+        try readerSeek(&font.file, h_metric_offset);
         advance = try readerInt(&font.file, u16, .big);
         lsb = try readerInt(&font.file, i16, .big);
     } else {
         // Get advance from last full LongHorMetric entry
         const advance_offset = font.dir.hmtx + (font.meta.number_of_hmetrics - 1) * 4;
-        font.file.seek = advance_offset;
+        try readerSeek(&font.file, advance_offset);
         advance = try readerInt(&font.file, u16, .big);
 
         // LSB from abridged entry past last full LongHorMetric entry
         const lsb_index = (index - font.meta.number_of_hmetrics) * 2;
         const lsb_offset = font.dir.hmtx + font.meta.number_of_hmetrics * 4 + lsb_index;
-        font.file.seek = lsb_offset;
+        try readerSeek(&font.file, lsb_offset);
         lsb = try readerInt(&font.file, i16, .big);
     }
 
@@ -74,7 +77,7 @@ pub fn byIndex(font: *Font, index: u32) Font.FileError!Glyph {
                 .short => font.dir.loca + (index + i) * 2,
                 .long => font.dir.loca + (index + i) * 4,
             };
-            font.file.seek = loca_offset;
+            try readerSeek(&font.file, loca_offset);
             result[i] = font.dir.glyf + (switch (font.meta.index_to_loc_format) {
                 .short => @as(u32, try readerInt(&font.file, u16, .big)) * 2,
                 .long => try readerInt(&font.file, u32, .big),
@@ -96,14 +99,14 @@ fn findGlyphIndexBMP(
     file: *Io.Reader,
     cmap_subtable_offset: u32,
     codepoint: u21,
-) Font.FileError!u32 {
+) fontpkg.ReaderError!u32 {
     // Not supported for codepoints outside of the BMP. If we get this, we
     // likely do not have a full plane table, so we just return zero for the
     // index, which needs to exist and is the invalid character placeholder.
     if (codepoint > 0xffff) return 0;
 
     const segment_count_offset = cmap_subtable_offset + 6;
-    file.seek = segment_count_offset;
+    try readerSeek(file, segment_count_offset);
 
     const segment_count: u16 = try readerInt(file, u16, .big) >> 1;
     var search_range: u16 = try readerInt(file, u16, .big) >> 1;
@@ -116,7 +119,7 @@ fn findGlyphIndexBMP(
 
     // they lie from endCount .. endCount + segCount
     // but searchRange is the nearest power of two, so...
-    file.seek = search + range_shift * 2;
+    try readerSeek(file, search + range_shift * 2);
     if (codepoint >= try readerInt(file, u16, .big)) {
         search += range_shift * 2;
     }
@@ -126,7 +129,7 @@ fn findGlyphIndexBMP(
 
     while (entry_selector > 0) {
         search_range >>= 1;
-        file.seek = search + search_range * 2;
+        try readerSeek(file, search + search_range * 2);
         const end = try readerInt(file, u16, .big);
         if (codepoint > end)
             search += search_range * 2;
@@ -136,24 +139,26 @@ fn findGlyphIndexBMP(
     search += 2;
 
     const item = (search - end_count_offset) >> 1;
-    file.seek = end_count_offset + segment_count * 2 + 2 + 2 * item;
+    try readerSeek(file, end_count_offset + segment_count * 2 + 2 + 2 * item);
     const start = try readerInt(file, u16, .big);
-    file.seek = end_count_offset + 2 * item;
+    try readerSeek(file, end_count_offset + 2 * item);
     const last = try readerInt(file, u16, .big);
 
     if (codepoint < start or codepoint > last) {
         return 0;
     }
 
-    file.seek = end_count_offset + segment_count * 6 + 2 + 2 * item;
+    try readerSeek(file, end_count_offset + segment_count * 6 + 2 + 2 * item);
     const offset = try readerInt(file, u16, .big);
     if (offset == 0) {
-        file.seek = end_count_offset + segment_count * 4 + 2 + 2 * item;
+        try readerSeek(file, end_count_offset + segment_count * 4 + 2 + 2 * item);
         return @intCast(@as(i32, @intCast(codepoint)) + try readerInt(file, i16, .big));
     }
 
-    file.seek =
-        offset + (codepoint - start) * 2 + end_count_offset + segment_count * 6 + 2 + 2 * item;
+    try readerSeek(
+        file,
+        offset + (codepoint - start) * 2 + end_count_offset + segment_count * 6 + 2 + 2 * item,
+    );
     return try readerInt(file, u16, .big);
 }
 
@@ -161,10 +166,10 @@ fn findGlyphIndexFull(
     file: *Io.Reader,
     cmap_subtable_offset: u32,
     codepoint: u21,
-) Font.FileError!u32 {
+) fontpkg.ReaderError!u32 {
     const num_groups_offset = cmap_subtable_offset + 12;
     const map_groups_offset = cmap_subtable_offset + 16;
-    file.seek = num_groups_offset;
+    try readerSeek(file, num_groups_offset);
     const num_groups = try readerInt(file, u32, .big);
     var low: i32 = 0;
     var high: i32 = @intCast(num_groups);
@@ -173,7 +178,7 @@ fn findGlyphIndexFull(
     while (low < high) {
         const mid = low + ((high - low) >> 1); // rounds down, so low <= mid < high
         const mid_table_offset: u32 = @intCast(@as(i32, @intCast(map_groups_offset)) + mid * 12);
-        file.seek = mid_table_offset;
+        try readerSeek(file, mid_table_offset);
         const start_char = try readerInt(file, u32, .big);
         const end_char = try readerInt(file, u32, .big);
         if (codepoint < start_char)
@@ -192,7 +197,7 @@ fn findGlyphIndexFull(
 ///
 /// The value is fetched first from the GPOS table, then the kern table if that
 /// does not exist. If neither exist, this returns zero.
-pub fn getKernAdvance(font: *Font, current: u32, next: u32) Font.FileError!i16 {
+pub fn getKernAdvance(font: *Font, current: u32, next: u32) fontpkg.ReaderError!i16 {
     return if (font.dir.GPOS != 0)
         getKernAdvanceGPOS(font, current, next)
     else if (font.dir.kern != 0)
@@ -201,12 +206,12 @@ pub fn getKernAdvance(font: *Font, current: u32, next: u32) Font.FileError!i16 {
         0;
 }
 
-fn getKernAdvanceKern(font: *Font, current: u32, next: u32) Font.FileError!i16 {
+fn getKernAdvanceKern(font: *Font, current: u32, next: u32) fontpkg.ReaderError!i16 {
     debug.assert(font.dir.kern != 0); // Should have been checked before
 
-    font.file.seek = font.dir.kern + 2;
+    try readerSeek(&font.file, font.dir.kern + 2);
     const num_tables = try readerInt(&font.file, u16, .big);
-    font.file.seek = font.dir.kern + 8;
+    try readerSeek(&font.file, font.dir.kern + 8);
     const format = try readerInt(&font.file, u16, .big);
 
     if (num_tables < 1) return 0; // number of tables, need at least 1
@@ -217,7 +222,7 @@ fn getKernAdvanceKern(font: *Font, current: u32, next: u32) Font.FileError!i16 {
     const needle: u32 = current << 16 | next;
     while (l <= r) {
         const m = (l + r) >> 1;
-        font.file.seek = font.dir.kern + 18 + (@as(u32, @intCast(m)) * 6); // note: unaligned read
+        try readerSeek(&font.file, font.dir.kern + 18 + (@as(u32, @intCast(m)) * 6)); // note: unaligned read
         const straw = try readerInt(&font.file, u32, .big);
         if (needle < straw)
             r = m - 1
@@ -230,28 +235,28 @@ fn getKernAdvanceKern(font: *Font, current: u32, next: u32) Font.FileError!i16 {
     return 0;
 }
 
-fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
+fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) fontpkg.ReaderError!i16 {
     debug.assert(font.dir.GPOS != 0); // Should have been checked before
 
-    font.file.seek = font.dir.GPOS;
+    try readerSeek(&font.file, font.dir.GPOS);
     const major = try readerInt(&font.file, u16, .big);
     const minor = try readerInt(&font.file, u16, .big);
     if (major != 1 or minor != 0) return 0;
 
-    font.file.seek = font.dir.GPOS + 8;
+    try readerSeek(&font.file, font.dir.GPOS + 8);
     const lookup_list_offset = try readerInt(&font.file, u16, .big);
     const lookup_list = font.dir.GPOS + lookup_list_offset;
-    font.file.seek = lookup_list;
+    try readerSeek(&font.file, lookup_list);
     const lookup_count = try readerInt(&font.file, u16, .big);
 
     for (0..lookup_count) |i| {
-        font.file.seek = lookup_list + 2 + 2 * i;
+        try readerSeek(&font.file, lookup_list + 2 + 2 * i);
         const lookup_offset = try readerInt(&font.file, u16, .big);
         const lookup_table = lookup_list + lookup_offset;
 
-        font.file.seek = lookup_table;
+        try readerSeek(&font.file, lookup_table);
         const lookup_type = try readerInt(&font.file, u16, .big);
-        font.file.seek = lookup_table + 4;
+        try readerSeek(&font.file, lookup_table + 4);
         const subtable_count = try readerInt(&font.file, u16, .big);
         const subtable_offsets = lookup_table + 6;
 
@@ -259,7 +264,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
         if (lookup_type != 2 and lookup_type != 9) continue;
 
         lookup_subtables: for (0..subtable_count) |sti| {
-            font.file.seek = subtable_offsets + 2 * sti;
+            try readerSeek(&font.file, subtable_offsets + 2 * sti);
             const subtable_offset = try readerInt(&font.file, u16, .big);
             const table: u32 = switch (lookup_type) {
                 2 => lookup_table + subtable_offset,
@@ -267,7 +272,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                     // lookup_type 9 is the GPOS extension table type, designed
                     // to hold offsets larger than 16-bit numbers can hold.
                     // This is ultimately a "link" to another table.
-                    font.file.seek = lookup_table + subtable_offset;
+                    try readerSeek(&font.file, lookup_table + subtable_offset);
                     const ext_format = try readerInt(&font.file, u16, .big);
                     debug.assert(ext_format == 1); // There is currently only one format
                     const ext_lookup_type = try readerInt(&font.file, u16, .big);
@@ -282,7 +287,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                 },
                 else => unreachable,
             };
-            font.file.seek = table;
+            try readerSeek(&font.file, table);
             const pos_format = try readerInt(&font.file, u16, .big);
             const coverage_offset = try readerInt(&font.file, u16, .big);
             const coverage_index = try getCoverageIndex(font, table + coverage_offset, current);
@@ -290,16 +295,16 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
 
             switch (pos_format) {
                 1 => {
-                    font.file.seek = table + 4;
+                    try readerSeek(&font.file, table + 4);
                     const value_format_1 = try readerInt(&font.file, u16, .big);
                     const value_format_2 = try readerInt(&font.file, u16, .big);
                     if (value_format_1 == 4 and value_format_2 == 0) { // Support more formats?
                         const value_record_pair_size_in_bytes: u32 = 2;
                         const pair_set_count = try readerInt(&font.file, u16, .big);
-                        font.file.seek = table + 10 + 2 * @as(u32, @intCast(coverage_index));
+                        try readerSeek(&font.file, table + 10 + 2 * @as(u32, @intCast(coverage_index)));
                         const pair_pos_offset = try readerInt(&font.file, u16, .big);
                         const pair_value_table = table + pair_pos_offset;
-                        font.file.seek = pair_value_table;
+                        try readerSeek(&font.file, pair_value_table);
                         const pair_value_count = try readerInt(&font.file, u16, .big);
                         const pair_value_array = pair_value_table + 2;
 
@@ -314,7 +319,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                             const m = (l + r) >> 1;
                             const pair_value = pair_value_array +
                                 (2 + value_record_pair_size_in_bytes) * @as(u32, @intCast(m));
-                            font.file.seek = pair_value;
+                            try readerSeek(&font.file, pair_value);
                             const second_glyph = try readerInt(&font.file, u16, .big);
                             const straw = second_glyph;
                             if (needle < straw)
@@ -327,7 +332,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                     } else return 0;
                 },
                 2 => {
-                    font.file.seek = table + 4;
+                    try readerSeek(&font.file, table + 4);
                     const value_format_1 = try readerInt(&font.file, u16, .big);
                     const value_format_2 = try readerInt(&font.file, u16, .big);
                     if (value_format_1 == 4 and value_format_2 == 0) { // Support more formats?
@@ -336,7 +341,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                         const glyph_1_class = try getGlyphClass(font, table + class_def_1_offset, current);
                         const glyph_2_class = try getGlyphClass(font, table + class_def_2_offset, next);
 
-                        font.file.seek = table + 12;
+                        try readerSeek(&font.file, table + 12);
                         const class_1_count = try readerInt(&font.file, u16, .big);
                         const class_2_count = try readerInt(&font.file, u16, .big);
 
@@ -346,7 +351,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
                         const class_1_records = table + 16;
                         const class_2_records = class_1_records + 2 *
                             (@as(u32, @intCast(glyph_1_class)) * @as(u32, @intCast(class_2_count)));
-                        font.file.seek = class_2_records + 2 * @as(u32, @intCast(glyph_2_class));
+                        try readerSeek(&font.file, class_2_records + 2 * @as(u32, @intCast(glyph_2_class)));
                         return try readerInt(&font.file, i16, .big);
                     } else return 0;
                 },
@@ -358,8 +363,8 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) Font.FileError!i16 {
     return 0;
 }
 
-fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) Font.FileError!i32 {
-    font.file.seek = coverage_table_offset;
+fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) fontpkg.ReaderError!i32 {
+    try readerSeek(&font.file, coverage_table_offset);
     const coverage_format = try readerInt(&font.file, u16, .big);
     switch (coverage_format) {
         1 => {
@@ -372,7 +377,7 @@ fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) Font.Fi
                 const glyph_array_offset = coverage_table_offset + 4;
                 var glyph_id: u16 = undefined;
                 const m = (l + r) >> 1;
-                font.file.seek = glyph_array_offset + 2 * @as(u32, @intCast(m));
+                try readerSeek(&font.file, glyph_array_offset + 2 * @as(u32, @intCast(m)));
                 glyph_id = try readerInt(&font.file, u16, .big);
                 const straw = glyph_id;
                 if (needle < straw)
@@ -394,7 +399,7 @@ fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) Font.Fi
             while (l <= r) {
                 const m = (l + r) >> 1;
                 const range_record_offset = range_array_offset + 6 * @as(u32, @intCast(m));
-                font.file.seek = range_record_offset;
+                try readerSeek(&font.file, range_record_offset);
                 const straw_start = try readerInt(&font.file, u16, .big);
                 const straw_end = try readerInt(&font.file, u16, .big);
                 if (needle < straw_start)
@@ -402,7 +407,7 @@ fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) Font.Fi
                 else if (needle > straw_end)
                     l = m + 1
                 else {
-                    font.file.seek = range_record_offset + 4;
+                    try readerSeek(&font.file, range_record_offset + 4);
                     const start_coverage_index = try readerInt(&font.file, u16, .big);
                     return start_coverage_index + @as(i32, @intCast(glyph)) - straw_start;
                 }
@@ -414,8 +419,8 @@ fn getCoverageIndex(font: *Font, coverage_table_offset: u32, glyph: u32) Font.Fi
     return -1; // Not found
 }
 
-fn getGlyphClass(font: *Font, class_def_table_offset: u32, glyph: u32) Font.FileError!i32 {
-    font.file.seek = class_def_table_offset;
+fn getGlyphClass(font: *Font, class_def_table_offset: u32, glyph: u32) fontpkg.ReaderError!i32 {
+    try readerSeek(&font.file, class_def_table_offset);
     const class_def_format = try readerInt(&font.file, u16, .big);
     switch (class_def_format) {
         1 => {
@@ -423,7 +428,7 @@ fn getGlyphClass(font: *Font, class_def_table_offset: u32, glyph: u32) Font.File
             const glyph_count = try readerInt(&font.file, u16, .big);
             const class_def_1_value_array = class_def_table_offset + 6;
             if (glyph >= start_glyph_id and glyph < start_glyph_id + glyph_count) {
-                font.file.seek = class_def_1_value_array + 2 * (glyph - start_glyph_id);
+                try readerSeek(&font.file, class_def_1_value_array + 2 * (glyph - start_glyph_id));
                 return try readerInt(&font.file, u16, .big);
             }
         },
@@ -437,7 +442,7 @@ fn getGlyphClass(font: *Font, class_def_table_offset: u32, glyph: u32) Font.File
             while (l <= r) {
                 const m = (l + r) >> 1;
                 const class_range_record = class_range_records + 6 * @as(u32, @intCast(m));
-                font.file.seek = class_range_record;
+                try readerSeek(&font.file, class_range_record);
                 const straw_start = try readerInt(&font.file, u16, .big);
                 const straw_end = try readerInt(&font.file, u16, .big);
                 if (needle < straw_start)
@@ -477,7 +482,7 @@ pub const Outline = struct {
         /// Malformed or corrupted outline data was found and the outline could not
         /// be properly parsed into a path.
         MalformedGlyph,
-    } || Font.FileError || Path.Error || mem.Allocator.Error;
+    } || fontpkg.ReaderError || Path.Error || mem.Allocator.Error;
 
     /// deinit should be called to release the outline.
     pub fn init(alloc: mem.Allocator, font: *Font, glyph: Glyph) InitError!Outline {
@@ -487,7 +492,7 @@ pub const Outline = struct {
         // Get our dimensions ahead of time. We don't need to process the contour
         // count right now as we do that further down when plotting (so that we can
         // detect composite glyphs).
-        font.file.seek = glyph.outline.offset + 2;
+        try readerSeek(&font.file, glyph.outline.offset + 2);
         const x_min = try readerInt(&font.file, i16, .big);
         const y_min = try readerInt(&font.file, i16, .big);
         const x_max = try readerInt(&font.file, i16, .big);
@@ -565,9 +570,9 @@ pub const Outline = struct {
 
         // We only need number of contours here, so we can skip over the bounding
         // points after reading it.
-        font.file.seek = glyf_offset;
+        try readerSeek(&font.file, glyf_offset);
         const number_of_contours = try readerInt(&font.file, i16, .big);
-        font.file.seek = glyf_offset + 10;
+        try readerSeek(&font.file, glyf_offset + 10);
 
         if (number_of_contours < 0) {
             // This is a composite glyph; process each component recursively until
@@ -622,6 +627,7 @@ pub const Outline = struct {
                     );
                 }
 
+                // Save return position
                 const return_pos = font.file.seek;
 
                 // Lookup the glyph table entry and plot
@@ -635,9 +641,9 @@ pub const Outline = struct {
                     return;
                 }
 
-                // We have to manually seek here (no defer) so that we can catch
-                // errors
-                font.file.seek = return_pos;
+                // Seek back to the return position. We have to do it here
+                // without a defer so that we can catch errors.
+                try readerSeek(&font.file, return_pos);
             }
         }
 
@@ -915,10 +921,7 @@ test "Glyph.init" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var font: Font = Font.loadBuffer(data) catch |err| {
-                debug.print("unexpected error from loadInternal: {}\n", .{err});
-                return error.TestUnexpectedError;
-            };
+            var font: Font = try testInitFont(data);
             try testing.expectEqualDeep(tc.expected, Glyph.init(&font, tc.codepoint));
         }
     };
@@ -962,10 +965,7 @@ test "Glyph.Outline.init" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            var font: Font = Font.loadBuffer(data) catch |err| {
-                debug.print("unexpected error from loadInternal: {}\n", .{err});
-                return error.TestUnexpectedError;
-            };
+            var font: Font = try testInitFont(data);
             const glyph: Glyph = Glyph.init(&font, tc.codepoint) catch |err| {
                 debug.print("unexpected error from Glyph.init: {}\n", .{err});
                 return error.TestUnexpectedError;
@@ -990,11 +990,7 @@ test "Glyph.Outline.init" {
 
 test "outline, composite processing, ensure no int overflow" {
     // Happens on the Inter semibold "i".
-    const data = @embedFile("./test-fonts/Inter-SemiBold.subset.ttf");
-    var font: Font = Font.loadBuffer(data) catch |err| {
-        debug.print("unexpected error from loadInternal: {}\n", .{err});
-        return error.TestUnexpectedError;
-    };
+    var font: Font = try testInitFont(@embedFile("./test-fonts/Inter-SemiBold.subset.ttf"));
     const glyph: Glyph = Glyph.init(&font, 'i') catch |err| {
         debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
@@ -1013,11 +1009,7 @@ test "init correctly loads advance for glyph past max hmetrics" {
     //
     // Using full, un-subsetted font here as subsetting can repack the entries
     // in a way that the long hmetric entry does exist, breaking the test.
-    const data = @embedFile("./test-fonts/AnnotationMono-Regular.ttf");
-    var font: Font = Font.loadBuffer(data) catch |err| {
-        debug.print("unexpected error from loadInternal: {}\n", .{err});
-        return error.TestUnexpectedError;
-    };
+    var font: Font = try testInitFont(@embedFile("./test-fonts/AnnotationMono-Regular.ttf"));
     const glyph: Glyph = Glyph.init(&font, 'u') catch |err| {
         debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
@@ -1028,11 +1020,7 @@ test "init correctly loads advance for glyph past max hmetrics" {
 }
 
 test "init correctly loads advance/lsb for last glyph" {
-    const data = @embedFile("./test-fonts/AnnotationMono-Regular.ttf");
-    var font: Font = Font.loadBuffer(data) catch |err| {
-        debug.print("unexpected error from loadInternal: {}\n", .{err});
-        return error.TestUnexpectedError;
-    };
+    var font: Font = try testInitFont(@embedFile("./test-fonts/AnnotationMono-Regular.ttf"));
     const glyph: Glyph = Glyph.init(&font, 0x1E95) catch |err| {
         debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
@@ -1040,4 +1028,12 @@ test "init correctly loads advance/lsb for last glyph" {
     try testing.expectEqual(765, glyph.index);
     try testing.expectEqual(500, glyph.advance);
     try testing.expectEqual(64, glyph.lsb);
+}
+
+/// For testing only. Expects a single font (no TTC).
+fn testInitFont(data: []const u8) !Font {
+    return Font.loadBufferOffset(data, 0) catch |err| {
+        debug.print("unexpected error from Font.loadBufferOffset: {}\n", .{err});
+        return error.TestUnexpectedError;
+    };
 }

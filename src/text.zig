@@ -20,13 +20,14 @@ const math = @import("std").math;
 const mem = @import("std").mem;
 const unicode = @import("std").unicode;
 
+const fontpkg = @import("font.zig");
 const painter = @import("painter.zig");
 
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
 const Transformation = @import("Transformation.zig");
-const Font = @import("Font.zig");
+const Font = fontpkg.Font;
 const Glyph = @import("internal/Glyph.zig");
 
 pub const ShowTextOptions = struct {
@@ -66,7 +67,7 @@ pub const ShowTextError = error{
 
     /// The supplied text has an invalid UTF-8 sequence.
     InvalidSequence,
-} || mem.Allocator.Error || Font.FileError || Glyph.Outline.InitError || painter.FillError;
+} || mem.Allocator.Error || fontpkg.ReaderError || Glyph.Outline.InitError || painter.FillError;
 
 /// Shows the text supplied in the UTF-8 string at the co-ordinates specified
 /// by `(x, y)`.
