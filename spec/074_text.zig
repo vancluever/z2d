@@ -15,7 +15,8 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     const height = 100;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
 
-    var font = try z2d.Font.loadBuffer(@embedFile("test-fonts/Inter-Regular.ttf"));
+    const font_file = try z2d.font.File.loadBuffer(@embedFile("test-fonts/Inter-Regular.ttf"));
+    var font = try font_file.loadFontIndex(0);
     try z2d.text.show(
         alloc,
         &sfc,
