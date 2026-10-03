@@ -1,4 +1,21 @@
-## 0.12.2-pre (Unreleased)
+## 0.13.0 (Unreleased)
+
+ENHANCEMENTS:
+
+* Font collections (.ttc files) are now supported. While the managed functions
+  within `Context` remain the same, those using the unmanaged interface will
+  experience a few breaking changes. See the `font` package for more details,
+  but the workflow is now as follows:
+  - Files are now loaded with `font.File.loadFile` or `font.File.loadBuffer`.
+    This applies to both using regular .ttf or .otf files, and .ttc collection
+    files.
+  - Fonts can then be selected out of these files with `loadFontIndex`, with
+    the index of the font that you want to select.
+  - This font can then be passed to `text.show` as normal.
+
+When using `Context`, select the font's index with `setFontIndex` before
+calling `showText`, otherwise the workflow remains the same. Note that when
+using collections the default font index is zero.
 
 BUG FIXES:
 
