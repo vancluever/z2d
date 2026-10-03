@@ -15,7 +15,7 @@ FONT COLLECTIONS:
 
 When using `Context`, select the font's index with `setFontIndex` before
 calling `showText`, otherwise the workflow remains the same. Note that when
-using collections the default font index is zero.
+using collections, the default font index is zero.
 
 See [#194](https://github.com/vancluever/z2d/pull/194) for details on the
 changes.
