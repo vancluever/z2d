@@ -2,7 +2,7 @@
 //   Copyright © 2024-2025 Chris Marchesi
 .{
     .name = .z2d,
-    .version = "0.12.2-pre",
+    .version = "0.13.0",
     .fingerprint = 0x188c5a41eff938f,
     .minimum_zig_version = "0.17.0-dev.2151+2ec5523d5",
     .paths = .{

@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const debug = @import("std").debug;
+const heap = @import("std").heap;
 const mem = @import("std").mem;
 const testing = @import("std").testing;
 
@@ -57,6 +58,13 @@ pub fn plot(
         plotter.result.deinit(alloc);
         plotter.outer.deinit(alloc);
         plotter.inner.deinit(alloc);
+        switch (plotter.initial_polygon) {
+            .on => |*on| {
+                on.outer.deinit(alloc);
+                on.inner.deinit(alloc);
+            },
+            else => {},
+        }
     }
 
     defer if (plotter.pen) |*p| p.deinit(alloc);
@@ -70,7 +78,7 @@ const Plotter = struct {
     const InitialPolygon = struct {
         alloc: mem.Allocator,
         opts: *const PlotterOptions,
-        pen: ?Pen,
+        pen: ?*const Pen,
         points: PointBuffer,
         clockwise_: ?bool,
         result: *Polygon,
@@ -492,7 +500,7 @@ const Plotter = struct {
             self.initial_polygon = .{ .on = .{
                 .alloc = self.alloc,
                 .opts = self.opts,
-                .pen = self.pen,
+                .pen = if (self.pen == null) null else &self.pen.?,
                 .points = self.points,
                 .clockwise_ = self.clockwise_,
                 .result = &self.result,
@@ -580,6 +588,8 @@ const Plotter = struct {
             // We need to replace the initial polygon with the outer due to the
             // direction of the concat happened in.
             self.initial_polygon.on.outer = self.outer;
+            // Retain clockwise direction from existing polygon
+            self.initial_polygon.on.clockwise_ = self.clockwise_;
 
             // Our first cap points are based entirely off of the plotter state
             // (not the initial state).
@@ -638,3 +648,42 @@ const Plotter = struct {
         }
     };
 };
+
+test "error in dashed plotter should not cause inner_polygon to leak" {
+    var static_path: @import("../../static_path.zig").StaticPath(5) = undefined;
+    static_path.init();
+    static_path.moveTo(0, 49);
+    static_path.lineTo(100, 100);
+    static_path.lineTo(0, 100);
+    static_path.close();
+
+    const opts: PlotterOptions = .{
+        .cap_mode = .butt,
+        .ctm = Transformation.identity,
+        .dash_offset = 0.0,
+        .dashes = &.{ 169, 5 },
+        .join_mode = .miter,
+        .miter_limit = 10.0,
+        .scale = 1,
+        .thickness = 2.0,
+        .tolerance = 0.1,
+    };
+
+    // Use a failing allocator to ensure that this fails after a few
+    // allocations. There should be 4 allocations for the initial join (one for
+    // the outer miter, 3 for the knot that creates the inner miter), which
+    // gets saved to the initial polygon afterwards, and then the next plot
+    // after that will fail.
+    var debug_alloc: heap.DebugAllocator(.{}) = .init;
+    var failing_alloc: testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 4 });
+    try testing.expectError(error.OutOfMemory, plot(
+        failing_alloc.allocator(),
+        static_path.wrapped_path.nodes.items,
+        opts,
+    ));
+    testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
+        // so we don't report the leak twice
+        debug_alloc.deinitWithoutLeakChecks();
+        return err;
+    };
+}

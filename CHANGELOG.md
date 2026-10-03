@@ -1,6 +1,37 @@
-## 0.12.2-pre (Unreleased)
+## 0.13.0 (Unreleased)
 
-Bumped version for dev.
+FONT COLLECTIONS:
+
+* Font collections (.ttc files) are now supported. While the managed functions
+  within `Context` remain the same, those using the unmanaged interface will
+  experience a few breaking changes. See the `font` package for more details,
+  but the workflow is now as follows:
+  - Files are now loaded with `font.File.loadFile` or `font.File.loadBuffer`.
+    This applies to both using regular .ttf or .otf files, and .ttc collection
+    files.
+  - Fonts can then be selected out of these files with `loadFontIndex`, with
+    the index of the font that you want to select.
+  - This font can then be passed to `text.show` as normal.
+
+When using `Context`, select the font's index with `setFontIndex` before
+calling `showText`, otherwise the workflow remains the same. Note that when
+using collections, the default font index is zero.
+
+See [#194](https://github.com/vancluever/z2d/pull/194) for details on the
+changes.
+
+BUG FIXES:
+
+* Any path that ultimately has a bounding box with a bottom or right side
+  coordinate of *exactly* zero will now correctly skip drawing. This is a
+  follow-on of [#173](https://github.com/vancluever/z2d/pull/173), fixed in
+  0.12.0. ([#184](https://github.com/vancluever/z2d/pull/184))
+* Dashed strokes where the final segment joins on both the final an initial
+  points will now correctly render without artifacts.
+  ([#187](https://github.com/vancluever/z2d/pull/187))
+* Fixed a memory leak in the dashed plotter that can happen when a stroke
+  operation runs out of memory during plotting.
+  ([#188](https://github.com/vancluever/z2d/pull/188))
 
 ## 0.12.1 (July 27, 2026)
 
@@ -37,10 +68,10 @@ BUG FIXES:
 
 * Any path that ultimately has a bounding box with a negative bottom or right
   side will now correctly skip drawing.
-  [#174](https://github.com/vancluever/z2d/pull/174))
+  ([#173](https://github.com/vancluever/z2d/pull/173))
 * Invalid end or starting points are now skipped when processing glyph outlines
   when rendering text, instead of producing an error.
-  [#177](https://github.com/vancluever/z2d/pull/177))
+  ([#177](https://github.com/vancluever/z2d/pull/177))
 
 ## 0.11.0 (April 23, 2026)
 

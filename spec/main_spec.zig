@@ -99,6 +99,8 @@ const _082_stroke_hairline_clip = @import("082_stroke_hairline_clip.zig");
 const _083_star_simplify_offset = @import("083_star_simplify_offset.zig");
 const _084_offset_ghostty_conformance = @import("084_offset_ghostty_conformance.zig");
 const _085_deja_sans_ignore_invalid_points = @import("085_deja_sans_ignore_invalid_points.zig");
+const _086_stroke_dash_close_multiple_join = @import("086_stroke_dash_close_multiple_join.zig");
+const _087_text_collection = @import("087_text_collection.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -195,6 +197,8 @@ pub fn main() !void {
     try pathExportRun(io, alloc, _083_star_simplify_offset);
     try pathExportRun(io, alloc, _084_offset_ghostty_conformance);
     try pathExportRun(io, alloc, _085_deja_sans_ignore_invalid_points);
+    try pathExportRun(io, alloc, _086_stroke_dash_close_multiple_join);
+    try pathExportRun(io, alloc, _087_text_collection);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -537,6 +541,14 @@ test "084_offset_ghostty_conformance" {
 
 test "085_deja_sans_ignore_invalid_points" {
     try pathTestRun(testing.io, testing.allocator, _085_deja_sans_ignore_invalid_points);
+}
+
+test "086_stroke_dash_close_multiple_join" {
+    try pathTestRun(testing.io, testing.allocator, _086_stroke_dash_close_multiple_join);
+}
+
+test "087_text_collection" {
+    try pathTestRun(testing.io, testing.allocator, _087_text_collection);
 }
 
 //////////////////////////////////////////////////////////////////////////////
