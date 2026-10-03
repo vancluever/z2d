@@ -1,6 +1,6 @@
 ## 0.13.0 (Unreleased)
 
-ENHANCEMENTS:
+FONT COLLECTIONS:
 
 * Font collections (.ttc files) are now supported. While the managed functions
   within `Context` remain the same, those using the unmanaged interface will
@@ -16,6 +16,9 @@ ENHANCEMENTS:
 When using `Context`, select the font's index with `setFontIndex` before
 calling `showText`, otherwise the workflow remains the same. Note that when
 using collections the default font index is zero.
+
+See [#194](https://github.com/vancluever/z2d/pull/194) for details on the
+changes.
 
 BUG FIXES:
 
