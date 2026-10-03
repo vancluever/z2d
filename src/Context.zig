@@ -17,6 +17,7 @@ const mem = @import("std").mem;
 const testing = @import("std").testing;
 
 const compositor = @import("compositor.zig");
+const fontpkg = @import("font.zig");
 const options = @import("options.zig");
 const painter = @import("painter.zig");
 const text = @import("text.zig");
@@ -26,7 +27,6 @@ const Path = @import("Path.zig");
 const Pixel = @import("pixel.zig").Pixel;
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
-const Font = @import("Font.zig");
 const Transformation = @import("Transformation.zig");
 
 io: Io,
@@ -38,11 +38,12 @@ pattern: Pattern = .{
         .pixel = .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
     },
 },
-font: union(enum) {
-    none: void,
-    file: Font,
-    buffer: Font,
-} = .none,
+
+font: ?struct {
+    file: fontpkg.File,
+    is_fd: bool,
+    index: u32 = 0,
+} = null,
 
 anti_aliasing_mode: options.AntiAliasMode = .default,
 dashes: []const f64 = &.{},
@@ -83,11 +84,12 @@ pub fn deinit(self: *Context) void {
 
 /// Releases any font data held on by the context.
 pub fn deinitFont(self: *Context) void {
-    switch (self.font) {
-        .file => self.font.file.deinit(self.alloc),
-        else => {},
+    if (self.font) |*f| {
+        if (f.is_fd) {
+            f.file.deinit(self.alloc);
+        }
     }
-    self.font = .none;
+    self.font = null;
 }
 
 /// Returns the current underlying `Pixel` for the context's pattern.
@@ -306,20 +308,74 @@ pub fn setTolerance(self: *Context, tolerance: f64) void {
     self.path.tolerance = t;
 }
 
-/// Sets the font to use with `showText`, loading the file form the supplied
-/// path. The contents of the file are read into memory using the context's
-/// allocator and freed when `deinit` is called, or if the font is switched via
-/// another `setFontToFile` or `setFontToBuffer` call.
-pub fn setFontToFile(self: *Context, filename: []const u8) Font.LoadFileError!void {
+/// Sets the font file to use with `showText`, loading the file form the
+/// supplied path. The contents of the file are read into memory using the
+/// context's allocator and freed when `deinit` is called, or if the font is
+/// switched via another `setFontToFile` or `setFontToBuffer` call.
+///
+/// The file can be either a single font file (.ttf, .otf, etc) or collection
+/// file (.ttc). For font collections, the font index to use can be set with
+/// `setFontIndex`.
+pub fn setFontToFile(self: *Context, filename: []const u8) fontpkg.File.LoadFileError!void {
     self.deinitFont();
-    self.font = .{ .file = try Font.loadFile(self.io, self.alloc, filename) };
+    self.font = .{
+        .file = try .loadFile(self.io, self.alloc, filename),
+        .is_fd = true,
+    };
 }
 
-/// Sets the font to use with `showText`, using a supplied buffer of externally
-/// managed memory.
-pub fn setFontToBuffer(self: *Context, buffer: []const u8) Font.LoadBufferError!void {
+/// Sets the font file to use with `showText`, using a supplied buffer of
+/// externally managed memory.
+///
+/// The file can be either a single font file (.ttf, .otf, etc) or collection
+/// file (.ttc). For font collections, the font index to use can be set with
+/// `setFontIndex`.
+pub fn setFontToBuffer(self: *Context, buffer: []const u8) fontpkg.File.LoadBufferError!void {
     self.deinitFont();
-    self.font = .{ .buffer = try Font.loadBuffer(buffer) };
+    self.font = .{
+        .file = try .loadBuffer(buffer),
+        .is_fd = false,
+    };
+}
+
+/// Returns the index set by `setFontIndex`.
+pub fn getFontIndex(self: *Context) u32 {
+    return if (self.font) |f| f.index else 0;
+}
+
+const SetFontIndexError = error{
+    /// No font has been set. Set one by using either `setFontToFile` or
+    /// `setFontToBuffer`.
+    NoFontSet,
+
+    /// The index is out of range of the amount of fonts in the file.
+    IndexOutOfRange,
+};
+
+/// Sets the font index the supplied value. Note that a font needs to be loaded
+/// first in order for this to be used. Single-font files do not need to call
+/// this and in the event they do, any value other than zero will cause an
+/// error.
+pub fn setFontIndex(self: *Context, index: u32) SetFontIndexError!void {
+    if (self.font) |*f| {
+        switch (f.file.num_fonts) {
+            .single => {
+                if (index != 0) return error.IndexOutOfRange;
+                // Note that this is only for completeness; in reality the
+                // index should never change here in the event of single-font
+                // files.
+                f.index = index;
+            },
+            .collection => |num_fonts| {
+                if (index > num_fonts - 1) return error.IndexOutOfRange;
+                f.index = index;
+            },
+        }
+
+        return;
+    }
+
+    return error.NoFontSet;
 }
 
 /// Returns the font size set with `setFont`.
@@ -640,6 +696,8 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
     );
 }
 
+const ShowTextError = fontpkg.File.LoadFontIndexError || text.ShowTextError;
+
 /// Shows the text from the UTF-8 supplied string at the co-ordinates specified
 /// by `(x, y)`.
 ///
@@ -647,18 +705,20 @@ pub fn stroke(self: *Context) painter.StrokeError!void {
 /// would normally apply to fill operations are applied to the rendering of
 /// text.
 ///
-/// See the `text` package and `Font` type for details on loading in fonts.
-pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) text.ShowTextError!void {
-    const font: *Font = switch (self.font) {
-        inline .file, .buffer => |*f| f,
-        else => return,
-    };
+/// The font to use must be already loaded in with either `setFontToFile` or
+/// `setFontToBuffer`. For font collections, the appropriate index must also be
+/// set via `setFontIndex`.
+///
+/// See the `text` and `font` packages for details on loading in fonts.
+pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!void {
+    const font_file = self.font orelse return;
+    var font = try font_file.file.loadFontIndex(font_file.index);
     const wrapped_pattern = self.wrapDither();
     try text.show(
         self.alloc,
         self.surface,
         &wrapped_pattern,
-        font,
+        &font,
         utf8,
         x,
         y,
@@ -719,7 +779,7 @@ test "setFontToFile, deinit" {
     var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
-    try testing.expect(context.font == .file);
+    try testing.expect(context.font.?.is_fd == true);
     context.deinit();
 }
 
@@ -731,7 +791,7 @@ test "setFontToBuffer, deinit" {
     var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try testing.expect(context.font == .buffer);
+    try testing.expect(context.font.?.is_fd == false);
     context.deinit();
 }
 
@@ -745,9 +805,9 @@ test "setFontToFile, deinitFont" {
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
-    try testing.expect(context.font == .file);
+    try testing.expect(context.font.?.is_fd == true);
     context.deinitFont();
-    try testing.expect(context.font == .none);
+    try testing.expect(context.font == null);
 }
 
 test "setFontToBuffer, deinitFont" {
@@ -760,7 +820,7 @@ test "setFontToBuffer, deinitFont" {
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try testing.expect(context.font == .buffer);
+    try testing.expect(context.font.?.is_fd == false);
     context.deinitFont();
-    try testing.expect(context.font == .none);
+    try testing.expect(context.font == null);
 }
