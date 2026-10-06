@@ -15,6 +15,9 @@
 //! (e.g., `moveToAssumeCapacity`). Using this method, you manage the node
 //! memory manually and `deinit` should not be called.
 //!
+//! * `serialize` and `deserialize` can also be used to export and import paths
+//! to/from a string value.
+//!
 //! A `Context` contains a managed `Path`, and you only need to use this
 //! package directly if you are not using it.
 //!
@@ -38,6 +41,9 @@ const PathNode = @import("internal/path_nodes.zig").PathNode;
 const PathVTable = @import("internal/PathVTable.zig");
 const Point = @import("internal/Point.zig");
 const Transformation = @import("Transformation.zig");
+
+const runCases = @import("internal/util.zig").runCases;
+const TestingError = @import("internal/util.zig").TestingError;
 
 /// Errors associated with `Path` point plotting operations.
 pub const Error = error{
@@ -98,11 +104,124 @@ pub fn initBuffer(nodes: []PathNode) Path {
     };
 }
 
+pub const DeserializeError = error{
+    /// A command was expected but was not found.
+    ExpectedCommand,
+} || ReaderParseValueError || ReaderTakeDelimError || FixStateError || std.Io.Reader.Error || mem.Allocator.Error;
+
+/// De-serializes a string representing the result of a previous `serialize`
+/// operation. Does not apply any transformations, however will ensure that
+/// state does match the de-serialized result, and will also validate the path
+/// to ensure it is usable.
+pub fn deserialize(alloc: mem.Allocator, serialized: []const u8) DeserializeError!Path {
+    var result: Path = .empty;
+    errdefer result.deinit(alloc);
+    var reader: std.Io.Reader = .fixed(serialized);
+    while (reader.takeByte()) |command| {
+        switch (command) {
+            'M' => {
+                const point = try readerTakePoint(&reader);
+                try result.nodes.append(alloc, .{ .move_to = .{ .point = point } });
+            },
+            'L' => {
+                const point = try readerTakePoint(&reader);
+                try result.nodes.append(alloc, .{ .line_to = .{ .point = point } });
+            },
+            'C' => {
+                const p1 = try readerTakePoint(&reader);
+                try readerTakeDelim(&reader);
+                const p2 = try readerTakePoint(&reader);
+                try readerTakeDelim(&reader);
+                const p3 = try readerTakePoint(&reader);
+                try result.nodes.append(alloc, .{ .curve_to = .{
+                    .p1 = p1,
+                    .p2 = p2,
+                    .p3 = p3,
+                } });
+            },
+            'Z' => try result.nodes.append(alloc, .{ .close_path = .{} }),
+            else => return error.ExpectedCommand,
+        }
+    } else |err| switch (err) {
+        error.EndOfStream => {},
+        else => return err,
+    }
+
+    try result.fixState();
+    return result;
+}
+
+fn readerTakePoint(reader: *std.Io.Reader) (ReaderParseValueError || ReaderTakeDelimError)!Point {
+    const x = try readerParseValue(reader);
+    try readerTakeDelim(reader);
+    const y = try readerParseValue(reader);
+    return .{ .x = x, .y = y };
+}
+
+const ReaderParseValueError = error{
+    /// A value was expected but was not found.
+    ExpectedValue,
+} || std.Io.Reader.Error || std.fmt.ParseFloatError;
+
+fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!f64 {
+    var len: usize = 1;
+    while (reader.peek(len)) |raw| {
+        switch (raw[raw.len - 1]) {
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' => len += 1,
+            '.' => {
+                if (len == 1) {
+                    len -= 1;
+                    break;
+                }
+
+                len += 1;
+            },
+            else => {
+                len -= 1;
+                break;
+            },
+        }
+    } else |err| switch (err) {
+        error.EndOfStream => len -= 1,
+        else => return err,
+    }
+
+    if (len == 0) {
+        return error.ExpectedValue;
+    }
+
+    const raw = try reader.take(len);
+    return std.fmt.parseFloat(f64, raw);
+}
+
+const ReaderTakeDelimError = error{
+    /// A value delimiter was expected but was not found.
+    ExpectedValueDelimiter,
+} || std.Io.Reader.Error;
+
+fn readerTakeDelim(reader: *std.Io.Reader) ReaderTakeDelimError!void {
+    if (try reader.takeByte() != ',') {
+        return error.ExpectedValueDelimiter;
+    }
+}
+
 /// Releases the `Path`'s node array list. It's invalid to use the path set
 /// after this call.
 pub fn deinit(self: *Path, alloc: mem.Allocator) void {
     self.nodes.deinit(alloc);
     self.* = undefined;
+}
+
+/// Creates a copy of this path using the supplied allocator. Caller owns the
+/// memory.
+pub fn clone(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!Path {
+    return .{
+        .nodes = try self.nodes.clone(alloc),
+        .current_point = self.current_point,
+        .initial_point = self.initial_point,
+        .tolerance = self.tolerance,
+        .transformation = self.transformation,
+    };
 }
 
 /// Rests the path set, clearing all nodes and state.
@@ -508,7 +627,7 @@ pub fn simplify(self: *const Path, alloc: mem.Allocator) SimplifyError!Path {
         .tolerance = self.tolerance,
         .transformation = self.transformation,
     };
-    result.fixState();
+    result.fixState() catch unreachable;
     return result;
 }
 
@@ -536,15 +655,67 @@ pub fn offset(self: *const Path, alloc: mem.Allocator, value: f64) OffsetError!P
         .tolerance = self.tolerance,
         .transformation = self.transformation,
     };
-    result.fixState();
+    result.fixState() catch unreachable;
     return result;
 }
+
+pub const SerializeError = std.Io.Writer.Error || mem.Allocator.Error;
+
+/// Serializes the current path into a minified string that can be stored and
+/// loaded as a new path using `deserialize`.
+///
+/// Caller owns the memory.
+pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
+    var serialized: std.Io.Writer.Allocating = .init(alloc);
+    errdefer serialized.deinit();
+    var current_: ?PathNode = null;
+    for (self.nodes.items) |node| {
+        if (current_) |current| {
+            if (current == .close_path and node == .close_path) {
+                continue;
+            }
+        }
+
+        try serialized.writer.writeByte(switch (node) {
+            .move_to => 'M',
+            .line_to => 'L',
+            .curve_to => 'C',
+            .close_path => 'Z',
+        });
+
+        switch (node) {
+            inline .move_to, .line_to => |n| try serialized.writer.print("{d},{d}", .{ n.point.x, n.point.y }),
+            .curve_to => |n| try serialized.writer.print(
+                "{d},{d},{d},{d},{d},{d}",
+                .{
+                    n.p1.x,
+                    n.p1.y,
+                    n.p2.x,
+                    n.p2.y,
+                    n.p3.x,
+                    n.p3.y,
+                },
+            ),
+            .close_path => {},
+        }
+
+        current_ = node;
+    }
+
+    return try serialized.toOwnedSlice();
+}
+
+const FixStateError = error{
+    /// The path is invalid and should not be used; undefined behavior will
+    /// occur if it is.
+    InvalidPath,
+};
 
 /// "Replays" the path so that initial_point and current_point are correctly
 /// set when a path is initialized from existing nodes.
 ///
 /// Asserts a well-formed path (move_to before anything else particularly).
-fn fixState(self: *Path) void {
+fn fixState(self: *Path) FixStateError!void {
     for (self.nodes.items) |node| {
         switch (node) {
             .move_to => |n| {
@@ -552,15 +723,15 @@ fn fixState(self: *Path) void {
                 self.current_point = n.point;
             },
             .line_to => |n| {
-                debug.assert(self.initial_point != null);
+                if (self.initial_point == null) return error.InvalidPath;
                 self.current_point = n.point;
             },
             .curve_to => |n| {
-                debug.assert(self.initial_point != null);
+                if (self.initial_point == null) return error.InvalidPath;
                 self.current_point = n.p3;
             },
             .close_path => {
-                debug.assert(self.initial_point != null);
+                if (self.initial_point == null) return error.InvalidPath;
                 self.current_point = self.initial_point;
             },
         }
@@ -569,6 +740,19 @@ fn fixState(self: *Path) void {
 
 fn clampI24(x: f64) f64 {
     return math.clamp(x, math.minInt(i24), math.maxInt(i24));
+}
+
+test "clone" {
+    const alloc = testing.allocator;
+    var path: Path = .empty;
+    defer path.deinit(alloc);
+    try path.moveTo(alloc, 49.5, 0);
+    try path.lineTo(alloc, 100, 100);
+    try path.lineTo(alloc, 0, 100);
+    path.transformation = path.transformation.scale(2.0, 3.0);
+    var cloned = try path.clone(alloc);
+    defer cloned.deinit(alloc);
+    try testing.expectEqualDeep(path, cloned);
 }
 
 test "moveTo clamped" {
@@ -929,7 +1113,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        got.fixState();
+        try got.fixState();
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
     }
@@ -943,7 +1127,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        got.fixState();
+        try got.fixState();
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
         try testing.expectEqualDeep(Point{ .x = 15, .y = 13 }, got.current_point);
     }
@@ -962,7 +1146,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        got.fixState();
+        try got.fixState();
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
         try testing.expectEqualDeep(Point{ .x = 4, .y = 4 }, got.current_point);
     }
@@ -979,8 +1163,183 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        got.fixState();
+        try got.fixState();
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
         try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
     }
+    {
+        // Invalid path (line_to)
+        var nodes = [_]PathNode{
+            .{ .line_to = .{ .point = .{ .x = 32, .y = 25 } } },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        try testing.expectError(error.InvalidPath, got.fixState());
+    }
+    {
+        // Invalid path (curve_to)
+        var nodes = [_]PathNode{
+            .{ .curve_to = .{
+                .p1 = .{ .x = 89, .y = 49 },
+                .p2 = .{ .x = 209, .y = 49 },
+                .p3 = .{ .x = 279, .y = 249 },
+            } },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        try testing.expectError(error.InvalidPath, got.fixState());
+    }
+    {
+        // Invalid path (close_path)
+        var nodes = [_]PathNode{
+            .{ .close_path = .{} },
+        };
+        var got: Path = .{
+            .nodes = .fromOwnedSlice(&nodes),
+        };
+        try testing.expectError(error.InvalidPath, got.fixState());
+    }
+}
+
+test "serialize, deserialize e2e" {
+    const name = "serialize";
+    const cases = [_]struct {
+        name: []const u8,
+        nodes: []const PathNode,
+        serialized: []const u8,
+        test_serialize: bool = true,
+        test_deserialize: bool = true,
+    }{
+        .{
+            .name = "triangle",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+            },
+            .serialized = "M49.5,0L100,100L0,100ZM49.5,0",
+        },
+        .{
+            .name = "curve_to",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 19, .y = 249 } } },
+                .{ .curve_to = .{
+                    .p1 = .{ .x = 89, .y = 49 },
+                    .p2 = .{ .x = 209, .y = 49 },
+                    .p3 = .{ .x = 279, .y = 249 },
+                } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 19, .y = 249 } } },
+            },
+            .serialized = "M19,249C89,49,209,49,279,249ZM19,249",
+        },
+        .{
+            .name = "zeroed fractions",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 0.5, .y = 0.125 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+            },
+            .serialized = "M0.5,0.125L100,100",
+        },
+        .{
+            .name = "empty path",
+            .nodes = &.{},
+            .serialized = "",
+        },
+        .{
+            .name = "close_path elided",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 50, .y = 50 } } },
+                .{ .close_path = .{} },
+                .{ .close_path = .{} },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 50, .y = 50 } } },
+            },
+            .serialized = "M50,50ZM50,50",
+            .test_deserialize = false,
+        },
+    };
+    const TestFn = struct {
+        fn f(tc: anytype) TestingError!void {
+            const alloc = testing.allocator;
+            var path: Path = .empty;
+            defer path.deinit(alloc);
+            try path.nodes.appendSlice(alloc, tc.nodes);
+            path.fixState() catch |err| {
+                std.debug.print("unexpected error: {}\n", .{err});
+                return error.TestUnexpectedError;
+            };
+            if (tc.test_serialize) {
+                const got_serialized = path.serialize(alloc) catch |err| {
+                    std.debug.print("unexpected error: {}\n", .{err});
+                    return error.TestUnexpectedError;
+                };
+                defer alloc.free(got_serialized);
+                try testing.expectEqualSlices(u8, tc.serialized, got_serialized);
+            }
+
+            if (tc.test_deserialize) {
+                var deserialized: Path = deserialize(alloc, tc.serialized) catch |err| {
+                    std.debug.print("unexpected error: {}\n", .{err});
+                    return error.TestUnexpectedError;
+                };
+                defer deserialized.deinit(alloc);
+                try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
+                try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
+                try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+            }
+        }
+    };
+    try runCases(name, cases, TestFn.f);
+}
+
+test "serialize OOM to trigger errdefer" {
+    const main_alloc = testing.allocator;
+    var debug_alloc: std.heap.DebugAllocator(.{}) = .init;
+    var failing_alloc: testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 1 });
+
+    var path: Path = .empty;
+    defer path.deinit(main_alloc);
+    try path.nodes.appendSlice(main_alloc, &.{
+        .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+        .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+        .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+        .{ .close_path = .{} },
+        .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+    });
+
+    try testing.expectEqual(error.OutOfMemory, path.serialize(failing_alloc.allocator()));
+    testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
+        // so we don't report the leak twice
+        debug_alloc.deinitWithoutLeakChecks();
+        return err;
+    };
+}
+
+test "deserialize, expected command" {
+    try testing.expectError(error.ExpectedCommand, deserialize(testing.allocator, "M1.5,2.5,3.5,4.5"));
+}
+
+test "deserialize, expected delimiter" {
+    try testing.expectError(error.ExpectedValueDelimiter, deserialize(testing.allocator, "M1.5x"));
+}
+
+test "deserialize, unexpected end of stream" {
+    try testing.expectError(error.EndOfStream, deserialize(testing.allocator, "M1.5"));
+}
+
+test "deserialize, expected value" {
+    try testing.expectError(error.ExpectedValue, deserialize(testing.allocator, "M1.5,"));
+}
+
+test "deserialize, invalid path" {
+    try testing.expectError(error.InvalidPath, deserialize(testing.allocator, "L1.5,2.5"));
+}
+
+test "deserialize, fractions close to zero must have leading zero" {
+    try testing.expectError(error.ExpectedValue, deserialize(testing.allocator, "M.5,2.5"));
 }
