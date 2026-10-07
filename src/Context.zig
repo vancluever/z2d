@@ -474,6 +474,14 @@ pub fn setHairline(self: *Context, hairline: bool) void {
     self.hairline = hairline;
 }
 
+/// Creates a clone of the managed path using the supplied allocator (or the
+/// allocator held by the context if `null` is supplied).
+///
+/// Caller owns the memory.
+pub fn clonePath(self: *Context, alloc: ?mem.Allocator) mem.Allocator.Error!Path {
+    return try self.path.clone(alloc orelse self.alloc);
+}
+
 /// Rests the path set, clearing all nodes and state.
 pub fn resetPath(self: *Context) void {
     self.path.reset();
@@ -641,6 +649,30 @@ pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
     const new_path = try self.path.offset(self.alloc, offset);
     self.path.deinit(self.alloc);
     self.path = new_path;
+}
+
+/// Serializes the current path into a minified string that can be stored and
+/// loaded as a new path using `deserializePath`.
+///
+/// The string is created using the supplied allocator (or the allocator held
+/// by the context if `null` is supplied). Caller owns the memory.
+pub fn serializePath(self: *Context, alloc: ?mem.Allocator) Path.SerializeError![]const u8 {
+    return try self.path.serialize(alloc orelse self.alloc);
+}
+
+/// De-serializes a string representing the result of a previous `serializePath`
+/// operation, replacing the path currently in use.
+///
+/// The current context's transformation matrix is saved to the new path after
+/// updating, however it is not applied to the path during de-serialization.
+///
+/// The input and the resulting path is validated to ensure it is correct and
+/// the old path will remain intact on errors.
+pub fn deserializePath(self: *Context, serialized: []const u8) Path.DeserializeError!void {
+    var path = try Path.deserialize(self.alloc, serialized);
+    path.transformation = self.transformation;
+    self.path.deinit(self.alloc);
+    self.path = path;
 }
 
 /// Runs a fill operation for the current path and any subpaths. All paths in
@@ -837,4 +869,42 @@ test "setFontIndex, error cases" {
     try testing.expectError(error.IndexOutOfRange, context.setFontIndex(1));
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular-Bold.subset.ttc"));
     try testing.expectError(error.IndexOutOfRange, context.setFontIndex(2));
+}
+
+test "serializePath, deserializePath e2e" {
+    const expected_serialized = "M49.5,0L100,100L0,100";
+    const alloc = testing.allocator;
+    const io = testing.io;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(io, alloc, &sfc);
+    defer context.deinit();
+    try context.moveTo(49.5, 0);
+    try context.lineTo(100, 100);
+    try context.lineTo(0, 100);
+    const got_serialized = try context.serializePath(null);
+    defer alloc.free(got_serialized);
+    try testing.expectEqualSlices(u8, expected_serialized, got_serialized);
+    var cloned_path = try context.clonePath(null);
+    defer cloned_path.deinit(alloc);
+    context.resetPath();
+    try testing.expectEqual(0, context.path.nodes.items.len);
+    try context.deserializePath(got_serialized);
+    try testing.expectEqualDeep(cloned_path, context.path);
+}
+
+test "deserializePath, errors do not clobber existing path" {
+    const alloc = testing.allocator;
+    const io = testing.io;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(io, alloc, &sfc);
+    defer context.deinit();
+    try context.moveTo(49.5, 0);
+    try context.lineTo(100, 100);
+    try context.lineTo(0, 100);
+    var cloned_path = try context.clonePath(null);
+    defer cloned_path.deinit(alloc);
+    try testing.expectError(error.ExpectedCommand, context.deserializePath("0"));
+    try testing.expectEqualDeep(cloned_path, context.path);
 }
