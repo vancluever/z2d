@@ -20,6 +20,13 @@ using collections, the default font index is zero.
 See [#194](https://github.com/vancluever/z2d/pull/194) for details on the
 changes.
 
+ENHANCEMENTS:
+
+* Added `serialize`, `deserialize`, `clone` to `Path`, and corresponding
+  methods to `Context`. Note that the serialization and de-serialization API
+  and serialization language are currently unstable and may change.
+  ([#195](https://github.com/vancluever/z2d/pull/195))
+
 BUG FIXES:
 
 * Any path that ultimately has a bounding box with a bottom or right side
