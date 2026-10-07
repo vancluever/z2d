@@ -102,6 +102,7 @@ const _084_offset_ghostty_conformance = @import("084_offset_ghostty_conformance.
 const _085_deja_sans_ignore_invalid_points = @import("085_deja_sans_ignore_invalid_points.zig");
 const _086_stroke_dash_close_multiple_join = @import("086_stroke_dash_close_multiple_join.zig");
 const _087_text_collection = @import("087_text_collection.zig");
+const _088_text_dimensions = @import("088_text_dimensions.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -226,6 +227,7 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _085_deja_sans_ignore_invalid_points);
     try addPathBenchmark(&bench, _086_stroke_dash_close_multiple_join);
     try addPathBenchmark(&bench, _087_text_collection);
+    try addPathBenchmark(&bench, _088_text_dimensions);
 
     var threaded: Io.Threaded = .init_single_threaded;
     const io = threaded.io();

@@ -59,6 +59,7 @@ miter_limit: f64 = 10.0,
 operator: compositor.Operator = .src_over,
 precision: compositor.Precision = .integer,
 tolerance: f64 = options.default_tolerance,
+glyph_orientation: options.GlyphOrientation = .top,
 transformation: Transformation = Transformation.identity,
 
 /// Initializes a `Context` with the passed in allocator and surface. Call
@@ -389,6 +390,20 @@ pub fn getFontSize(self: *Context) f64 {
 /// is 16px, or 12pt @ 96 DPI.
 pub fn setFontSize(self: *Context, size: f64) void {
     self.font_size = size;
+}
+
+/// Returns the glyph orientation set with `setGlyphOrientation`.
+pub fn getGlyphOrientation(self: *Context) f64 {
+    return self.font_size;
+}
+
+/// Sets the glyph orientation to use with `showText`. This affects where the
+/// text origin is in relation to vertical spacing; see
+/// `options.GlyphOrientation` for more details.
+///
+/// The default orientation is `.top`.
+pub fn setGlyphOrientation(self: *Context, orientation: options.GlyphOrientation) void {
+    self.glyph_orientation = orientation;
 }
 
 /// Returns the current transformation matrix (CTM) for the context.
@@ -741,6 +756,9 @@ const ShowTextError = fontpkg.File.LoadFontIndexError || text.ShowTextError;
 /// `setFontToBuffer`. For font collections, the appropriate index must also be
 /// set via `setFontIndex`.
 ///
+/// How the vertical origin relates to glyph placement can be controlled by
+/// setting `setGlyphOrientation`, see that function for more details.
+///
 /// See the `text` and `font` packages for details on loading in fonts.
 pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!void {
     const font_file = self.font orelse return;
@@ -757,6 +775,7 @@ pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!
         .{
             .transformation = self.transformation,
             .size = self.font_size,
+            .glyph_orientation = self.glyph_orientation,
             .fill_opts = .{
                 .anti_aliasing_mode = self.anti_aliasing_mode,
                 .fill_rule = self.fill_rule,

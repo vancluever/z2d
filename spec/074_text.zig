@@ -17,6 +17,14 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
 
     const font_file = try z2d.font.File.loadBuffer(@embedFile("test-fonts/Inter-Regular.ttf"));
     var font = try font_file.loadFontIndex(0);
+    // 12pt @ 163 DPI. This is the density of my 27 inch 4K monitor.
+    // This looks OK with 4x SSAA but we could probably do better; text
+    // rendering is definitely showing the need for different AA
+    // techniques. Will look into these after we get text rendering
+    // nailed down half decently, as we are not looking at implementing
+    // hinting anytime soon.
+    const font_size: f64 = 27.0;
+    const spacing = font.extents(font_size).height;
     try z2d.text.show(
         alloc,
         &sfc,
@@ -30,13 +38,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
         10,
         0,
         .{
-            // 12pt @ 163 DPI. This is the density of my 27 inch 4K monitor.
-            // This looks OK with 4x SSAA but we could probably do better; text
-            // rendering is definitely showing the need for different AA
-            // techniques. Will look into these after we get text rendering
-            // nailed down half decently, as we are not looking at implementing
-            // hinting anytime soon.
-            .size = 27,
+            .size = font_size,
             .fill_opts = .{ .anti_aliasing_mode = aa_mode },
         },
     );
@@ -57,7 +59,10 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
             return err;
         }
     };
-    try context.showText("The quick brown fox jumps over the lázy dog", 10, 30);
+    // Start placing text according to our font spacing. Variable name reflects
+    // our default glyph orientation (top of the ascender).
+    var top_y = spacing;
+    try context.showText("The quick brown fox jumps over the lázy dog", 10, top_y);
 
     // Last test uses a buffer-loaded font
     try context.setFontToBuffer(@embedFile("test-fonts/Inter-Regular.ttf"));
@@ -76,7 +81,11 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
     context.setSource(gradient.asPattern());
     context.scale(1.5, 1.0); // Stretch this one out a bit too
-    try context.showText("The quick brown fox jumps over the lázy dog", 10, 60);
+    // This technically will be pushing our ascender up into last line due to
+    // scaling, but it doesn't do it too much so it's fine (it also was this
+    // way before we had vertical metrics too).
+    top_y += spacing;
+    try context.showText("The quick brown fox jumps over the lázy dog", 10, top_y);
 
     return sfc;
 }
