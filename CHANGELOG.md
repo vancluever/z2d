@@ -36,7 +36,8 @@ metrics for vertical spacing.
 Text positioning has also changed as a result of this, being corrected to
 properly use only the ascender in a font versus the em-square.
 
-See [#196](https://github.com/vancluever/z2d/pull/196) for additional details.
+See [#196](https://github.com/vancluever/z2d/pull/196) and
+[#197](https:////github.com/vancluever/z2d/pull/197) for additional details.
 
 PATH SERIALIZATION:
 
