@@ -61,7 +61,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     context.translate(253, 0);
     try fillRightBrack(&context);
     context.setIdentity();
-    context.translate(0, 135);
+    context.translate(0, height - 1);
     try fillSubtitle(&context);
 
     return sfc;
@@ -96,9 +96,10 @@ fn fillZAnd2d(context: *z2d.Context) !void {
     const saved_font_size = context.getFontSize();
     defer context.setFontSize(saved_font_size);
     context.setFontSize(128);
+    context.setGlyphOrientation(.baseline);
     try context.setFontToBuffer(title_font);
     defer context.deinitFont();
-    try context.showText("2d", 86, -11);
+    try context.showText("2d", 86, 117);
 }
 
 fn fillRightBrack(context: *z2d.Context) !void {
@@ -118,6 +119,7 @@ fn fillSubtitle(context: *z2d.Context) !void {
     const saved_font_size = context.getFontSize();
     defer context.setFontSize(saved_font_size);
     context.setFontSize(36);
+    context.setGlyphOrientation(.baseline);
     try context.setFontToBuffer(subtitle_font);
     defer context.deinitFont();
     try context.showText("A PURE ZIG GRAPHICS LIBRARY", 0, 0);
