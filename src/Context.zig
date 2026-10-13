@@ -502,6 +502,16 @@ pub fn resetPath(self: *Context) void {
     self.path.reset();
 }
 
+/// "Appends", or replays, the supplied path to the existing path in the
+/// context. Will use the current transformation matrix when appending nodes.
+/// So as an example, if an existing path has been created with the identity
+/// matrix, and then appended using this function after running
+/// `context.scale(2.0, 2.0)`, the resulting appended path will be twice as
+/// big.
+pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator.Error) {
+    return try self.path.appendPath(self.alloc, src);
+}
+
 /// Starts a new path, and moves the current point to it. If a path already has
 /// been started, a new sub-path is started. Note that this does not clear any
 /// existing paths or nodes, use `resetPath` to accomplish this.
