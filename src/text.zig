@@ -189,7 +189,7 @@ pub const ShapeTextResult = union(SelectMode) {
     }
 
     /// Asserts a result type of `.extents_only` or `.all`.
-    pub fn extents(self: *ShapeTextResult) Extents {
+    pub fn extents(self: *const ShapeTextResult) Extents {
         return switch (self.*) {
             .path_only => unreachable,
             .extents_only => |e| e,
@@ -292,32 +292,34 @@ pub fn shape(
             };
         } else null;
 
-        if (path_) |*path| {
-            // Only need to draw the glyph if we actually have an outline for this
-            // codepoint (i.e., not whitespace).
-            if (current_glyph.outline != .none) {
+        if (current_glyph.outline != .none) {
+            // We have an outline, so we want to get it, even if we're not
+            // drawing, so that we can keep track of metrics if we need to
+            // return them later.
+            var outline = outlines.get(codepoint) orelse outline: {
+                const o = try Glyph.Outline.init(alloc, font, current_glyph, opts.glyph_orientation);
+                try outlines.put(alloc, codepoint, o);
+                break :outline o;
+            };
+
+            // Record our box values to help keep track of the final bounding box.
+            if (box_x_min_ == null) {
+                box_x_min_ = advance + outline.x_min * scale;
+            }
+            if (idx == codepoints.items.len - 1) {
+                // Don't need to record this until the final glyph
+                box_x_max = advance + outline.x_max * scale;
+            }
+
+            // We need to keep track of vertical extrema every glyph.
+            box_y_min = @min(box_y_min, outline.y_min);
+            box_y_max = @max(box_y_max, outline.y_max);
+
+            // Only draw if we need to.
+            if (path_) |*path| {
                 // We save and restore the ctm after drawing each codepoint
                 const saved_ctm = path.transformation;
                 defer path.transformation = saved_ctm;
-
-                var outline = outlines.get(codepoint) orelse outline: {
-                    const o = try Glyph.Outline.init(alloc, font, current_glyph, opts.glyph_orientation);
-                    try outlines.put(alloc, codepoint, o);
-                    break :outline o;
-                };
-
-                // Record our box values to help keep track of the final bounding box.
-                if (box_x_min_ == null) {
-                    box_x_min_ = advance + outline.x_min * scale;
-                }
-                if (idx == codepoints.items.len - 1) {
-                    // Don't need to record this until the final glyph
-                    box_x_max = advance + outline.x_max * scale;
-                }
-
-                // We need to keep track of vertical extrema every glyph.
-                box_y_min = @min(box_y_min, outline.y_min);
-                box_y_max = @max(box_y_max, outline.y_max);
 
                 // Phantom point 1 is equal to xMin - lsb, but only if the
                 // lsb_is_at_x_zero flag is false. If it is, we don't need to
@@ -380,4 +382,16 @@ pub fn shape(
             };
         },
     };
+}
+
+test "text.shape will corretly return extents in .extents_only" {
+    const alloc = std.testing.allocator;
+    var font: Font = try Font.loadBufferOffset(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"), 0);
+    const shaped = try shape(alloc, &font, "a", 0, 0, .{ .mode = .extents_only });
+    const extents = shaped.extents();
+    try std.testing.expect(extents.x_bearing != 0.0);
+    try std.testing.expect(extents.y_bearing != 0.0);
+    try std.testing.expect(extents.width != 0.0);
+    try std.testing.expect(extents.height != 0.0);
+    try std.testing.expect(extents.advance != 0.0);
 }
