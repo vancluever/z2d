@@ -842,29 +842,6 @@ pub const Outline = struct {
         self.* = undefined;
     }
 
-    /// "Appends", or replays, the stored path within the outline on the path supplied.
-    ///
-    /// One thing to note when using this function is to keep in mind that
-    /// y-coordinates are already flipped, so it is not necessary (but rather
-    /// incorrect) to pass a scale(1, -1) here.
-    ///
-    /// The path is expected to be not pre-allocated (i.e., we expand capacity when
-    /// appending).
-    pub fn appendToPath(
-        self: *Outline,
-        alloc: mem.Allocator,
-        path: *Path,
-    ) (Path.Error || mem.Allocator.Error)!void {
-        for (self.path.nodes.items) |node| {
-            switch (node) {
-                .move_to => |n| try path.moveTo(alloc, n.point.x, n.point.y),
-                .line_to => |n| try path.lineTo(alloc, n.point.x, n.point.y),
-                .curve_to => |n| try path.curveTo(alloc, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
-                .close_path => try path.close(alloc),
-            }
-        }
-    }
-
     fn quadCurveTo(
         alloc: mem.Allocator,
         path: *Path,

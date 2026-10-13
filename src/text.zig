@@ -336,7 +336,7 @@ pub fn shape(
                 ).scale(scale, scale);
 
                 // Append the glyph to the path now
-                try outline.appendToPath(alloc, path);
+                try path.appendPath(alloc, &outline.path);
             }
         }
 
