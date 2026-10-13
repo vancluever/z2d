@@ -47,8 +47,15 @@ format which can be read back in at a later time. These serializations are
 designed to be terse but also human-readable and editable (and could be
 considered a subset of the SVG path language). Note that the serialization and
 de-serialization API, and the serialization language are currently unstable and
-may change. See ([#195](https://github.com/vancluever/z2d/pull/195)) for
+may change. See [#195](https://github.com/vancluever/z2d/pull/195) for
 additional details.
+
+ADDITIONAL ENHANCEMENTS:
+
+* `appendPath` has been added to `Path` and `Context` to allow for the replay
+  of path nodes into another path, working off the destination path's
+  higher-level attributes such as transformation matrices.
+  ([#198](https://github.com/vancluever/z2d/pull/198))
 
 BUG FIXES:
 
