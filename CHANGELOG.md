@@ -28,10 +28,10 @@ origin, but also the font baseline and the full bottom left.
 
 Additionally, text shaping (or in other words, the ability to get a pre-drawn
 path and/or font metrics to assist with positioning text) is now possible,
-through the use of `text.shape` and `Font.extents`. When fetching metrics, both
-functions will return metrics corresponding to their particular domain -
-`text.shap` returns metrics for the rendered text, and `Font.extents` returns
-metrics for vertical spacing.
+through the use of `text.shape` (along with `Context.shapText`) and
+`Font.extents`. When fetching metrics, both functions will return metrics
+corresponding to their particular domain - `text.shape` returns metrics for the
+rendered text, and `Font.extents` returns metrics for vertical spacing.
 
 Text positioning has also changed as a result of this, being corrected to
 properly use only the ascender in a font versus the em-square.
