@@ -75,7 +75,7 @@ pub fn show(
 }
 
 /// The type of data to extract when using `shape`.
-pub const SelectMode = enum {
+pub const ShapeMode = enum {
     /// Returns the path only, skips a few extra calculations at the end of the
     /// function.
     path_only,
@@ -119,7 +119,7 @@ pub const Extents = struct {
 
 pub const ShapeTextOptions = struct {
     /// Defines the data to return.
-    mode: SelectMode = .all,
+    mode: ShapeMode = .all,
 
     /// The transformation matrix to use when drawing text. This is used as the
     /// initial matrix when tracing font outlines and calculating extents.
@@ -160,7 +160,7 @@ pub const ShapeTextError = error{
 } || mem.Allocator.Error || fontpkg.ReaderError || Glyph.Outline.InitError;
 
 /// Represents the result of `shape`.
-pub const ShapeTextResult = union(SelectMode) {
+pub const ShapeTextResult = union(ShapeMode) {
     path_only: Path,
     extents_only: Extents,
     all: struct {
