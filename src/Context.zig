@@ -508,7 +508,7 @@ pub fn resetPath(self: *Context) void {
 /// matrix, and then appended using this function after running
 /// `context.scale(2.0, 2.0)`, the resulting appended path will be twice as
 /// big.
-pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator.Error) {
+pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator.Error)!void {
     return try self.path.appendPath(self.alloc, src);
 }
 
@@ -793,6 +793,51 @@ pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!
                 .precision = self.precision,
                 .tolerance = self.tolerance,
             },
+        },
+    );
+}
+
+const ShapeTextError = error{
+    /// No font has been loaded into the context.
+    NoFontLoaded,
+} || fontpkg.File.LoadFontIndexError || text.ShapeTextError;
+
+/// Returns the path and/or dimensions of the text as it would be drawn with
+/// `showText`, at the co-ordinates specified. See that function for details
+/// pertaining to the particular behavior of specific text rendering options.
+///
+/// A separate allocator can be supplied in `alloc`, which will be used for
+/// both the intermediate loading of glyphs, and the allocation of nodes for the
+/// returned path. Use `null` if you wish to use the context's allocator; note
+/// that the caller still owns this memory and will need to release the result
+/// using the context's allocator.
+///
+/// Returning both the path and extents, or one or the other, can be controlled
+/// by selecting the appropriate option in `mode`.
+///
+/// Note that unlike `showText`, this function requires a font, and will return
+/// an error if one has not been loaded.
+pub fn shapeText(
+    self: *Context,
+    utf8: []const u8,
+    x: f64,
+    y: f64,
+    alloc: ?mem.Allocator,
+    mode: text.ShapeMode,
+) ShapeTextError!text.ShapeTextResult {
+    const font_file = self.font orelse return error.NoFontLoaded;
+    var font = try font_file.file.loadFontIndex(font_file.index);
+    return try text.shape(
+        alloc orelse self.alloc,
+        &font,
+        utf8,
+        x,
+        y,
+        .{
+            .mode = mode,
+            .transformation = self.transformation,
+            .size = self.font_size,
+            .glyph_orientation = self.glyph_orientation,
         },
     );
 }
