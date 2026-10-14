@@ -231,6 +231,24 @@ pub fn reset(self: *Path) void {
     self.current_point = null;
 }
 
+/// "Appends", or replays, the supplied path to the existing path. This is a
+/// higher-level function that takes into account features that would normally
+/// expect the individual path builder to use, e.g., transformation matrices.
+pub fn appendPath(
+    self: *Path,
+    alloc: mem.Allocator,
+    src: *const Path,
+) (Path.Error || mem.Allocator.Error)!void {
+    for (src.nodes.items) |node| {
+        switch (node) {
+            .move_to => |n| try self.moveTo(alloc, n.point.x, n.point.y),
+            .line_to => |n| try self.lineTo(alloc, n.point.x, n.point.y),
+            .curve_to => |n| try self.curveTo(alloc, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
+            .close_path => try self.close(alloc),
+        }
+    }
+}
+
 /// Starts a new path, and moves the current point to it.
 pub fn moveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
@@ -1342,4 +1360,19 @@ test "deserialize, invalid path" {
 
 test "deserialize, fractions close to zero must have leading zero" {
     try testing.expectError(error.ExpectedValue, deserialize(testing.allocator, "M.5,2.5"));
+}
+
+test "appendPath" {
+    const alloc = testing.allocator;
+    var src: Path = .empty;
+    defer src.deinit(alloc);
+    var dst: Path = .empty;
+    defer dst.deinit(alloc);
+
+    try src.moveTo(alloc, 0, 49);
+    try src.lineTo(alloc, 100, 100);
+    try src.curveTo(alloc, 89, 49, 209, 49, 279, 249);
+    try src.close(alloc);
+    try dst.appendPath(alloc, &src);
+    try testing.expectEqualDeep(src, dst);
 }

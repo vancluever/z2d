@@ -18,6 +18,7 @@ const fontpkg = @import("../font.zig");
 const Font = fontpkg.Font;
 const Path = @import("../Path.zig");
 const Transformation = @import("../Transformation.zig");
+const GlyphOrientation = @import("../options.zig").GlyphOrientation;
 
 const readerByte = @import("util.zig").readerByte;
 const readerByteSigned = @import("util.zig").readerByteSigned;
@@ -485,7 +486,12 @@ pub const Outline = struct {
     } || fontpkg.ReaderError || Path.Error || mem.Allocator.Error;
 
     /// deinit should be called to release the outline.
-    pub fn init(alloc: mem.Allocator, font: *Font, glyph: Glyph) InitError!Outline {
+    pub fn init(
+        alloc: mem.Allocator,
+        font: *Font,
+        glyph: Glyph,
+        orientation: GlyphOrientation,
+    ) InitError!Outline {
         // Not supported when there is no outline detail
         debug.assert(glyph.outline != .none);
 
@@ -506,9 +512,20 @@ pub const Outline = struct {
         // us to apply simpler transformations later. What we are ultimately
         // doing here is making sure our y-axis is corrected from the upward
         // plane that fonts have to the downward one we have.
-        path.transformation = path.transformation
-            .scale(1.0, -1.0)
-            .translate(0.0, @as(f64, @floatFromInt(font.meta.units_per_em)) * -1.0);
+        path.transformation = path.transformation.scale(1.0, -1.0);
+        // Add a spacing translation depending on our orientation.
+        spacing_adjustment: {
+            var ty: f64 = switch (orientation) {
+                .top => @floatFromInt(font.meta.vertical_metrics.ascender),
+                .bottom => @floatFromInt(font.meta.vertical_metrics.descender),
+                .baseline => break :spacing_adjustment, // baseline needs no adjustment
+            };
+            ty *= -1.0; // to match our previous flip
+            path.transformation = path.transformation.translate(0, ty);
+        }
+
+        // Outline's transformation matrix gets reverted back to identity after
+        // we're done
         defer path.transformation = Transformation.identity;
 
         // Plot the outline now; our inner routine can handle both simple and
@@ -825,29 +842,6 @@ pub const Outline = struct {
         self.* = undefined;
     }
 
-    /// "Appends", or replays, the stored path within the outline on the path supplied.
-    ///
-    /// One thing to note when using this function is to keep in mind that
-    /// y-coordinates are already flipped, so it is not necessary (but rather
-    /// incorrect) to pass a scale(1, -1) here.
-    ///
-    /// The path is expected to be not pre-allocated (i.e., we expand capacity when
-    /// appending).
-    pub fn appendToPath(
-        self: *Outline,
-        alloc: mem.Allocator,
-        path: *Path,
-    ) (Path.Error || mem.Allocator.Error)!void {
-        for (self.path.nodes.items) |node| {
-            switch (node) {
-                .move_to => |n| try path.moveTo(alloc, n.point.x, n.point.y),
-                .line_to => |n| try path.lineTo(alloc, n.point.x, n.point.y),
-                .curve_to => |n| try path.curveTo(alloc, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
-                .close_path => try path.close(alloc),
-            }
-        }
-    }
-
     fn quadCurveTo(
         alloc: mem.Allocator,
         path: *Path,
@@ -970,7 +964,7 @@ test "Glyph.Outline.init" {
                 debug.print("unexpected error from Glyph.init: {}\n", .{err});
                 return error.TestUnexpectedError;
             };
-            var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph) catch |err| {
+            var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph, .top) catch |err| {
                 debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
                 return error.TestUnexpectedError;
             };
@@ -995,7 +989,7 @@ test "outline, composite processing, ensure no int overflow" {
         debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };
-    var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph) catch |err| {
+    var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph, .top) catch |err| {
         debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };

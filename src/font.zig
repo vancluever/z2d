@@ -183,6 +183,52 @@ pub const Font = struct {
         };
     }
 
+    /// Extents for the font, computed off of metrics for a supplied font size
+    /// and expressed in pixels. Can be used to correctly position text.
+    ///
+    /// Relative vertical figures like `ascender` and `descender` are oriented
+    /// with a top-left origin system, versus the bottom-left origin that fonts
+    /// are normally expressed in. This means that `ascender` will usually be
+    /// negative and `descender` positive.
+    ///
+    /// Additionally, extents are always supplied in user-space co-ordinates,
+    /// due to the one-dimensional nature of most attributes. This means that
+    /// any scaling or other transformations need to be applied to the result
+    /// manually.
+    pub const Extents = struct {
+        /// The maximum distance that the font extends above the baseline.
+        ascender: f64,
+
+        /// The maximum distance that the font extends below the baseline.
+        descender: f64,
+
+        /// The recommended vertical spacing of the text, generally a result of the
+        /// absolute value of the ascender, descender, and line spacing attributes
+        /// of the font.
+        ///
+        /// A number of fonts will have zero line gaps. For those that do, the gap
+        /// can be found by subtracting the absolute value of the ascender and
+        /// descender from this value.
+        height: f64,
+    };
+
+    /// Computes the extents for the font at the specified size in pixels.
+    pub fn extents(font: *const Font, size: f64) Extents {
+        const scale: f64 = size / @as(f64, @floatFromInt(font.meta.units_per_em));
+        const ascender: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.ascender)) * -scale;
+        const descender: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.descender)) * -scale;
+        const line_gap: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.line_gap)) * scale;
+        // NOTE: As per the OpenType spec, the TrueType metric fields
+        // possibly have negative line gap values in some legacy platforms,
+        // and are treated as zero when they are encountered.
+        const height = @abs(ascender) + @abs(descender) + @max(0, line_gap);
+        return .{
+            .ascender = ascender,
+            .descender = descender,
+            .height = height,
+        };
+    }
+
     /// Represents the table directory via offsets.
     const Directory = struct {
         cmap: u32,
@@ -195,6 +241,9 @@ pub const Font = struct {
         // Kerning tables (optional)
         kern: u32,
         GPOS: u32,
+
+        // OS/2 table (optional)
+        @"OS/2": u32,
 
         /// Errors associated while loading the font table directory.
         const InitError = error{
@@ -267,11 +316,12 @@ pub const Font = struct {
                 }
             }
 
-            // We currently require all tables, so just go over them and make sure
-            // all entries are present.
             inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
                 comptime {
-                    if (std.mem.eql(u8, f_name, "kern") or std.mem.eql(u8, f_name, "GPOS")) {
+                    if (std.mem.eql(u8, f_name, "kern") or
+                        std.mem.eql(u8, f_name, "GPOS") or
+                        std.mem.eql(u8, f_name, "OS/2"))
+                    {
                         continue;
                     }
                 }
@@ -298,6 +348,18 @@ pub const Font = struct {
             long, // u32
         };
 
+        /// Defines the vertical spacing for glyphs in the font. Note that this
+        /// is different from an individual glyph's metrics and is generally
+        /// used to define vertical spacing, not bounding box details. However,
+        /// using this to define vertical extrema on a bounding box will give
+        /// you a fast an accurate way of guaranteeing that no text is likely
+        /// to lie outside of it.
+        const VerticalMetrics = struct {
+            ascender: i16,
+            descender: i16,
+            line_gap: i16,
+        };
+
         /// The type of the suitable cmap subtable that we found. We prefer the
         /// availability of a full repertoire table. Note that if the BMP is only
         /// supported, character ranges over U+FFFF will be unsupported and will be
@@ -320,6 +382,9 @@ pub const Font = struct {
 
         /// The unitsPerEm value from the "head" table.
         units_per_em: u16,
+
+        /// The font's vertical spacing.
+        vertical_metrics: VerticalMetrics,
 
         /// Errors associated with loading font file metadata.
         const InitError = error{
@@ -415,6 +480,20 @@ pub const Font = struct {
             try readerSeek(file, number_of_hmetrics_offset);
             const number_of_hmetrics = try readerInt(file, u16, .big);
 
+            // Determine vertical spacing, preferring OS/2 metrics first,
+            // falling back to hhea/TrueType metrics.
+            const vertical_spacing_offset = if (dir.@"OS/2" != 0)
+                dir.@"OS/2" + 68
+            else
+                dir.hhea + 4;
+
+            try readerSeek(file, vertical_spacing_offset);
+            const vertical_spacing: VerticalMetrics = .{
+                .ascender = try readerInt(file, i16, .big),
+                .descender = try readerInt(file, i16, .big),
+                .line_gap = try readerInt(file, i16, .big),
+            };
+
             return .{
                 .cmap_subtable_offset = cmap_subtable_offset,
                 .lsb_is_at_x_zero = lsb_is_at_x_zero,
@@ -426,6 +505,7 @@ pub const Font = struct {
                 .advance_width_max = advance_width_max,
                 .number_of_hmetrics = number_of_hmetrics,
                 .units_per_em = units_per_em,
+                .vertical_metrics = vertical_spacing,
             };
         }
     };
@@ -495,6 +575,7 @@ const TestSingleFont = struct {
             .loca = 16776,
             .kern = 0,
             .GPOS = 19724,
+            .@"OS/2" = 18624,
         },
         .meta = .{
             .cmap_subtable_offset = .{ .bmp = 18740 },
@@ -503,6 +584,7 @@ const TestSingleFont = struct {
             .advance_width_max = 5492,
             .number_of_hmetrics = 292,
             .units_per_em = 2048,
+            .vertical_metrics = .{ .ascender = 1984, .descender = -494, .line_gap = 0 },
         },
     };
 };
@@ -519,6 +601,7 @@ const TestFontCollection = struct {
             .loca = 7964,
             .kern = 0,
             .GPOS = 13112,
+            .@"OS/2" = 8408,
         },
         .meta = .{
             .cmap_subtable_offset = .{ .bmp = 8524 },
@@ -527,6 +610,7 @@ const TestFontCollection = struct {
             .advance_width_max = 2018,
             .number_of_hmetrics = 58,
             .units_per_em = 2048,
+            .vertical_metrics = .{ .ascender = 1984, .descender = -494, .line_gap = 0 },
         },
     };
     const expected_bold: TestExpectedFontTableMeta = .{
@@ -539,6 +623,7 @@ const TestFontCollection = struct {
             .loca = 23460,
             .kern = 0,
             .GPOS = 24644,
+            .@"OS/2" = 23904,
         },
         .meta = .{
             .cmap_subtable_offset = .{ .bmp = 8524 },
@@ -547,6 +632,7 @@ const TestFontCollection = struct {
             .advance_width_max = 2125,
             .number_of_hmetrics = 58,
             .units_per_em = 2048,
+            .vertical_metrics = .{ .ascender = 1984, .descender = -494, .line_gap = 0 },
         },
     };
 };

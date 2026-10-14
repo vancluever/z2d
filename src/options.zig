@@ -89,3 +89,22 @@ pub const AntiAliasMode = enum {
     /// particular case.
     supersample_4x,
 };
+
+/// Represents how glyph outlines are oriented when being loaded. This
+/// generally affects where the vertical origin is placed when rendering
+/// horizontally-directioned text.
+pub const GlyphOrientation = enum {
+    /// The vertical origin is placed at the top of the ascender. This will
+    /// have the effect of rendering all text below the defined origin.
+    top,
+
+    /// The vertical origin is placed at the baseline. This will have the
+    /// effect of treating the origin as the line on which text is drawn, with
+    /// most of the glyph being placed above the line and descending portions
+    /// being placed below.
+    baseline,
+
+    /// The vertical origin is placed at the very bottom of the descender. This
+    /// will have the effect of rendering all text above the defined origin.
+    bottom,
+};

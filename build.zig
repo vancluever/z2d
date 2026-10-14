@@ -110,22 +110,35 @@ fn docsBundleStep(b: *std.Build, docs_dir: std.Build.LazyPath) !*std.Build.Step 
 
 /// A step that runs kcov on an artifact binary (requires kcov to be
 /// installed).
-fn coverStep(b: *std.Build, artifact: *std.Build.Step.Compile) !*std.Build.Step {
-    const coverage_command = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        "kcov --clean --include-pattern=z2d \"$1\" \"$2\" &>/dev/null",
-        "--",
-    });
-    const output_dir = coverage_command.addOutputDirectoryArg("z2d-cover");
-    coverage_command.addArtifactArg(artifact);
+fn coverStep(b: *std.Build, artifacts: []const *std.Build.Step.Compile) !*std.Build.Step {
+    if (artifacts.len == 0) {
+        return error.ArtifactsRequired;
+    }
+
+    var clean_command = b.addSystemCommand(&.{ "rm", "-rf" });
+    clean_command.has_side_effects = true;
+    const output_dir = clean_command.addOutputDirectoryArg("z2d-cover");
+
+    var last_command = clean_command;
+    for (artifacts) |artifact| {
+        const next_coverage_command = b.addSystemCommand(&.{
+            "sh",
+            "-c",
+            "kcov --include-pattern=z2d \"$1\" \"$2\" &>/dev/null",
+            "--",
+        });
+        next_coverage_command.addDirectoryArg(output_dir);
+        next_coverage_command.addArtifactArg(artifact);
+        next_coverage_command.step.dependOn(&last_command.step);
+        last_command = next_coverage_command;
+    }
 
     const open_command = b.addSystemCommand(&.{
         if (builtin.target.os.tag == .linux) "xdg-open" else "open",
     });
     open_command.addFileArg(try output_dir.join(b.allocator, "index.html"));
 
-    open_command.step.dependOn(&coverage_command.step);
+    open_command.step.dependOn(&last_command.step);
     return &open_command.step;
 }
 
@@ -181,7 +194,7 @@ pub fn build(b: *std.Build) !void {
     });
     const test_step = b.step("test", "Run unit tests");
     if (cover) {
-        const cover_step = try coverStep(b, test_compile);
+        const cover_step = try coverStep(b, &.{test_compile});
         test_step.dependOn(cover_step);
     } else {
         const test_run = b.addRunArtifact(test_compile);
@@ -229,13 +242,30 @@ pub fn build(b: *std.Build) !void {
     spec_test.root_module.addOptions("spec_options", spec_options);
     const spec_step = b.step("spec", "Run spec (E2E) tests");
     if (cover) {
-        const spec_cover_step = try coverStep(b, spec_test);
+        const spec_cover_step = try coverStep(b, &.{spec_test});
         spec_step.dependOn(spec_cover_step);
     } else {
         const spec_run = b.addRunArtifact(spec_test);
         spec_step.dependOn(&spec_run.step);
     }
     check_step.dependOn(&spec_test.step);
+
+    /////////////////////////////////////////////////////////////////////////
+    // Running all tests
+    //
+    // Quick command for running both unit and spec tests, with option for
+    // coverage too.
+    /////////////////////////////////////////////////////////////////////////
+    const test_all_step = b.step("test-all", "Run spec (E2E) tests");
+    if (cover) {
+        const test_all_cover_step = try coverStep(b, &.{ test_compile, spec_test });
+        test_all_step.dependOn(test_all_cover_step);
+    } else {
+        const test_run = b.addRunArtifact(test_compile);
+        const spec_run = b.addRunArtifact(spec_test);
+        test_all_step.dependOn(&test_run.step);
+        test_all_step.dependOn(&spec_run.step);
+    }
 
     /////////////////////////////////////////////////////////////////////////
     // Release automation

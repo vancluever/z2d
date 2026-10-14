@@ -59,6 +59,7 @@ miter_limit: f64 = 10.0,
 operator: compositor.Operator = .src_over,
 precision: compositor.Precision = .integer,
 tolerance: f64 = options.default_tolerance,
+glyph_orientation: options.GlyphOrientation = .top,
 transformation: Transformation = Transformation.identity,
 
 /// Initializes a `Context` with the passed in allocator and surface. Call
@@ -391,6 +392,20 @@ pub fn setFontSize(self: *Context, size: f64) void {
     self.font_size = size;
 }
 
+/// Returns the glyph orientation set with `setGlyphOrientation`.
+pub fn getGlyphOrientation(self: *Context) f64 {
+    return self.font_size;
+}
+
+/// Sets the glyph orientation to use with `showText`. This affects where the
+/// text origin is in relation to vertical spacing; see
+/// `options.GlyphOrientation` for more details.
+///
+/// The default orientation is `.top`.
+pub fn setGlyphOrientation(self: *Context, orientation: options.GlyphOrientation) void {
+    self.glyph_orientation = orientation;
+}
+
 /// Returns the current transformation matrix (CTM) for the context.
 pub fn getTransformation(self: *Context) Transformation {
     return self.transformation;
@@ -485,6 +500,16 @@ pub fn clonePath(self: *Context, alloc: ?mem.Allocator) mem.Allocator.Error!Path
 /// Rests the path set, clearing all nodes and state.
 pub fn resetPath(self: *Context) void {
     self.path.reset();
+}
+
+/// "Appends", or replays, the supplied path to the existing path in the
+/// context. Will use the current transformation matrix when appending nodes.
+/// So as an example, if an existing path has been created with the identity
+/// matrix, and then appended using this function after running
+/// `context.scale(2.0, 2.0)`, the resulting appended path will be twice as
+/// big.
+pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator.Error)!void {
+    return try self.path.appendPath(self.alloc, src);
 }
 
 /// Starts a new path, and moves the current point to it. If a path already has
@@ -741,6 +766,9 @@ const ShowTextError = fontpkg.File.LoadFontIndexError || text.ShowTextError;
 /// `setFontToBuffer`. For font collections, the appropriate index must also be
 /// set via `setFontIndex`.
 ///
+/// How the vertical origin relates to glyph placement can be controlled by
+/// setting `setGlyphOrientation`, see that function for more details.
+///
 /// See the `text` and `font` packages for details on loading in fonts.
 pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!void {
     const font_file = self.font orelse return;
@@ -757,6 +785,7 @@ pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!
         .{
             .transformation = self.transformation,
             .size = self.font_size,
+            .glyph_orientation = self.glyph_orientation,
             .fill_opts = .{
                 .anti_aliasing_mode = self.anti_aliasing_mode,
                 .fill_rule = self.fill_rule,
@@ -764,6 +793,51 @@ pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!
                 .precision = self.precision,
                 .tolerance = self.tolerance,
             },
+        },
+    );
+}
+
+const ShapeTextError = error{
+    /// No font has been loaded into the context.
+    NoFontLoaded,
+} || fontpkg.File.LoadFontIndexError || text.ShapeTextError;
+
+/// Returns the path and/or dimensions of the text as it would be drawn with
+/// `showText`, at the co-ordinates specified. See that function for details
+/// pertaining to the particular behavior of specific text rendering options.
+///
+/// A separate allocator can be supplied in `alloc`, which will be used for
+/// both the intermediate loading of glyphs, and the allocation of nodes for the
+/// returned path. Use `null` if you wish to use the context's allocator; note
+/// that the caller still owns this memory and will need to release the result
+/// using the context's allocator.
+///
+/// Returning both the path and extents, or one or the other, can be controlled
+/// by selecting the appropriate option in `mode`.
+///
+/// Note that unlike `showText`, this function requires a font, and will return
+/// an error if one has not been loaded.
+pub fn shapeText(
+    self: *Context,
+    utf8: []const u8,
+    x: f64,
+    y: f64,
+    alloc: ?mem.Allocator,
+    mode: text.ShapeMode,
+) ShapeTextError!text.ShapeTextResult {
+    const font_file = self.font orelse return error.NoFontLoaded;
+    var font = try font_file.file.loadFontIndex(font_file.index);
+    return try text.shape(
+        alloc orelse self.alloc,
+        &font,
+        utf8,
+        x,
+        y,
+        .{
+            .mode = mode,
+            .transformation = self.transformation,
+            .size = self.font_size,
+            .glyph_orientation = self.glyph_orientation,
         },
     );
 }

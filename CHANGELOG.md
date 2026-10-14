@@ -20,12 +20,42 @@ using collections, the default font index is zero.
 See [#194](https://github.com/vancluever/z2d/pull/194) for details on the
 changes.
 
-ENHANCEMENTS:
+NEW TEXT SHAPING AND FONT METRICS FUNCTIONALITY:
 
-* Added `serialize`, `deserialize`, `clone` to `Path`, and corresponding
-  methods to `Context`. Note that the serialization and de-serialization API
-  and serialization language are currently unstable and may change.
-  ([#195](https://github.com/vancluever/z2d/pull/195))
+Additional text placement options have been added for use with `text.show` and
+`Context.showText`, allowing one to orient text at not just the top left as the
+origin, but also the font baseline and the full bottom left.
+
+Additionally, text shaping (or in other words, the ability to get a pre-drawn
+path and/or font metrics to assist with positioning text) is now possible,
+through the use of `text.shape` (along with `Context.shapText`) and
+`Font.extents`. When fetching metrics, both functions will return metrics
+corresponding to their particular domain - `text.shape` returns metrics for the
+rendered text, and `Font.extents` returns metrics for vertical spacing.
+
+Text positioning has also changed as a result of this, being corrected to
+properly use only the ascender in a font versus the em-square.
+
+See [#196](https://github.com/vancluever/z2d/pull/196) and
+[#197](https:////github.com/vancluever/z2d/pull/197) for additional details.
+
+PATH SERIALIZATION:
+
+You can now use `serialize`, `deserialize`, and `clone` in `Path`, and
+corresponding methods to `Context`, to convert existing paths to a textual
+format which can be read back in at a later time. These serializations are
+designed to be terse but also human-readable and editable (and could be
+considered a subset of the SVG path language). Note that the serialization and
+de-serialization API, and the serialization language are currently unstable and
+may change. See [#195](https://github.com/vancluever/z2d/pull/195) for
+additional details.
+
+ADDITIONAL ENHANCEMENTS:
+
+* `appendPath` has been added to `Path` and `Context` to allow for the replay
+  of path nodes into another path, working off the destination path's
+  higher-level attributes such as transformation matrices.
+  ([#198](https://github.com/vancluever/z2d/pull/198))
 
 BUG FIXES:
 
