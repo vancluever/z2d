@@ -12,8 +12,5 @@ jobs:
         with:
           version: 0.16.0
 
-      - name: Run unit tests
-        run: zig build test --summary all
-
-      - name: Run spec tests
-        run: zig build spec --summary all
+      - name: Run all tests
+        run: zig build test-all --summary all
