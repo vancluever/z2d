@@ -15,8 +15,8 @@
 //! (e.g., `moveToAssumeCapacity`). Using this method, you manage the node
 //! memory manually and `deinit` should not be called.
 //!
-//! * `serialize` and `deserialize` can also be used to export and import paths
-//! to/from a string value.
+//! * `serialize`, `loadSerialized`, and `appendSerialized` can also be used to
+//! export and import paths to/from a string value.
 //!
 //! A `Context` contains a managed `Path`, and you only need to use this
 //! package directly if you are not using it.
@@ -24,6 +24,35 @@
 //! You may also be interested in `StaticPath`, which is an infallible wrapper
 //! over the static buffer-managed pattern that you would get by using
 //! `initBuffer` here.
+//!
+//! ## Path serialization language
+//!
+//! `serialize`, `loadSerialized`, and `appendSerialized` marshal and unmarshal
+//! path data into a language that could be considered a subset of SVG's path
+//! data language, with the caveat that your options with regards to
+//! structuring for readability are limited at this time. Examples of this
+//! divergence are as follows:
+//!
+//! * Commands (currently) cannot be repeated, e.g., `M10,10,20,20` to do a
+//! `move_to` -> `line_to` is not valid.
+//!
+//! * Co-ordinate pairs cannot be selectively delimited, e.g., `M 10 10` is not
+//! a valid command, only `M10,10` is.
+//!
+//! * Whitespace and line breaks to help make strings more readable are
+//! currently not supported, in fact, no whitespace is valid at all at this
+//! time.
+//!
+//! The following commands are supported (note parentheses should be omitted):
+//!
+//! * `M(x,y)` - denotes a move_to command, example: `M10,10`.
+//! * `L(x,y)` - denotes a line_to command, example: `L20,20`.
+//! * `C(x1,y1,x2,y2,x3,y3)` - denotes a curve_to command, example:
+//! `C20,10,20,20,10,20`.
+//! * `Z` - denotes a close_path command.
+//!
+//! Successive commands start right after the final expected co-ordinate pair,
+//! e.g., `M10,10L20,20L10,20ZM10,10`.
 const Path = @This();
 
 const std = @import("std");
@@ -104,105 +133,23 @@ pub fn initBuffer(nodes: []PathNode) Path {
     };
 }
 
-pub const DeserializeError = error{
-    /// A command was expected but was not found.
-    ExpectedCommand,
-} || ReaderParseValueError || ReaderTakeDelimError || FixStateError || std.Io.Reader.Error || mem.Allocator.Error;
+pub const LoadSerializedError = DeserializeSharedError || LoadSerializedHandlerError || FixStateError;
 
-/// De-serializes a string representing the result of a previous `serialize`
-/// operation. Does not apply any transformations, however will ensure that
-/// state does match the de-serialized result, and will also validate the path
-/// to ensure it is usable.
-pub fn deserialize(alloc: mem.Allocator, serialized: []const u8) DeserializeError!Path {
+/// Loads a path from a string representing the result of a previous
+/// `serialize` operation. The path is validated after it's loaded to ensure it
+/// is usable.
+pub fn loadSerialized(alloc: mem.Allocator, serialized: []const u8) LoadSerializedError!Path {
     var result: Path = .empty;
     errdefer result.deinit(alloc);
-    var reader: std.Io.Reader = .fixed(serialized);
-    while (reader.takeByte()) |command| {
-        switch (command) {
-            'M' => {
-                const point = try readerTakePoint(&reader);
-                try result.nodes.append(alloc, .{ .move_to = .{ .point = point } });
-            },
-            'L' => {
-                const point = try readerTakePoint(&reader);
-                try result.nodes.append(alloc, .{ .line_to = .{ .point = point } });
-            },
-            'C' => {
-                const p1 = try readerTakePoint(&reader);
-                try readerTakeDelim(&reader);
-                const p2 = try readerTakePoint(&reader);
-                try readerTakeDelim(&reader);
-                const p3 = try readerTakePoint(&reader);
-                try result.nodes.append(alloc, .{ .curve_to = .{
-                    .p1 = p1,
-                    .p2 = p2,
-                    .p3 = p3,
-                } });
-            },
-            'Z' => try result.nodes.append(alloc, .{ .close_path = .{} }),
-            else => return error.ExpectedCommand,
-        }
-    } else |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
-    }
-
+    try deserializeInner(
+        LoadSerializedHandlerError,
+        loadSerializedHandler,
+        &result,
+        alloc,
+        serialized,
+    );
     try result.fixState();
     return result;
-}
-
-fn readerTakePoint(reader: *std.Io.Reader) (ReaderParseValueError || ReaderTakeDelimError)!Point {
-    const x = try readerParseValue(reader);
-    try readerTakeDelim(reader);
-    const y = try readerParseValue(reader);
-    return .{ .x = x, .y = y };
-}
-
-const ReaderParseValueError = error{
-    /// A value was expected but was not found.
-    ExpectedValue,
-} || std.Io.Reader.Error || std.fmt.ParseFloatError;
-
-fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!f64 {
-    var len: usize = 1;
-    while (reader.peek(len)) |raw| {
-        switch (raw[raw.len - 1]) {
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' => len += 1,
-            '.' => {
-                if (len == 1) {
-                    len -= 1;
-                    break;
-                }
-
-                len += 1;
-            },
-            else => {
-                len -= 1;
-                break;
-            },
-        }
-    } else |err| switch (err) {
-        error.EndOfStream => len -= 1,
-        else => return err,
-    }
-
-    if (len == 0) {
-        return error.ExpectedValue;
-    }
-
-    const raw = try reader.take(len);
-    return std.fmt.parseFloat(f64, raw);
-}
-
-const ReaderTakeDelimError = error{
-    /// A value delimiter was expected but was not found.
-    ExpectedValueDelimiter,
-} || std.Io.Reader.Error;
-
-fn readerTakeDelim(reader: *std.Io.Reader) ReaderTakeDelimError!void {
-    if (try reader.takeByte() != ',') {
-        return error.ExpectedValueDelimiter;
-    }
 }
 
 /// Releases the `Path`'s node array list. It's invalid to use the path set
@@ -247,6 +194,22 @@ pub fn appendPath(
             .close_path => try self.close(alloc),
         }
     }
+}
+
+pub const AppendSerializedError = DeserializeSharedError || AppendSerializedHandlerError || FixStateError;
+
+/// "Appends", or replays, a path from a string representing the result of a
+/// previous `serialize` operation. This is a higher-level function that takes
+/// into account features that would normally expect the individual path
+/// builder to use, e.g., transformation matrices.
+pub fn appendSerialized(path: *Path, alloc: mem.Allocator, serialized: []const u8) AppendSerializedError!void {
+    try deserializeInner(
+        AppendSerializedHandlerError,
+        appendSerializedHandler,
+        path,
+        alloc,
+        serialized,
+    );
 }
 
 /// Starts a new path, and moves the current point to it.
@@ -610,6 +573,9 @@ fn _closeAssumeCapacity(self: *Path) void {
     self.nodes.appendAssumeCapacity(.{ .move_to = .{
         .point = .{ .x = self.initial_point.?.x, .y = self.initial_point.?.y },
     } });
+
+    // Set current point to initial point
+    self.current_point = self.initial_point;
 }
 
 /// Returns `true` if all subpaths in the path set are currently closed.
@@ -721,6 +687,126 @@ pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
     }
 
     return try serialized.toOwnedSlice();
+}
+
+fn DeserializeHandler(err_T: type) type {
+    return *const fn (path: *Path, alloc: mem.Allocator, node: PathNode) err_T!void;
+}
+
+const LoadSerializedHandlerError = mem.Allocator.Error;
+
+fn loadSerializedHandler(path: *Path, alloc: mem.Allocator, node: PathNode) LoadSerializedHandlerError!void {
+    try path.nodes.append(alloc, node);
+}
+
+const AppendSerializedHandlerError = Error || mem.Allocator.Error;
+
+fn appendSerializedHandler(path: *Path, alloc: mem.Allocator, node: PathNode) AppendSerializedHandlerError!void {
+    switch (node) {
+        .move_to => |n| try path.moveTo(alloc, n.point.x, n.point.y),
+        .line_to => |n| try path.lineTo(alloc, n.point.x, n.point.y),
+        .curve_to => |n| try path.curveTo(alloc, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
+        .close_path => try path.close(alloc),
+    }
+}
+
+/// Shared error set for all deserialize operations.
+const DeserializeSharedError = error{
+    /// A command was expected but was not found.
+    ExpectedCommand,
+} || ReaderParseValueError || ReaderTakeDelimError || std.Io.Reader.Error;
+
+fn deserializeInner(
+    handler_err_T: type,
+    handler: DeserializeHandler(handler_err_T),
+    path: *Path,
+    alloc: mem.Allocator,
+    serialized: []const u8,
+) !void {
+    var reader: std.Io.Reader = .fixed(serialized);
+    while (reader.takeByte()) |command| {
+        switch (command) {
+            'M' => {
+                const point = try readerTakePoint(&reader);
+                try handler(path, alloc, .{ .move_to = .{ .point = point } });
+            },
+            'L' => {
+                const point = try readerTakePoint(&reader);
+                try handler(path, alloc, .{ .line_to = .{ .point = point } });
+            },
+            'C' => {
+                const p1 = try readerTakePoint(&reader);
+                try readerTakeDelim(&reader);
+                const p2 = try readerTakePoint(&reader);
+                try readerTakeDelim(&reader);
+                const p3 = try readerTakePoint(&reader);
+                try handler(path, alloc, .{ .curve_to = .{
+                    .p1 = p1,
+                    .p2 = p2,
+                    .p3 = p3,
+                } });
+            },
+            'Z' => try handler(path, alloc, .{ .close_path = .{} }),
+            else => return error.ExpectedCommand,
+        }
+    } else |err| switch (err) {
+        error.EndOfStream => {},
+        else => return err,
+    }
+}
+
+fn readerTakePoint(reader: *std.Io.Reader) (ReaderParseValueError || ReaderTakeDelimError)!Point {
+    const x = try readerParseValue(reader);
+    try readerTakeDelim(reader);
+    const y = try readerParseValue(reader);
+    return .{ .x = x, .y = y };
+}
+
+const ReaderParseValueError = error{
+    /// A value was expected but was not found.
+    ExpectedValue,
+} || std.Io.Reader.Error || std.fmt.ParseFloatError;
+
+fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!f64 {
+    var len: usize = 1;
+    while (reader.peek(len)) |raw| {
+        switch (raw[raw.len - 1]) {
+            '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' => len += 1,
+            '.' => {
+                if (len == 1) {
+                    len -= 1;
+                    break;
+                }
+
+                len += 1;
+            },
+            else => {
+                len -= 1;
+                break;
+            },
+        }
+    } else |err| switch (err) {
+        error.EndOfStream => len -= 1,
+        else => return err,
+    }
+
+    if (len == 0) {
+        return error.ExpectedValue;
+    }
+
+    const raw = try reader.take(len);
+    return std.fmt.parseFloat(f64, raw);
+}
+
+const ReaderTakeDelimError = error{
+    /// A value delimiter was expected but was not found.
+    ExpectedValueDelimiter,
+} || std.Io.Reader.Error;
+
+fn readerTakeDelim(reader: *std.Io.Reader) ReaderTakeDelimError!void {
+    if (try reader.takeByte() != ',') {
+        return error.ExpectedValueDelimiter;
+    }
 }
 
 const FixStateError = error{
@@ -1301,14 +1387,27 @@ test "serialize, deserialize e2e" {
             }
 
             if (tc.test_deserialize) {
-                var deserialized: Path = deserialize(alloc, tc.serialized) catch |err| {
-                    std.debug.print("unexpected error: {}\n", .{err});
-                    return error.TestUnexpectedError;
-                };
-                defer deserialized.deinit(alloc);
-                try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
-                try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
-                try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                {
+                    var deserialized: Path = loadSerialized(alloc, tc.serialized) catch |err| {
+                        std.debug.print("unexpected error: {}\n", .{err});
+                        return error.TestUnexpectedError;
+                    };
+                    defer deserialized.deinit(alloc);
+                    try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
+                    try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
+                    try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                }
+                {
+                    var deserialized: Path = .empty;
+                    defer deserialized.deinit(alloc);
+                    deserialized.appendSerialized(alloc, tc.serialized) catch |err| {
+                        std.debug.print("unexpected error: {}\n", .{err});
+                        return error.TestUnexpectedError;
+                    };
+                    try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
+                    try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
+                    try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                }
             }
         }
     };
@@ -1339,27 +1438,27 @@ test "serialize OOM to trigger errdefer" {
 }
 
 test "deserialize, expected command" {
-    try testing.expectError(error.ExpectedCommand, deserialize(testing.allocator, "M1.5,2.5,3.5,4.5"));
+    try testing.expectError(error.ExpectedCommand, loadSerialized(testing.allocator, "M1.5,2.5,3.5,4.5"));
 }
 
 test "deserialize, expected delimiter" {
-    try testing.expectError(error.ExpectedValueDelimiter, deserialize(testing.allocator, "M1.5x"));
+    try testing.expectError(error.ExpectedValueDelimiter, loadSerialized(testing.allocator, "M1.5x"));
 }
 
 test "deserialize, unexpected end of stream" {
-    try testing.expectError(error.EndOfStream, deserialize(testing.allocator, "M1.5"));
+    try testing.expectError(error.EndOfStream, loadSerialized(testing.allocator, "M1.5"));
 }
 
 test "deserialize, expected value" {
-    try testing.expectError(error.ExpectedValue, deserialize(testing.allocator, "M1.5,"));
+    try testing.expectError(error.ExpectedValue, loadSerialized(testing.allocator, "M1.5,"));
 }
 
 test "deserialize, invalid path" {
-    try testing.expectError(error.InvalidPath, deserialize(testing.allocator, "L1.5,2.5"));
+    try testing.expectError(error.InvalidPath, loadSerialized(testing.allocator, "L1.5,2.5"));
 }
 
 test "deserialize, fractions close to zero must have leading zero" {
-    try testing.expectError(error.ExpectedValue, deserialize(testing.allocator, "M.5,2.5"));
+    try testing.expectError(error.ExpectedValue, loadSerialized(testing.allocator, "M.5,2.5"));
 }
 
 test "appendPath" {
@@ -1375,4 +1474,15 @@ test "appendPath" {
     try src.close(alloc);
     try dst.appendPath(alloc, &src);
     try testing.expectEqualDeep(src, dst);
+}
+
+test "close moves current point to initial point" {
+    const alloc = testing.allocator;
+    var path: Path = .empty;
+    defer path.deinit(alloc);
+    try path.moveTo(alloc, 49, 0);
+    try path.lineTo(alloc, 100, 100);
+    try path.lineTo(alloc, 100, 0);
+    try path.close(alloc);
+    try testing.expectEqualDeep(path.initial_point, path.current_point);
 }
