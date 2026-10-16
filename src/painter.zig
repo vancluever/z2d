@@ -48,9 +48,6 @@ pub const FillOptions = struct {
 };
 
 /// Errors related to the `fill` operation.
-///
-/// **Note for autodoc viewers:** `std.mem.Allocator.Error` is a member of this
-/// set, but is not shown because `std` is pruned from our autodoc.
 pub const FillError = error{
     /// The supplied path (and any sub-paths) have not been explicitly closed,
     /// which is required by the fill operation.
@@ -198,9 +195,6 @@ pub const StrokeOptions = struct {
 };
 
 /// Errors related to the `stroke` operation.
-///
-/// **Note for autodoc viewers:** `std.mem.Allocator.Error` is a member of this
-/// set, but is not shown because `std` is pruned from our autodoc.
 pub const StrokeError = error{
     /// The single-pixel source data is an RGB-with-alpha-channel type, but the
     /// value has not been correctly pre-multiplied and will cause overflows

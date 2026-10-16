@@ -14,6 +14,20 @@ fn docsStep(
 ) !std.Build.LazyPath {
     const docs_dir_name = "docs-generated";
 
+    // A list of files we want to include (or more specifically, exclude from
+    // deletion). This makes the archive file *significantly* smaller to serve
+    // (uncompressed approx 5-10% of the original size).
+    const files_to_keep = .{
+        "z2d",
+        "std/Io.zig",
+        "std/Io/Reader.zig",
+        "std/Io/Writer.zig",
+        "std/mem.zig",
+        "std/mem/Allocator.zig",
+        "std/std.zig",
+        "z2d_options",
+    };
+
     // This should generate a directory named "z2d-docs" with the documentation
     // as emitted by getEmittedDocs. Unfortunately the name generated here
     // determines the root namespace, so we have to keep it this way; we try to
@@ -24,15 +38,28 @@ fn docsStep(
         .root_module = mod,
     }).getEmittedDocs();
 
-    const in_tar = try emitted_docs_dir.join(b.allocator, "sources.tar");
-    const tar = b.addSystemCommand(&.{"sh"});
-    tar.addArgs(&.{
-        "-c",
-        "cat \"$1\" | tar --delete std > \"$2\"",
-        "--",
-    });
-    tar.addFileArg(in_tar);
-    const out_tar = tar.addOutputFileArg("z2d-sources.tar");
+    // In order to properly filter the archive (using --exclude-from with
+    // --delete does not work), we have to untar the archive first, and then
+    // tar it back up.
+    //
+    // Extract the archive now
+    const emitted_docs_tar_file = try emitted_docs_dir.join(b.allocator, "sources.tar");
+    const docs_extracted_command = b.addSystemCommand(&.{ "tar", "--extract" });
+    docs_extracted_command.addArg("--file");
+    docs_extracted_command.addFileArg(emitted_docs_tar_file);
+    docs_extracted_command.addArg("--directory");
+    const docs_extracted_dir = docs_extracted_command.addOutputDirectoryArg("z2d-docs-extracted");
+
+    // Re-tar the directory using the file/dir list of the content that we want
+    // to keep.
+    const output_tar_command = b.addSystemCommand(&.{ "tar", "--create" });
+    output_tar_command.addArg("--file");
+    const out_tar = output_tar_command.addOutputFileArg("z2d-sources.tar");
+    output_tar_command.addArg("--directory");
+    output_tar_command.addDirectoryArg(docs_extracted_dir);
+    inline for (files_to_keep) |file| {
+        output_tar_command.addArg(file);
+    }
 
     const wf = b.addWriteFiles();
     const out_docs_dir = try wf.getDirectory().join(b.allocator, docs_dir_name);
@@ -95,14 +122,12 @@ fn docsBundleStep(b: *std.Build, docs_dir: std.Build.LazyPath) !*std.Build.Step 
         b.fmt("{s}/{s}", .{ bundle_dir_name, "main.js" }),
     );
 
-    const tar = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        "tar --create --gzip --directory=\"$1\" --file=\"$2\" .",
-        "--",
-    });
+    const tar = b.addSystemCommand(&.{ "tar", "--create", "--gzip" });
+    tar.addArg("--directory");
     tar.addDirectoryArg(bundle_dir);
+    tar.addArg("--file");
     const out_file = tar.addOutputFileArg(out_file_name);
+    tar.addArg(".");
 
     const install_tar = b.addInstallFile(out_file, out_file_name);
     return &install_tar.step;
