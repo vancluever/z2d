@@ -512,6 +512,31 @@ pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator
     return try self.path.appendPath(self.alloc, src);
 }
 
+/// "Appends", or replays, a path from a string representing the result of a
+/// previous `serializePath` operation. Will use the current transformation
+/// matrix when appending nodes. So as an example, if an existing path has been
+/// created with the identity matrix, and then appended using this function
+/// after running `context.scale(2.0, 2.0)`, the resulting appended path will
+/// be twice as big.
+pub fn appendSerializedPath(self: *Context, serialized: []const u8) Path.AppendSerializedError!void {
+    try self.path.appendSerialized(self.alloc, serialized);
+}
+
+/// De-serializes a string representing the result of a previous `serializePath`
+/// operation, replacing the path currently in use.
+///
+/// The current context's transformation matrix is saved to the new path after
+/// updating, however it is not applied to the path during de-serialization.
+///
+/// The input and the resulting path is validated to ensure it is correct and
+/// the old path will remain intact on errors.
+pub fn loadSerializedPath(self: *Context, serialized: []const u8) Path.LoadSerializedError!void {
+    var path = try Path.loadSerialized(self.alloc, serialized);
+    path.transformation = self.transformation;
+    self.path.deinit(self.alloc);
+    self.path = path;
+}
+
 /// Starts a new path, and moves the current point to it. If a path already has
 /// been started, a new sub-path is started. Note that this does not clear any
 /// existing paths or nodes, use `resetPath` to accomplish this.
@@ -683,21 +708,6 @@ pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
 /// by the context if `null` is supplied). Caller owns the memory.
 pub fn serializePath(self: *Context, alloc: ?mem.Allocator) Path.SerializeError![]const u8 {
     return try self.path.serialize(alloc orelse self.alloc);
-}
-
-/// De-serializes a string representing the result of a previous `serializePath`
-/// operation, replacing the path currently in use.
-///
-/// The current context's transformation matrix is saved to the new path after
-/// updating, however it is not applied to the path during de-serialization.
-///
-/// The input and the resulting path is validated to ensure it is correct and
-/// the old path will remain intact on errors.
-pub fn deserializePath(self: *Context, serialized: []const u8) Path.DeserializeError!void {
-    var path = try Path.deserialize(self.alloc, serialized);
-    path.transformation = self.transformation;
-    self.path.deinit(self.alloc);
-    self.path = path;
 }
 
 /// Runs a fill operation for the current path and any subpaths. All paths in
@@ -945,7 +955,7 @@ test "setFontIndex, error cases" {
     try testing.expectError(error.IndexOutOfRange, context.setFontIndex(2));
 }
 
-test "serializePath, deserializePath e2e" {
+test "serializePath, deserializePath, appendSerializedPath e2e" {
     const expected_serialized = "M49.5,0L100,100L0,100";
     const alloc = testing.allocator;
     const io = testing.io;
@@ -963,7 +973,10 @@ test "serializePath, deserializePath e2e" {
     defer cloned_path.deinit(alloc);
     context.resetPath();
     try testing.expectEqual(0, context.path.nodes.items.len);
-    try context.deserializePath(got_serialized);
+    try context.loadSerializedPath(got_serialized);
+    try testing.expectEqualDeep(cloned_path, context.path);
+    context.resetPath();
+    try context.appendSerializedPath(got_serialized);
     try testing.expectEqualDeep(cloned_path, context.path);
 }
 
@@ -979,6 +992,6 @@ test "deserializePath, errors do not clobber existing path" {
     try context.lineTo(0, 100);
     var cloned_path = try context.clonePath(null);
     defer cloned_path.deinit(alloc);
-    try testing.expectError(error.ExpectedCommand, context.deserializePath("0"));
+    try testing.expectError(error.ExpectedCommand, context.loadSerializedPath("0"));
     try testing.expectEqualDeep(cloned_path, context.path);
 }
