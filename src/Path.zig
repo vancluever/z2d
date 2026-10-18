@@ -29,9 +29,8 @@
 //!
 //! `serialize`, `loadSerialized`, and `appendSerialized` marshal and unmarshal
 //! path data into a language that could be considered a subset of SVG's path
-//! data language, with the caveat that your options with regards to
-//! structuring for readability are limited at this time. Examples of this
-//! divergence are as follows:
+//! data language, with some options for structuring for readability. Note
+//! however the following divergences:
 //!
 //! * Commands (currently) cannot be repeated, e.g., `M10,10,20,20` to do a
 //! `move_to` -> `line_to` is not valid.
@@ -39,9 +38,16 @@
 //! * Co-ordinate pairs cannot be selectively delimited, e.g., `M 10 10` is not
 //! a valid command, only `M10,10` is.
 //!
-//! * Whitespace and line breaks to help make strings more readable are
-//! currently not supported, in fact, no whitespace is valid at all at this
-//! time.
+//! Whitespace and line breaks separating commands are permitted, additionally,
+//! so are comments. An example:
+//!
+//! ```
+//! # Represents a triangle.
+//! M49,0
+//!   L100,100
+//!   L0,100
+//! Z
+//! ```
 //!
 //! The following commands are supported (note parentheses should be omitted):
 //!
@@ -747,8 +753,19 @@ fn deserializeInner(
                 } });
             },
             'Z' => try handler(path, alloc, .{ .close_path = .{} }),
+            '#' => try readerTakeComments(&reader),
+            ' ', '\r', '\n' => {},
             else => return error.ExpectedCommand,
         }
+    } else |err| switch (err) {
+        error.EndOfStream => {},
+        else => return err,
+    }
+}
+
+fn readerTakeComments(reader: *std.Io.Reader) std.Io.Reader.Error!void {
+    while (reader.takeByte()) |c| {
+        if (c == '\n') return;
     } else |err| switch (err) {
         error.EndOfStream => {},
         else => return err,
@@ -1365,6 +1382,29 @@ test "serialize, deserialize e2e" {
             },
             .serialized = "M50,50ZM50,50",
             .test_deserialize = false,
+        },
+        .{
+            .name = "triangle, with comments and whitespace",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+            },
+            .serialized =
+            \\# this is a comment
+            \\
+            \\M49.5,0
+            \\  L100,100
+            \\  L0,100
+            \\Z
+            \\M49.5,0
+            \\
+            \\# end of file
+            ,
+            .test_serialize = false,
+            .test_deserialize = true,
         },
     };
     const TestFn = struct {
