@@ -58,7 +58,7 @@
 //! * `Z` - denotes a close_path command.
 //!
 //! Successive commands start right after the final expected co-ordinate pair,
-//! e.g., `M10,10L20,20L10,20ZM10,10`.
+//! e.g., `M10,10L20,20L10,20Z`.
 const Path = @This();
 
 const std = @import("std");
@@ -656,41 +656,51 @@ pub const SerializeError = std.Io.Writer.Error || mem.Allocator.Error;
 pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
     var serialized: std.Io.Writer.Allocating = .init(alloc);
     errdefer serialized.deinit();
-    var current_: ?PathNode = null;
-    for (self.nodes.items) |node| {
-        if (current_) |current| {
-            if (current == .close_path and node == .close_path) {
-                continue;
-            }
-        }
+    var last_: ?PathNode = null;
+    for (self.nodes.items, 0..) |node, idx| {
+        if (last_) |last| l: {
+            switch (node) {
+                .move_to => {
+                    // Elide concurrent move_to nodes (only last node would
+                    // effectively draw anything)
+                    if (last == .move_to) break :l;
 
-        try serialized.writer.writeByte(switch (node) {
-            .move_to => 'M',
-            .line_to => 'L',
-            .curve_to => 'C',
-            .close_path => 'Z',
-        });
-
-        switch (node) {
-            inline .move_to, .line_to => |n| try serialized.writer.print("{d},{d}", .{ n.point.x, n.point.y }),
-            .curve_to => |n| try serialized.writer.print(
-                "{d},{d},{d},{d},{d},{d}",
-                .{
-                    n.p1.x,
-                    n.p1.y,
-                    n.p2.x,
-                    n.p2.y,
-                    n.p3.x,
-                    n.p3.y,
+                    // Omit final move_to after a close_path by breaking out of
+                    // the loop completely
+                    if (idx == self.nodes.items.len - 1) break;
                 },
-            ),
-            .close_path => {},
+                .line_to => {},
+                .curve_to => {},
+                .close_path => if (last == .close_path) break :l,
+            }
+
+            try serializeNode(&serialized.writer, last);
         }
 
-        current_ = node;
+        last_ = node;
     }
 
+    try serializeNode(&serialized.writer, last_ orelse return &.{});
     return try serialized.toOwnedSlice();
+}
+
+fn serializeNode(writer: *std.Io.Writer, node: PathNode) std.Io.Writer.Error!void {
+    switch (node) {
+        .move_to => |n| try writer.print("M{d},{d}", .{ n.point.x, n.point.y }),
+        .line_to => |n| try writer.print("L{d},{d}", .{ n.point.x, n.point.y }),
+        .curve_to => |n| try writer.print(
+            "C{d},{d},{d},{d},{d},{d}",
+            .{
+                n.p1.x,
+                n.p1.y,
+                n.p2.x,
+                n.p2.y,
+                n.p3.x,
+                n.p3.y,
+            },
+        ),
+        .close_path => try writer.writeByte('Z'),
+    }
 }
 
 fn DeserializeHandler(err_T: type) type {
@@ -1334,7 +1344,7 @@ test "serialize, deserialize e2e" {
                 .{ .close_path = .{} },
                 .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
             },
-            .serialized = "M49.5,0L100,100L0,100ZM49.5,0",
+            .serialized = "M49.5,0L100,100L0,100Z",
         },
         .{
             .name = "curve_to",
@@ -1348,7 +1358,7 @@ test "serialize, deserialize e2e" {
                 .{ .close_path = .{} },
                 .{ .move_to = .{ .point = .{ .x = 19, .y = 249 } } },
             },
-            .serialized = "M19,249C89,49,209,49,279,249ZM19,249",
+            .serialized = "M19,249C89,49,209,49,279,249Z",
         },
         .{
             .name = "zeroed fractions",
@@ -1372,7 +1382,7 @@ test "serialize, deserialize e2e" {
                 .{ .close_path = .{} },
                 .{ .move_to = .{ .point = .{ .x = 50, .y = 50 } } },
             },
-            .serialized = "M50,50ZM50,50",
+            .serialized = "M50,50Z",
             .test_deserialize = false,
         },
         .{
@@ -1391,7 +1401,6 @@ test "serialize, deserialize e2e" {
             \\  L100,100
             \\  L0,100
             \\Z
-            \\M49.5,0
             \\
             \\# end of file
             ,
