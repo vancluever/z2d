@@ -41,14 +41,19 @@ See [#196](https://github.com/vancluever/z2d/pull/196) and
 
 PATH SERIALIZATION:
 
-You can now use `serialize`, `deserialize`, and `clone` in `Path`, and
-corresponding methods to `Context`, to convert existing paths to a textual
-format which can be read back in at a later time. These serializations are
-designed to be terse but also human-readable and editable (and could be
+You can now use `serialize`, `loadSerialized`, and `appendSerialized` in
+`Path`, and corresponding methods to `Context`, to convert existing paths to a
+textual format which can be read back in at a later time. These serializations
+are designed to be terse but also human-readable and editable (and could be
 considered a subset of the SVG path language). Note that the serialization and
 de-serialization API, and the serialization language are currently unstable and
-may change. See [#195](https://github.com/vancluever/z2d/pull/195) for
-additional details.
+may change.
+
+See the following pull requests for additional details:
+
+* [#195](https://github.com/vancluever/z2d/pull/195)
+* [#201](https://github.com/vancluever/z2d/pull/201)
+* [#202](https://github.com/vancluever/z2d/pull/202)
 
 ADDITIONAL ENHANCEMENTS:
 
@@ -56,6 +61,9 @@ ADDITIONAL ENHANCEMENTS:
   of path nodes into another path, working off the destination path's
   higher-level attributes such as transformation matrices.
   ([#198](https://github.com/vancluever/z2d/pull/198))
+* `clone` can also be used to duplicate a path (with respective methods in
+  `Context` as well).
+  ([#195](https://github.com/vancluever/z2d/pull/195))
 
 BUG FIXES:
 
