@@ -139,22 +139,20 @@ pub fn initBuffer(nodes: []PathNode) Path {
     };
 }
 
-pub const LoadSerializedError = DeserializeSharedError || LoadSerializedHandlerError || FixStateError;
+pub const LoadSerializedError = DeserializeSharedError || AppendSerializedHandlerError || FixStateError;
 
-/// Loads a path from a string representing the result of a previous
-/// `serialize` operation. The path is validated after it's loaded to ensure it
-/// is usable.
+/// Loads a new path from a string representing the result of a previous
+/// `serialize` operation.
 pub fn loadSerialized(alloc: mem.Allocator, serialized: []const u8) LoadSerializedError!Path {
     var result: Path = .empty;
     errdefer result.deinit(alloc);
     try deserializeInner(
-        LoadSerializedHandlerError,
-        loadSerializedHandler,
+        AppendSerializedHandlerError,
+        appendSerializedHandler,
         &result,
         alloc,
         serialized,
     );
-    try result.fixState();
     return result;
 }
 
@@ -697,12 +695,6 @@ pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
 
 fn DeserializeHandler(err_T: type) type {
     return *const fn (path: *Path, alloc: mem.Allocator, node: PathNode) err_T!void;
-}
-
-const LoadSerializedHandlerError = mem.Allocator.Error;
-
-fn loadSerializedHandler(path: *Path, alloc: mem.Allocator, node: PathNode) LoadSerializedHandlerError!void {
-    try path.nodes.append(alloc, node);
 }
 
 const AppendSerializedHandlerError = Error || mem.Allocator.Error;
@@ -1491,10 +1483,6 @@ test "deserialize, unexpected end of stream" {
 
 test "deserialize, expected value" {
     try testing.expectError(error.ExpectedValue, loadSerialized(testing.allocator, "M1.5,"));
-}
-
-test "deserialize, invalid path" {
-    try testing.expectError(error.InvalidPath, loadSerialized(testing.allocator, "L1.5,2.5"));
 }
 
 test "deserialize, fractions close to zero must have leading zero" {
