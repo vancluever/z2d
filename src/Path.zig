@@ -653,7 +653,9 @@ pub const SerializeError = std.Io.Writer.Error || mem.Allocator.Error;
 /// loaded as a new path using `deserialize`.
 ///
 /// Caller owns the memory.
-pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
+///
+/// `prettify` can be set to make the serialization more human-readable.
+pub fn serialize(self: *Path, alloc: mem.Allocator, prettify: bool) SerializeError![]const u8 {
     var serialized: std.Io.Writer.Allocating = .init(alloc);
     errdefer serialized.deinit();
     var last_: ?PathNode = null;
@@ -669,37 +671,33 @@ pub fn serialize(self: *Path, alloc: mem.Allocator) SerializeError![]const u8 {
                     // the loop completely
                     if (idx == self.nodes.items.len - 1) break;
                 },
-                .line_to => {},
-                .curve_to => {},
+                .line_to, .curve_to => {},
                 .close_path => if (last == .close_path) break :l,
             }
 
-            try serializeNode(&serialized.writer, last);
+            try serializeNode(&serialized.writer, last, prettify);
         }
 
         last_ = node;
     }
 
-    try serializeNode(&serialized.writer, last_ orelse return &.{});
+    try serializeNode(&serialized.writer, last_ orelse return &.{}, prettify);
     return try serialized.toOwnedSlice();
 }
 
-fn serializeNode(writer: *std.Io.Writer, node: PathNode) std.Io.Writer.Error!void {
+fn serializeNode(writer: *std.Io.Writer, node: PathNode, prettify: bool) std.Io.Writer.Error!void {
+    // This is shortened so that to keep the below switch compact.
+    const ident = if (prettify) "  " else "";
+    const newline = if (prettify) "\n" else "";
+
     switch (node) {
-        .move_to => |n| try writer.print("M{d},{d}", .{ n.point.x, n.point.y }),
-        .line_to => |n| try writer.print("L{d},{d}", .{ n.point.x, n.point.y }),
+        .move_to => |n| try writer.print("M{d},{d}{s}", .{ n.point.x, n.point.y, newline }),
+        .line_to => |n| try writer.print("{s}L{d},{d}{s}", .{ ident, n.point.x, n.point.y, newline }),
         .curve_to => |n| try writer.print(
-            "C{d},{d},{d},{d},{d},{d}",
-            .{
-                n.p1.x,
-                n.p1.y,
-                n.p2.x,
-                n.p2.y,
-                n.p3.x,
-                n.p3.y,
-            },
+            "{s}C{d},{d},{d},{d},{d},{d}{s}",
+            .{ ident, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y, newline },
         ),
-        .close_path => try writer.writeByte('Z'),
+        .close_path => try writer.print("Z{s}", .{newline}),
     }
 }
 
@@ -1331,6 +1329,7 @@ test "serialize, deserialize e2e" {
     const cases = [_]struct {
         name: []const u8,
         nodes: []const PathNode,
+        prettify: bool = false,
         serialized: []const u8,
         test_serialize: bool = true,
         test_deserialize: bool = true,
@@ -1407,6 +1406,87 @@ test "serialize, deserialize e2e" {
             .test_serialize = false,
             .test_deserialize = true,
         },
+        .{
+            .name = "prettified",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .curve_to = .{
+                    .p1 = .{ .x = 89, .y = 49 },
+                    .p2 = .{ .x = 209, .y = 49 },
+                    .p3 = .{ .x = 279, .y = 249 },
+                } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+            },
+            .prettify = true,
+            .serialized =
+            \\M49.5,0
+            \\  L100,100
+            \\  L0,100
+            \\  C89,49,209,49,279,249
+            \\Z
+            \\
+            ,
+        },
+        .{
+            .name = "multi-path",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .move_to = .{ .point = .{ .x = 200, .y = 200 } } },
+                .{ .line_to = .{ .point = .{ .x = 250, .y = 200 } } },
+                .{ .line_to = .{ .point = .{ .x = 250, .y = 250 } } },
+                .{ .line_to = .{ .point = .{ .x = 200, .y = 250 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 200, .y = 200 } } },
+            },
+            .serialized = "M49.5,0L100,100L0,100ZM200,200L250,200L250,250L200,250Z",
+        },
+        .{
+            .name = "multi-path, prettified",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .move_to = .{ .point = .{ .x = 200, .y = 200 } } },
+                .{ .line_to = .{ .point = .{ .x = 250, .y = 200 } } },
+                .{ .line_to = .{ .point = .{ .x = 250, .y = 250 } } },
+                .{ .line_to = .{ .point = .{ .x = 200, .y = 250 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 200, .y = 200 } } },
+            },
+            .prettify = true,
+            .serialized =
+            \\M49.5,0
+            \\  L100,100
+            \\  L0,100
+            \\Z
+            \\M200,200
+            \\  L250,200
+            \\  L250,250
+            \\  L200,250
+            \\Z
+            \\
+            ,
+        },
+        .{
+            .name = "negative value",
+            .nodes = &.{
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+                .{ .line_to = .{ .point = .{ .x = -100, .y = -100 } } },
+                .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+                .{ .close_path = .{} },
+                .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+            },
+            .serialized = "M49.5,0L-100,-100L0,100Z",
+        },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
@@ -1419,7 +1499,7 @@ test "serialize, deserialize e2e" {
                 return error.TestUnexpectedError;
             };
             if (tc.test_serialize) {
-                const got_serialized = path.serialize(alloc) catch |err| {
+                const got_serialized = path.serialize(alloc, tc.prettify) catch |err| {
                     std.debug.print("unexpected error: {}\n", .{err});
                     return error.TestUnexpectedError;
                 };
@@ -1470,7 +1550,7 @@ test "serialize OOM to trigger errdefer" {
         .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
     });
 
-    try testing.expectEqual(error.OutOfMemory, path.serialize(failing_alloc.allocator()));
+    try testing.expectEqual(error.OutOfMemory, path.serialize(failing_alloc.allocator(), false));
     testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
         // so we don't report the leak twice
         debug_alloc.deinitWithoutLeakChecks();
