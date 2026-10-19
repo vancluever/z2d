@@ -706,8 +706,10 @@ pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
 ///
 /// The string is created using the supplied allocator (or the allocator held
 /// by the context if `null` is supplied). Caller owns the memory.
-pub fn serializePath(self: *Context, alloc: ?mem.Allocator) Path.SerializeError![]const u8 {
-    return try self.path.serialize(alloc orelse self.alloc);
+///
+/// `prettify` can be set to make the serialization more human-readable.
+pub fn serializePath(self: *Context, alloc: ?mem.Allocator, prettify: bool) Path.SerializeError![]const u8 {
+    return try self.path.serialize(alloc orelse self.alloc, prettify);
 }
 
 /// Runs a fill operation for the current path and any subpaths. All paths in
@@ -966,7 +968,7 @@ test "serializePath, deserializePath, appendSerializedPath e2e" {
     try context.moveTo(49.5, 0);
     try context.lineTo(100, 100);
     try context.lineTo(0, 100);
-    const got_serialized = try context.serializePath(null);
+    const got_serialized = try context.serializePath(null, false);
     defer alloc.free(got_serialized);
     try testing.expectEqualSlices(u8, expected_serialized, got_serialized);
     var cloned_path = try context.clonePath(null);
