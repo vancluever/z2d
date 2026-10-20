@@ -300,14 +300,12 @@ pub fn shape(
 
             // Record our box values to help keep track of the final bounding box.
             if (box_x_min_ == null) {
+                // Start is only needed once
                 box_x_min_ = advance + outline.x_min * scale;
             }
-            if (idx == codepoints.items.len - 1) {
-                // Don't need to record this until the final glyph
-                box_x_max = advance + outline.x_max * scale;
-            }
 
-            // We need to keep track of vertical extrema every glyph.
+            // We need to keep track of all other extrema every glyph.
+            box_x_max = advance + outline.x_max * scale;
             box_y_min = @min(box_y_min, outline.y_min);
             box_y_max = @max(box_y_max, outline.y_max);
 
@@ -390,4 +388,46 @@ test "text.shape will corretly return extents in .extents_only" {
     try std.testing.expect(extents.width != 0.0);
     try std.testing.expect(extents.height != 0.0);
     try std.testing.expect(extents.advance != 0.0);
+}
+
+test "text.shape correctly returns extents for starting and trailing whitespace" {
+    const alloc = std.testing.allocator;
+    var font: Font = try Font.loadBufferOffset(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"), 0);
+
+    // Get single whitespace advance so that we can use it in our calculations
+    const whitespace_width = w: {
+        const shaped = try shape(alloc, &font, " ", 0, 0, .{ .mode = .extents_only });
+        const extents = shaped.extents();
+        try std.testing.expect(extents.advance != 0);
+        break :w extents.advance;
+    };
+
+    // Expected width should be same as character w/o whitespace
+    const single_char_extents = e: {
+        const shaped = try shape(alloc, &font, "a", 0, 0, .{ .mode = .extents_only });
+        break :e shaped.extents();
+    };
+
+    // Leading whitespace
+    const leading_whitespace_extents = e: {
+        const shaped = try shape(alloc, &font, " a", 0, 0, .{ .mode = .extents_only });
+        const extents = shaped.extents();
+        try std.testing.expectEqual(whitespace_width + single_char_extents.x_bearing, extents.x_bearing);
+        try std.testing.expectEqual(single_char_extents.y_bearing, extents.y_bearing);
+        try std.testing.expectEqual(single_char_extents.width, extents.width);
+        try std.testing.expectEqual(single_char_extents.height, extents.height);
+        try std.testing.expectEqual(whitespace_width + single_char_extents.advance, extents.advance);
+        break :e extents;
+    };
+
+    // Trailing whitespace
+    {
+        const shaped = try shape(alloc, &font, "a ", 0, 0, .{ .mode = .extents_only });
+        const extents = shaped.extents();
+        try std.testing.expectEqual(single_char_extents.x_bearing, extents.x_bearing);
+        try std.testing.expectEqual(leading_whitespace_extents.y_bearing, extents.y_bearing);
+        try std.testing.expectEqual(leading_whitespace_extents.width, extents.width);
+        try std.testing.expectEqual(leading_whitespace_extents.height, extents.height);
+        try std.testing.expectEqual(leading_whitespace_extents.advance, extents.advance);
+    }
 }
