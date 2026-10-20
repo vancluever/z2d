@@ -6,15 +6,13 @@
 //! on-curve point on a contour).
 //!
 //! Also provides a reasonable demo of how to use text shaping.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "085_deja_sans_ignore_invalid_points";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     _ = io;
 
     const font_file = try z2d.font.File.loadBuffer(@embedFile("test-fonts/DejaVuSans.ttf"));

@@ -13,15 +13,13 @@
 //! you do this on conic gradients, you need to be careful to not use too much
 //! offset to ensure that it still looks like a hard stop around the edges of
 //! your circle.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "066_conic_pie_gradient";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -44,7 +42,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     defer context.deinit();
     context.setAntiAliasingMode(aa_mode);
     context.setSource(gradient.asPattern());
-    try context.arc(149, 149, 100, 0, math.pi * 2);
+    try context.arc(149, 149, 100, 0, std.math.pi * 2);
     try context.closePath();
     try context.fill();
 

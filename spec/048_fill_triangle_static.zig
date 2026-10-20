@@ -6,14 +6,13 @@
 //!
 //! This also demonstrates the use of the unmanaged functions in the painter,
 //! completely avoiding the use of a Context.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "048_fill_triangle_static";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     _ = io;
     const width = 300;
     const height = 300;

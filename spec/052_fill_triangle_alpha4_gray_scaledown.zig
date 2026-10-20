@@ -5,14 +5,13 @@
 //! grayscale, to an alpha4 surface.
 //!
 //! This test should render identical to 049_fill_triangle_alpha4_gray.zig.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "052_fill_triangle_alpha4_gray_scaledown";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     var sfc = try z2d.Surface.init(

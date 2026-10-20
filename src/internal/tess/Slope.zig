@@ -9,8 +9,7 @@
 //! Slope represents a slope, de-constructed as its deltas.
 const Slope = @This();
 
-const debug = @import("std").debug;
-const math = @import("std").math;
+const std = @import("std");
 
 const Point = @import("../Point.zig");
 
@@ -47,13 +46,13 @@ pub fn compare(a: Slope, b: Slope) i32 {
     // We snap our b slope to our a slope if the differences are below the f64
     // epsilon. This ensures downstream calculations that depend on slopes
     // being non-parallel do not produce undefined behavior or NaNs.
-    const bdy = if (@abs(b.dy - a.dy) > math.floatEps(f64)) b.dy else a.dy;
-    const bdx = if (@abs(b.dx - a.dx) > math.floatEps(f64)) b.dx else a.dx;
+    const bdy = if (@abs(b.dy - a.dy) > std.math.floatEps(f64)) b.dy else a.dy;
+    const bdx = if (@abs(b.dx - a.dx) > std.math.floatEps(f64)) b.dx else a.dx;
 
     // Do basic comparison first. Our comparison is done multiplicatively
     // on the vector (saves division, allows for calculation of things like
     // clockwise/counterclockwise direction, etc).
-    const cmp = math.sign(a.dy * bdx - bdy * a.dx);
+    const cmp = std.math.sign(a.dy * bdx - bdy * a.dx);
     if (cmp != 0) {
         return cmp;
     }
@@ -74,8 +73,8 @@ pub fn compare(a: Slope, b: Slope) i32 {
     //
     // We check if we need to do comparison by checking for the sign (note
     // in Cairo, this is done using XOR on the sign bit, not too sure if
-    // this would be faster than math.sign on fixed point or not).
-    if (math.sign(a.dx) != math.sign(bdx) or math.sign(a.dy) != math.sign(bdy)) {
+    // this would be faster than std.math.sign on fixed point or not).
+    if (std.math.sign(a.dx) != std.math.sign(bdx) or std.math.sign(a.dy) != std.math.sign(bdy)) {
         // In this case, a is always considered less than b.
         return if (a.dx > 0 or (a.dx == 0 and a.dy > 0)) -1 else 1;
     }
@@ -182,7 +181,7 @@ pub fn normalize(self: *Slope) f64 {
     var result_dy: f64 = undefined;
     var mag: f64 = undefined;
 
-    debug.assert(self.dx != 0.0 or self.dy != 0.0);
+    std.debug.assert(self.dx != 0.0 or self.dy != 0.0);
 
     if (self.dx == 0.0) {
         result_dx = 0.0;
@@ -203,7 +202,7 @@ pub fn normalize(self: *Slope) f64 {
             result_dx = -1.0;
         }
     } else {
-        mag = math.hypot(self.dx, self.dy);
+        mag = std.math.hypot(self.dx, self.dy);
         result_dx = self.dx / mag;
         result_dy = self.dy / mag;
     }

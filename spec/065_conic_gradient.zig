@@ -2,15 +2,13 @@
 //   Copyright © 2025 Chris Marchesi
 
 //! Case: renders conic gradients.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "065_conic_gradient";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const width = 200;
     const height = 200;
@@ -25,7 +23,7 @@ pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
                 100 * @as(i32, @intCast(y)),
                 49,
                 49,
-                math.pi / 2.0 * @as(f64, @floatFromInt(y * 2 + x)),
+                std.math.pi / 2.0 * @as(f64, @floatFromInt(y * 2 + x)),
             );
         }
     }
@@ -34,7 +32,7 @@ pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
 }
 
 fn draw(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,

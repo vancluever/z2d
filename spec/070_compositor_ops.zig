@@ -8,15 +8,13 @@
 //! then with alpha), then float, (fully opaque, then alpha). Note that the
 //! compositor will automatically switch to floating point precision for
 //! operators that are not supported by integer precision.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "070_compositor_ops";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 460;
     const height = 3090;
     var sfc = try z2d.Surface.initPixel(
@@ -59,8 +57,8 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
 }
 
 fn draw(
-    alloc: mem.Allocator,
-    io: Io,
+    alloc: std.mem.Allocator,
+    io: std.Io,
     main_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,

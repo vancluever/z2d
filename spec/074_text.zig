@@ -3,14 +3,13 @@
 
 //! Case: Draws text, using both unmanaged and managed interfaces, with the
 //! latter adding various features (transformation, gradient source).
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "074_text";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 900;
     const height = 100;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

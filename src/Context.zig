@@ -12,9 +12,7 @@
 //! the patterns used here as an example.
 const Context = @This();
 
-const Io = @import("std").Io;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const compositor = @import("compositor.zig");
 const fontpkg = @import("font.zig");
@@ -29,8 +27,8 @@ const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
 const Transformation = @import("Transformation.zig");
 
-io: Io,
-alloc: mem.Allocator,
+io: std.Io,
+alloc: std.mem.Allocator,
 path: Path,
 surface: *Surface,
 pattern: Pattern = .{
@@ -65,7 +63,7 @@ transformation: Transformation = Transformation.identity,
 /// Initializes a `Context` with the passed in allocator and surface. Call
 /// `deinit` to release any resources managed solely by the context, such as
 /// the managed `Path`.
-pub fn init(io: Io, alloc: mem.Allocator, surface: *Surface) Context {
+pub fn init(io: std.Io, alloc: std.mem.Allocator, surface: *Surface) Context {
     return .{
         .alloc = alloc,
         .surface = surface,
@@ -493,7 +491,7 @@ pub fn setHairline(self: *Context, hairline: bool) void {
 /// allocator held by the context if `null` is supplied).
 ///
 /// Caller owns the memory.
-pub fn clonePath(self: *Context, alloc: ?mem.Allocator) mem.Allocator.Error!Path {
+pub fn clonePath(self: *Context, alloc: ?std.mem.Allocator) std.mem.Allocator.Error!Path {
     return try self.path.clone(alloc orelse self.alloc);
 }
 
@@ -508,7 +506,7 @@ pub fn resetPath(self: *Context) void {
 /// matrix, and then appended using this function after running
 /// `context.scale(2.0, 2.0)`, the resulting appended path will be twice as
 /// big.
-pub fn appendPath(self: *Context, src: *const Path) (Path.Error || mem.Allocator.Error)!void {
+pub fn appendPath(self: *Context, src: *const Path) (Path.Error || std.mem.Allocator.Error)!void {
     return try self.path.appendPath(self.alloc, src);
 }
 
@@ -540,26 +538,26 @@ pub fn loadSerializedPath(self: *Context, serialized: []const u8) Path.LoadSeria
 /// Starts a new path, and moves the current point to it. If a path already has
 /// been started, a new sub-path is started. Note that this does not clear any
 /// existing paths or nodes, use `resetPath` to accomplish this.
-pub fn moveTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
+pub fn moveTo(self: *Context, x: f64, y: f64) std.mem.Allocator.Error!void {
     try self.path.moveTo(self.alloc, x, y);
 }
 
 /// Begins a new sub-path relative to the current point. It is an error to call
 /// this without a current point.
-pub fn relMoveTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
+pub fn relMoveTo(self: *Context, x: f64, y: f64) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relMoveTo(self.alloc, x, y);
 }
 
 /// Draws a line from the current point to the specified point and sets
 /// it as the current point. Acts as a `moveTo` instead if there is no
 /// current point.
-pub fn lineTo(self: *Context, x: f64, y: f64) mem.Allocator.Error!void {
+pub fn lineTo(self: *Context, x: f64, y: f64) std.mem.Allocator.Error!void {
     try self.path.lineTo(self.alloc, x, y);
 }
 
 /// Draws a line relative to the current point. It is an error to call this
 /// without a current point.
-pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || mem.Allocator.Error)!void {
+pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relLineTo(self.alloc, x, y);
 }
 
@@ -574,7 +572,7 @@ pub fn curveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) (Path.Error || mem.Allocator.Error)!void {
+) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.curveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
 
@@ -588,7 +586,7 @@ pub fn relCurveTo(
     y2: f64,
     x3: f64,
     y3: f64,
-) (Path.Error || mem.Allocator.Error)!void {
+) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relCurveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
 
@@ -631,7 +629,7 @@ pub fn arc(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) (Path.Error || mem.Allocator.Error)!void {
+) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.arc(self.alloc, xc, yc, radius, angle1, angle2);
 }
 
@@ -646,13 +644,13 @@ pub fn arcNegative(
     radius: f64,
     angle1: f64,
     angle2: f64,
-) (Path.Error || mem.Allocator.Error)!void {
+) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.arcNegative(self.alloc, xc, yc, radius, angle1, angle2);
 }
 
 /// Closes the path by drawing a line from the current point by the
 /// starting point. No effect if there is no current point.
-pub fn closePath(self: *Context) mem.Allocator.Error!void {
+pub fn closePath(self: *Context) std.mem.Allocator.Error!void {
     try self.path.close(self.alloc);
 }
 
@@ -708,7 +706,7 @@ pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
 /// by the context if `null` is supplied). Caller owns the memory.
 ///
 /// `prettify` can be set to make the serialization more human-readable.
-pub fn serializePath(self: *Context, alloc: ?mem.Allocator, prettify: bool) Path.SerializeError![]const u8 {
+pub fn serializePath(self: *Context, alloc: ?std.mem.Allocator, prettify: bool) Path.SerializeError![]const u8 {
     return try self.path.serialize(alloc orelse self.alloc, prettify);
 }
 
@@ -834,7 +832,7 @@ pub fn shapeText(
     utf8: []const u8,
     x: f64,
     y: f64,
-    alloc: ?mem.Allocator,
+    alloc: ?std.mem.Allocator,
     mode: text.ShapeMode,
 ) ShapeTextError!text.ShapeTextResult {
     const font_file = self.font orelse return error.NoFontLoaded;
@@ -877,45 +875,45 @@ fn wrapDither(self: *Context) Pattern {
 }
 
 test "deinit after allocating path elements" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.moveTo(10, 10);
     try context.lineTo(20, 20);
-    try testing.expectEqual(2, context.path.nodes.items.len);
+    try std.testing.expectEqual(2, context.path.nodes.items.len);
     context.deinit();
 }
 
 test "setFontToFile, deinit" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
-    try testing.expect(context.font.?.is_fd == true);
+    try std.testing.expect(context.font.?.is_fd == true);
     context.deinit();
 }
 
 test "setFontToBuffer, deinit" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
     errdefer context.deinit();
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try testing.expect(context.font.?.is_fd == false);
+    try std.testing.expect(context.font.?.is_fd == false);
     context.deinit();
 }
 
 test "setFontToFile, deinitFont" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
@@ -923,14 +921,14 @@ test "setFontToFile, deinitFont" {
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
-    try testing.expect(context.font.?.is_fd == true);
+    try std.testing.expect(context.font.?.is_fd == true);
     context.deinitFont();
-    try testing.expect(context.font == null);
+    try std.testing.expect(context.font == null);
 }
 
 test "setFontToBuffer, deinitFont" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
@@ -938,29 +936,29 @@ test "setFontToBuffer, deinitFont" {
     // exclusively. Nothing else should leak as a result from this as we are
     // de-allocating our surface and nothing is being added to the path.
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try testing.expect(context.font.?.is_fd == false);
+    try std.testing.expect(context.font.?.is_fd == false);
     context.deinitFont();
-    try testing.expect(context.font == null);
+    try std.testing.expect(context.font == null);
 }
 
 test "setFontIndex, error cases" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
     defer context.deinit();
-    try testing.expectError(error.NoFontSet, context.setFontIndex(0));
+    try std.testing.expectError(error.NoFontSet, context.setFontIndex(0));
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try testing.expectError(error.IndexOutOfRange, context.setFontIndex(1));
+    try std.testing.expectError(error.IndexOutOfRange, context.setFontIndex(1));
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular-Bold.subset.ttc"));
-    try testing.expectError(error.IndexOutOfRange, context.setFontIndex(2));
+    try std.testing.expectError(error.IndexOutOfRange, context.setFontIndex(2));
 }
 
 test "serializePath, deserializePath, appendSerializedPath e2e" {
     const expected_serialized = "M49.5,0L100,100L0,100";
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
@@ -970,21 +968,21 @@ test "serializePath, deserializePath, appendSerializedPath e2e" {
     try context.lineTo(0, 100);
     const got_serialized = try context.serializePath(null, false);
     defer alloc.free(got_serialized);
-    try testing.expectEqualSlices(u8, expected_serialized, got_serialized);
+    try std.testing.expectEqualSlices(u8, expected_serialized, got_serialized);
     var cloned_path = try context.clonePath(null);
     defer cloned_path.deinit(alloc);
     context.resetPath();
-    try testing.expectEqual(0, context.path.nodes.items.len);
+    try std.testing.expectEqual(0, context.path.nodes.items.len);
     try context.loadSerializedPath(got_serialized);
-    try testing.expectEqualDeep(cloned_path, context.path);
+    try std.testing.expectEqualDeep(cloned_path, context.path);
     context.resetPath();
     try context.appendSerializedPath(got_serialized);
-    try testing.expectEqualDeep(cloned_path, context.path);
+    try std.testing.expectEqualDeep(cloned_path, context.path);
 }
 
 test "deserializePath, errors do not clobber existing path" {
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
     defer sfc.deinit(alloc);
     var context = Context.init(io, alloc, &sfc);
@@ -994,6 +992,6 @@ test "deserializePath, errors do not clobber existing path" {
     try context.lineTo(0, 100);
     var cloned_path = try context.clonePath(null);
     defer cloned_path.deinit(alloc);
-    try testing.expectError(error.ExpectedCommand, context.loadSerializedPath("0"));
-    try testing.expectEqualDeep(cloned_path, context.path);
+    try std.testing.expectError(error.ExpectedCommand, context.loadSerializedPath("0"));
+    try std.testing.expectEqualDeep(cloned_path, context.path);
 }

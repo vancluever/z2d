@@ -2,11 +2,6 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 const std = @import("std");
-const debug = @import("std").debug;
-const fmt = @import("std").fmt;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const options = @import("../../options.zig");
 const nodepkg = @import("../path_nodes.zig");
@@ -24,7 +19,7 @@ const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 
 const InternalError = @import("../InternalError.zig").InternalError;
-pub const Error = InternalError || mem.Allocator.Error;
+pub const Error = InternalError || std.mem.Allocator.Error;
 
 pub const PlotterOptions = struct {
     cap_mode: options.CapMode,
@@ -39,7 +34,7 @@ pub const PlotterOptions = struct {
 };
 
 pub fn plot(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: PlotterOptions,
 ) Error!Polygon {
@@ -76,7 +71,7 @@ pub fn plot(
 }
 
 const Plotter = struct {
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: *const PlotterOptions,
 
@@ -209,11 +204,11 @@ const Plotter = struct {
         //
         // Note that we draw rectangles/squares for dashed lines, see this
         // function in the dashed plotter for more details.
-        debug.assert(self.inner.len == 0); // should have not been used
+        std.debug.assert(self.inner.len == 0); // should have not been used
         if (self.opts.cap_mode == .round) {
             // Just plot off all of the pen's vertices, no need to
             // determine a subset as we're doing a 360-degree plot.
-            debug.assert(self.pen != null);
+            std.debug.assert(self.pen != null);
             for (self.pen.?.vertices.items) |v| {
                 try self.outer.plot(
                     self.alloc,
@@ -252,7 +247,7 @@ const Plotter = struct {
 pub fn plotSingle(T: type, self: *T, start: Point, end: Point) Error!void {
     // Single-segment line. This can be drawn off of
     // our start line caps.
-    debug.assert(self.inner.len == 0); // should have not been used
+    std.debug.assert(self.inner.len == 0); // should have not been used
     const cap_points = Face.init(
         start,
         end,
@@ -416,14 +411,14 @@ pub fn join(
     p1: Point,
     p2: Point,
     before_outer: ?*std.DoublyLinkedList.Node,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     const Joiner = struct {
         const Self = @This();
 
         plotter: *T,
         plot_fn: *const fn (
             *const @This(),
-            *?mem.Allocator.Error,
+            *?std.mem.Allocator.Error,
             Point,
             ?*std.DoublyLinkedList.Node,
         ) void,
@@ -432,15 +427,15 @@ pub fn join(
             this: *const Self,
             point: Point,
             before: ?*std.DoublyLinkedList.Node,
-        ) mem.Allocator.Error!void {
-            var err_: ?mem.Allocator.Error = null;
+        ) std.mem.Allocator.Error!void {
+            var err_: ?std.mem.Allocator.Error = null;
             this.plot_fn(this, &err_, point, before);
             if (err_) |err| return err;
         }
 
         fn plotOuter(
             this: *const Self,
-            err_: *?mem.Allocator.Error,
+            err_: *?std.mem.Allocator.Error,
             point: Point,
             before: ?*std.DoublyLinkedList.Node,
         ) void {
@@ -452,7 +447,7 @@ pub fn join(
 
         fn plotInner(
             this: *const Self,
-            err_: *?mem.Allocator.Error,
+            err_: *?std.mem.Allocator.Error,
             point: Point,
             before: ?*std.DoublyLinkedList.Node,
         ) void {
@@ -530,7 +525,7 @@ pub fn join(
         },
 
         .round => {
-            debug.assert(self.pen != null);
+            std.debug.assert(self.pen != null);
             var vit = self.pen.?.vertexIteratorFor(in.dev_slope, out.dev_slope, join_clockwise);
             try outer_joiner.plot(
                 if (join_clockwise) in.p1_ccw else in.p1_cw,
@@ -562,7 +557,7 @@ pub fn join(
 }
 
 const CapPlotterCtx = struct {
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     contour: *Polygon.Contour,
     before: ?*std.DoublyLinkedList.Node,
 
@@ -589,7 +584,7 @@ inline fn unwrapPen(plotter: anytype) ?*const Pen {
 test "assert ok: degenerate moveto -> lineto, then good lineto" {
     {
         // p0 -> p1 is equal
-        const alloc = testing.allocator;
+        const alloc = std.testing.allocator;
         var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
@@ -608,12 +603,12 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(4, result.edges.items.len);
+        try std.testing.expectEqual(4, result.edges.items.len);
     }
 
     {
         // p1 -> p2 is equal
-        const alloc = testing.allocator;
+        const alloc = std.testing.allocator;
         var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } });
@@ -632,14 +627,14 @@ test "assert ok: degenerate moveto -> lineto, then good lineto" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(4, result.edges.items.len);
+        try std.testing.expectEqual(4, result.edges.items.len);
     }
 }
 
 test "slope difference below epsilon does not produce NaN" {
     {
         // p1 -> p2 is equal
-        const alloc = testing.allocator;
+        const alloc = std.testing.allocator;
         var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(
@@ -667,12 +662,12 @@ test "slope difference below epsilon does not produce NaN" {
             .tolerance = 0.01,
         });
         defer result.deinit(alloc);
-        try testing.expectEqual(6, result.edges.items.len);
+        try std.testing.expectEqual(6, result.edges.items.len);
         for (result.edges.items, 0..) |edge, idx| {
             inline for (@typeInfo(Polygon.Edge).@"struct".fields) |f| {
                 if (@typeInfo(f.type) == .float) {
-                    if (!math.isFinite(@field(edge, f.name))) {
-                        debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, edge });
+                    if (!std.math.isFinite(@field(edge, f.name))) {
+                        std.debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, edge });
                         return error.TestExpectedFinite;
                     }
                 }

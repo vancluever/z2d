@@ -3,14 +3,13 @@
 
 //! Case: renders some linear gradients using lower-level compositing on
 //! intermediary surfaces, in HSL space, using shorter path.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "062_hsl_gradient";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const width = 100;
     const height = 200;
@@ -95,7 +94,7 @@ pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
 }
 
 fn draw(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     width: i32,
     height: i32,

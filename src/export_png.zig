@@ -3,17 +3,7 @@
 
 //! Rudimentary PNG export functionality.
 
-const builtin = @import("std").builtin;
-const crc32 = @import("std").hash.Crc32;
-const debug = @import("std").debug;
-const fmt = @import("std").fmt;
-const fs = @import("std").fs;
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const sha256 = @import("std").crypto.hash.sha2.Sha256;
-const testing = @import("std").testing;
-const flate = @import("std").compress.flate;
+const std = @import("std");
 
 const color = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
@@ -45,7 +35,7 @@ pub const WriteToPNGFileError = WritePNGMagicError ||
     WritePNGgAMAError ||
     WritePNGIDATStreamError ||
     WritePNGIENDError ||
-    Io.File.OpenError;
+    std.Io.File.OpenError;
 
 /// Exports the surface to a PNG file supplied by filename.
 ///
@@ -54,7 +44,7 @@ pub const WriteToPNGFileError = WritePNGMagicError ||
 ///
 /// Additional options to control the export can be supplied in opts.
 pub fn writeToPNGFile(
-    io: Io,
+    io: std.Io,
     sfc: surface.Surface,
     filename: []const u8,
     opts: WriteToPNGFileOptions,
@@ -66,7 +56,7 @@ pub fn writeToPNGFile(
     }
 
     // Open and create the file.
-    const file = try Io.Dir.cwd().createFile(io, filename, .{});
+    const file = try std.Io.Dir.cwd().createFile(io, filename, .{});
     defer file.close(io);
 
     // NOTE: No buffer for now for writing (seems okay). We have a 16K buffer
@@ -83,10 +73,10 @@ pub fn writeToPNGFile(
     try writePNGIEND(&writer.interface);
 }
 
-const WritePNGMagicError = BytesWrittenMismatchError || Io.Writer.Error;
+const WritePNGMagicError = BytesWrittenMismatchError || std.Io.Writer.Error;
 
 /// Writes the magic header for the PNG file.
-fn writePNGMagic(writer: *Io.Writer) WritePNGMagicError!void {
+fn writePNGMagic(writer: *std.Io.Writer) WritePNGMagicError!void {
     const header = "\x89PNG\x0D\x0A\x1A\x0A";
     if (try writer.write(header) != header.len) return error.BytesWrittenMismatch;
 }
@@ -94,12 +84,12 @@ fn writePNGMagic(writer: *Io.Writer) WritePNGMagicError!void {
 const WritePNGIHDRError = WritePNGWriteChunkError;
 
 /// Writes the IHDR chunk for the PNG file.
-fn writePNGIHDR(writer: *Io.Writer, sfc: surface.Surface) WritePNGIHDRError!void {
+fn writePNGIHDR(writer: *std.Io.Writer, sfc: surface.Surface) WritePNGIHDRError!void {
     var width = [_]u8{0} ** 4;
     var height = [_]u8{0} ** 4;
 
-    mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
-    mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
+    std.mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
+    std.mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
         .argb, .xrgb, .rgb, .rgba, .alpha8 => 8,
         .alpha4 => 4,
@@ -130,13 +120,13 @@ fn writePNGIHDR(writer: *Io.Writer, sfc: surface.Surface) WritePNGIHDRError!void
 
 const WritePNGgAMAError = WritePNGWriteChunkError;
 
-fn writePNGgAMA(writer: *Io.Writer, profile: color.RGBProfile) WritePNGgAMAError!void {
+fn writePNGgAMA(writer: *std.Io.Writer, profile: color.RGBProfile) WritePNGgAMAError!void {
     const gamma: u32 = @intFromFloat((switch (profile) {
         .linear => 1 / color.LinearRGB.gamma,
         .srgb => 1 / color.SRGB.gamma,
     }) * 100000);
     var gamma_bytes = [_]u8{0} ** 4;
-    mem.writeInt(u32, &gamma_bytes, gamma, .big);
+    std.mem.writeInt(u32, &gamma_bytes, gamma, .big);
     try writePNGWriteChunk(
         writer,
         "gAMA".*,
@@ -144,14 +134,14 @@ fn writePNGgAMA(writer: *Io.Writer, profile: color.RGBProfile) WritePNGgAMAError
     );
 }
 
-const WritePNGIDATStreamError = Io.Writer.Error;
+const WritePNGIDATStreamError = std.Io.Writer.Error;
 
 /// Write the IDAT stream (pixel data) for the PNG file.
 ///
 /// This is currently a very rudimentary algorithm - default zlib
 /// compression and no pixel filtering.
 fn writePNGIDATStream(
-    writer: *Io.Writer,
+    writer: *std.Io.Writer,
     sfc: surface.Surface,
     profile: ?color.RGBProfile,
 ) WritePNGIDATStreamError!void {
@@ -161,10 +151,10 @@ fn writePNGIDATStream(
     const IDATStream = struct {
         const buffer_size = 16384;
 
-        output_file_writer: *Io.Writer,
-        idat_stream_writer: Io.Writer,
+        output_file_writer: *std.Io.Writer,
+        idat_stream_writer: std.Io.Writer,
 
-        fn drain(w: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
+        fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
             switch (data.len) {
                 0 => @panic("at least one data entry must be provided"),
                 1 => if (splat == 0) return 0,
@@ -180,7 +170,7 @@ fn writePNGIDATStream(
     };
 
     var idat_buffer = [_]u8{0} ** IDATStream.buffer_size;
-    var zlib_buffer = [_]u8{0} ** flate.max_window_len;
+    var zlib_buffer = [_]u8{0} ** std.compress.flate.max_window_len;
     var idat_stream: IDATStream = .{
         .output_file_writer = writer,
         .idat_stream_writer = .{
@@ -190,11 +180,11 @@ fn writePNGIDATStream(
             },
         },
     };
-    var zlib_stream: flate.Compress = try .init(
+    var zlib_stream: std.compress.flate.Compress = try .init(
         &idat_stream.idat_stream_writer,
         &zlib_buffer,
         .zlib,
-        flate.Compress.Options.default,
+        std.compress.flate.Compress.Options.default,
     );
 
     // To encode, we read from our buffer, pixel-by-pixel, and convert
@@ -373,23 +363,23 @@ const WritePNGIDATSingleError = WritePNGWriteChunkError;
 
 /// Writes a single IDAT chunk. The data should be part of the zlib
 /// stream. See writePNG_IDAT_stream et al.
-fn writePNGIDATSingle(writer: *Io.Writer, data: []const u8) WritePNGIDATSingleError!void {
+fn writePNGIDATSingle(writer: *std.Io.Writer, data: []const u8) WritePNGIDATSingleError!void {
     try writePNGWriteChunk(writer, "IDAT".*, data);
 }
 
 const WritePNGIENDError = WritePNGWriteChunkError;
 
 /// Write the IEND chunk.
-fn writePNGIEND(writer: *Io.Writer) WritePNGIENDError!void {
+fn writePNGIEND(writer: *std.Io.Writer) WritePNGIENDError!void {
     try writePNGWriteChunk(writer, "IEND".*, "");
 }
 
-const WritePNGWriteChunkError = BytesWrittenMismatchError || Io.Writer.Error;
+const WritePNGWriteChunkError = BytesWrittenMismatchError || std.Io.Writer.Error;
 
 /// Generic chunk writer, used by higher-level chunk writers to process
 /// and write the payload.
-fn writePNGWriteChunk(writer: *Io.Writer, chunk_type: [4]u8, data: []const u8) WritePNGWriteChunkError!void {
-    if (data.len > math.maxInt(u32)) {
+fn writePNGWriteChunk(writer: *std.Io.Writer, chunk_type: [4]u8, data: []const u8) WritePNGWriteChunkError!void {
+    if (data.len > std.math.maxInt(u32)) {
         @panic("bad PNG chunk data length (larger than 4GB). this is a bug, please report it");
     }
     const len: u32 = @intCast(data.len);
@@ -413,7 +403,7 @@ fn writePNGWriteChunk(writer: *Io.Writer, chunk_type: [4]u8, data: []const u8) W
 
 /// Calculates the CRC32 checksum for the chunk.
 fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
-    var hasher = crc32.init();
+    var hasher = std.hash.Crc32.init();
     hasher.update(chunk_type[0..chunk_type.len]);
     hasher.update(data);
     return hasher.final();
@@ -421,16 +411,16 @@ fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
 
 test "RGB/ARGB formats all export to same image" {
     const Context = @import("Context.zig");
-    const hash_bytes_int_T = @Int(.unsigned, sha256.digest_length * 8);
-    const alloc = testing.allocator;
-    const io = testing.io;
+    const hash_bytes_int_T = @Int(.unsigned, std.crypto.hash.sha2.Sha256.digest_length * 8);
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
     const width = 300;
     const height = 300;
 
     // Two groups, one for ARGB/RGBA, and one for XRGB/RGB.
     const TestFn = struct {
         fn run(sfc_type: surface.SurfaceType) !void {
-            var expected_hash_: ?[sha256.digest_length]u8 = null;
+            var expected_hash_: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = null;
 
             var sfc = try surface.Surface.init(sfc_type, alloc, width, height);
             defer sfc.deinit(alloc);
@@ -445,12 +435,12 @@ test "RGB/ARGB formats all export to same image" {
             try context.closePath();
             try context.fill();
 
-            var tmp_dir = testing.tmpDir(.{});
+            var tmp_dir = std.testing.tmpDir(.{});
             defer tmp_dir.cleanup();
             var parent_path_bytes: [512]u8 = undefined;
             const parent_path_len = try tmp_dir.dir.realPath(io, &parent_path_bytes);
             const parent_path = parent_path_bytes[0..parent_path_len];
-            const target_path = try fs.path.join(alloc, &.{ parent_path, "z2d_test.png" });
+            const target_path = try std.fs.path.join(alloc, &.{ parent_path, "z2d_test.png" });
             defer alloc.free(target_path);
             try writeToPNGFile(
                 io,
@@ -459,17 +449,17 @@ test "RGB/ARGB formats all export to same image" {
                 .{},
             );
 
-            const actual_data = try Io.Dir.cwd().readFileAlloc(io, target_path, alloc, .limited(10240000));
+            const actual_data = try std.Io.Dir.cwd().readFileAlloc(io, target_path, alloc, .limited(10240000));
             defer alloc.free(actual_data);
             if (expected_hash_) |expected_hash| {
-                var actual_hash: [sha256.digest_length]u8 = undefined;
-                sha256.hash(actual_data, &actual_hash, .{});
-                if (!mem.eql(u8, &expected_hash, &actual_hash)) {
-                    debug.print(
+                var actual_hash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+                std.crypto.hash.sha2.Sha256.hash(actual_data, &actual_hash, .{});
+                if (!std.mem.eql(u8, &expected_hash, &actual_hash)) {
+                    std.debug.print(
                         "output mismatch: {s} vs {s}\n",
                         .{
-                            fmt.hex(mem.bytesToValue(hash_bytes_int_T, &expected_hash)),
-                            fmt.hex(mem.bytesToValue(hash_bytes_int_T, &actual_hash)),
+                            std.fmt.hex(std.mem.bytesToValue(hash_bytes_int_T, &expected_hash)),
+                            std.fmt.hex(std.mem.bytesToValue(hash_bytes_int_T, &actual_hash)),
                         },
                     );
                     return error.OutputDoesNotMatch;
@@ -477,7 +467,7 @@ test "RGB/ARGB formats all export to same image" {
             } else {
                 expected_hash_ = undefined;
                 expected_hash_.? = @splat(0);
-                sha256.hash(actual_data, &expected_hash_.?, .{});
+                std.crypto.hash.sha2.Sha256.hash(actual_data, &expected_hash_.?, .{});
             }
         }
     };

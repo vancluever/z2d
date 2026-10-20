@@ -3,9 +3,6 @@
 
 //! A polygon plotter for fill operations.
 const std = @import("std");
-const debug = @import("std").debug;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const nodepkg = @import("../path_nodes.zig");
 
@@ -16,10 +13,10 @@ const Polygon = @import("Polygon.zig");
 const Spline = @import("Spline.zig");
 
 const InternalError = @import("../InternalError.zig").InternalError;
-pub const Error = InternalError || mem.Allocator.Error;
+pub const Error = InternalError || std.mem.Allocator.Error;
 
 pub fn plot(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     scale: f64,
     tolerance: f64,
@@ -99,7 +96,7 @@ pub fn plot(
 const SplinePlotterCtx = struct {
     polygon: *Polygon,
     points: *PointBuffer,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
 
     fn line_to(ctx: *anyopaque, err_: *?PlotterVTable.Error, node: nodepkg.PathLineTo) void {
         const self: *SplinePlotterCtx = @ptrCast(@alignCast(ctx));
@@ -119,7 +116,7 @@ const SplinePlotterCtx = struct {
 };
 
 test "degenerate line_to" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
     defer nodes.deinit(alloc);
     try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
@@ -133,8 +130,8 @@ test "degenerate line_to" {
     defer result.deinit(alloc);
     // NOTE: only 2 edges should be here as there is a horizontal edge
     // ((10,10) -> (0, 10)), this is now filtered out.
-    try testing.expectEqual(2, result.edges.items.len);
-    try testing.expectEqualSlices(Polygon.Edge, &.{
+    try std.testing.expectEqual(2, result.edges.items.len);
+    try std.testing.expectEqualSlices(Polygon.Edge, &.{
         .{
             .y0 = 0.0,
             .y1 = 10.0,
@@ -153,7 +150,7 @@ test "degenerate line_to" {
 test "degenerate close" {
     {
         // move_to -> line_to
-        const alloc = testing.allocator;
+        const alloc = std.testing.allocator;
         var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
@@ -163,8 +160,8 @@ test "degenerate close" {
 
         var result = try plot(alloc, nodes.items, 1, 1);
         defer result.deinit(alloc);
-        try testing.expectEqual(1, result.edges.items.len);
-        try testing.expectEqualSlices(Polygon.Edge, &.{
+        try std.testing.expectEqual(1, result.edges.items.len);
+        try std.testing.expectEqualSlices(Polygon.Edge, &.{
             .{
                 .y0 = 0.0,
                 .y1 = 10.0,
@@ -175,7 +172,7 @@ test "degenerate close" {
     }
     {
         // double close
-        const alloc = testing.allocator;
+        const alloc = std.testing.allocator;
         var nodes: std.ArrayListUnmanaged(nodepkg.PathNode) = .empty;
         defer nodes.deinit(alloc);
         try nodes.append(alloc, .{ .move_to = .{ .point = .{ .x = 5, .y = 0 } } });
@@ -190,8 +187,8 @@ test "degenerate close" {
         defer result.deinit(alloc);
         // NOTE: only 2 edges should be here as there is a horizontal edge
         // ((10,10) -> (0, 10)), this is now filtered out.
-        try testing.expectEqual(2, result.edges.items.len);
-        try testing.expectEqualSlices(Polygon.Edge, &.{
+        try std.testing.expectEqual(2, result.edges.items.len);
+        try std.testing.expectEqualSlices(Polygon.Edge, &.{
             .{
                 .y0 = 0.0,
                 .y1 = 10.0,

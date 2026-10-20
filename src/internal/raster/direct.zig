@@ -1,6 +1,4 @@
-const heap = @import("std").heap;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const compositor = @import("../../compositor.zig");
 
@@ -12,14 +10,14 @@ const Polygon = @import("../tess/Polygon.zig");
 const commpositeOpaque = @import("shared.zig").compositeOpaque;
 
 pub fn run(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     polygons: Polygon,
     fill_rule: FillRule,
     operator: compositor.Operator,
     precision: compositor.Precision,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     const sfc_width: i32 = surface.getWidth();
     const sfc_height: i32 = surface.getHeight();
     const _precision = if (operator.requiresFloat()) .float else precision;
@@ -45,8 +43,8 @@ pub fn run(
     const poly_start_y: i32 = if (bounded) @intFromFloat(@floor(polygons.extent_top)) else 0;
     const poly_end_y: i32 = if (bounded) @intFromFloat(@ceil(polygons.extent_bottom)) else sfc_height - 1;
     // Clamp the scanlines to the surface
-    const start_scanline: i32 = math.clamp(poly_start_y, 0, sfc_height - 1);
-    const end_scanline: i32 = math.clamp(poly_end_y, start_scanline, sfc_height - 1);
+    const start_scanline: i32 = std.math.clamp(poly_start_y, 0, sfc_height - 1);
+    const end_scanline: i32 = std.math.clamp(poly_end_y, start_scanline, sfc_height - 1);
 
     // Our working edge set that survives a particular scanline iteration. This
     // is re-scanned at particular breakpoints, but only incremented on
@@ -101,7 +99,7 @@ pub fn run(
                 // We're past the end of the draw area and can stop drawing.
                 break;
             }
-            const end_x: i32 = math.clamp(
+            const end_x: i32 = std.math.clamp(
                 filtered_edge_set[edge_pair_start + 1],
                 start_x,
                 sfc_width,

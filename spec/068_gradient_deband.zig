@@ -4,15 +4,13 @@
 //! Demonstrates removal of gradient banding by adding dither. The top gradient
 //! is rendered without dithering, the below one is rendered with it, which
 //! visibly removes it.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "068_gradient_deband";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const width = 500;
     const height = 500;
@@ -39,7 +37,7 @@ pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
 }
 
 fn draw(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,

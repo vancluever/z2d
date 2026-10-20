@@ -4,10 +4,6 @@
 //! Contains types and utility functions for gradients.
 
 const std = @import("std");
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const colorpkg = @import("color.zig");
 const pixel = @import("pixel.zig");
@@ -150,7 +146,7 @@ pub const Gradient = union(GradientType) {
 
     /// Releases any stops that have been added using `addStop`. Must use the
     /// same allocator that was used there.
-    pub fn deinit(self: *Gradient, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Gradient, alloc: std.mem.Allocator) void {
         switch (self.*) {
             inline else => |*g| g.deinit(alloc),
         }
@@ -182,10 +178,10 @@ pub const Gradient = union(GradientType) {
     /// ```
     pub fn addStop(
         self: *Gradient,
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         offset: f32,
         color: Color.InitArgs,
-    ) mem.Allocator.Error!void {
+    ) std.mem.Allocator.Error!void {
         return switch (self.*) {
             inline else => |*g| g.stops.add(alloc, offset, color),
         };
@@ -297,7 +293,7 @@ pub const Linear = struct {
 
     /// Releases any stops that have been added using `Stop.List.add`. Must use
     /// the same allocator that was used there.
-    pub fn deinit(self: *Linear, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Linear, alloc: std.mem.Allocator) void {
         self.stops.deinit(alloc);
         self.* = undefined;
     }
@@ -359,7 +355,7 @@ pub const Linear = struct {
         const inv_dist = 1 / gradient_distance;
         const start_to_p_dx = px - self.start.x;
         const start_to_p_dy = py - self.start.y;
-        return @floatCast(math.clamp(
+        return @floatCast(std.math.clamp(
             dot(
                 f64,
                 2,
@@ -439,7 +435,7 @@ pub const Radial = struct {
 
     /// Releases any stops that have been added using `Stop.List.add`. Must use
     /// the same allocator that was used there.
-    pub fn deinit(self: *Radial, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Radial, alloc: std.mem.Allocator) void {
         self.stops.deinit(alloc);
         self.* = undefined;
     }
@@ -629,19 +625,19 @@ pub const Radial = struct {
             // technically currently repeats due to the nature of the algorithm
             const t = 0.5 * c / b;
             if (t * self.dr >= self.min_dr) {
-                return @floatCast(math.clamp(t, 0, 1));
+                return @floatCast(std.math.clamp(t, 0, 1));
             }
             return -1;
         } else {
             const discr = dot(f64, 2, .{ b, self.a }, .{ b, -c });
             if (discr >= 0) {
-                const sqrtdiscr = math.sqrt(discr);
+                const sqrtdiscr = std.math.sqrt(discr);
                 const t0 = (b + sqrtdiscr) * self.inv_a;
                 const t1 = (b - sqrtdiscr) * self.inv_a;
                 if (t0 * self.dr >= self.min_dr)
-                    return @floatCast(math.clamp(t0, 0, 1))
+                    return @floatCast(std.math.clamp(t0, 0, 1))
                 else if (t1 * self.dr >= self.min_dr)
-                    return @floatCast(math.clamp(t1, 0, 1));
+                    return @floatCast(std.math.clamp(t1, 0, 1));
             }
         }
         return -1;
@@ -672,7 +668,7 @@ pub const Conic = struct {
     ) Conic {
         return .{
             .center = .{ .x = x, .y = y },
-            .angle = @mod(angle, math.pi * 2),
+            .angle = @mod(angle, std.math.pi * 2),
             .stops = .{
                 .l = std.ArrayListUnmanaged(Stop).initBuffer(stops),
                 .interpolation_method = method,
@@ -682,7 +678,7 @@ pub const Conic = struct {
 
     /// Releases any stops that have been added using `Stop.List.add`. Must use
     /// the same allocator that was used there.
-    pub fn deinit(self: *Conic, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Conic, alloc: std.mem.Allocator) void {
         self.stops.deinit(alloc);
         self.* = undefined;
     }
@@ -736,8 +732,8 @@ pub const Conic = struct {
         }
         const dx = px - self.center.x;
         const dy = py - self.center.y;
-        const angle = @mod(math.atan2(dy, dx) - self.angle, math.pi * 2);
-        return @floatCast(angle / (math.pi * 2));
+        const angle = @mod(std.math.atan2(dy, dx) - self.angle, std.math.pi * 2);
+        return @floatCast(angle / (std.math.pi * 2));
     }
 };
 
@@ -759,7 +755,7 @@ pub const Stop = struct {
         interpolation_method: InterpolationMethod,
 
         /// Releases any memory allocated using `add`.
-        fn deinit(self: *List, alloc: mem.Allocator) void {
+        fn deinit(self: *List, alloc: std.mem.Allocator) void {
             self.l.deinit(alloc);
             self.* = undefined;
         }
@@ -784,10 +780,10 @@ pub const Stop = struct {
         /// ```
         pub fn add(
             self: *List,
-            alloc: mem.Allocator,
+            alloc: std.mem.Allocator,
             offset: f32,
             color: Color.InitArgs,
-        ) mem.Allocator.Error!void {
+        ) std.mem.Allocator.Error!void {
             const newlen = self.l.items.len + 1;
             try self.l.ensureTotalCapacity(alloc, newlen);
             self.addAssumeCapacity(offset, color);
@@ -795,13 +791,13 @@ pub const Stop = struct {
 
         /// Like `add`, but assumes the list can hold the stop.
         pub fn addAssumeCapacity(self: *List, offset: f32, color: Color.InitArgs) void {
-            const _offset = math.clamp(offset, 0, 1);
+            const _offset = std.math.clamp(offset, 0, 1);
             self.l.appendAssumeCapacity(.{
                 .idx = self.current_idx,
                 .color = Color.init(color),
                 .offset = _offset,
             });
-            mem.sort(Stop, self.l.items, {}, stop_sort_asc);
+            std.mem.sort(Stop, self.l.items, {}, stop_sort_asc);
             self.current_idx += 1;
         }
 
@@ -929,7 +925,7 @@ test "Stop.List.addAssumeCapacity" {
         .{ .idx = 0, .color = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(), .offset = 0.75 },
         .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
     };
-    try testing.expectEqualDeep(&expected, stop_list.l.items);
+    try std.testing.expectEqualDeep(&expected, stop_list.l.items);
 
     // clamped
     stop_list.addAssumeCapacity(-1.0, .{ .srgb = .{ 1, 0, 0 } });
@@ -943,7 +939,7 @@ test "Stop.List.addAssumeCapacity" {
         .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
         .{ .idx = 5, .color = colorpkg.SRGB.init(0, 1, 0, 1).asColor(), .offset = 1.0 },
     };
-    try testing.expectEqualDeep(&expected_clamped, stop_list.l.items);
+    try std.testing.expectEqualDeep(&expected_clamped, stop_list.l.items);
 
     // identical offset
     stop_list.addAssumeCapacity(0.25, .{ .hsl = .{ 130, 0.9, 0.45 } });
@@ -957,7 +953,7 @@ test "Stop.List.addAssumeCapacity" {
         .{ .idx = 2, .color = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(), .offset = 0.9 },
         .{ .idx = 5, .color = colorpkg.SRGB.init(0, 1, 0, 1).asColor(), .offset = 1.0 },
     };
-    try testing.expectEqualDeep(&expected_identical_offset, stop_list.l.items);
+    try std.testing.expectEqualDeep(&expected_identical_offset, stop_list.l.items);
 }
 
 test "Stop.List.search" {
@@ -965,7 +961,7 @@ test "Stop.List.search" {
     var stop_list_zero: Stop.List = .{
         .interpolation_method = .linear_rgb,
     };
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
         .offset = 0,
@@ -990,20 +986,20 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .offset = 0.4,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // smaller interval
     got = stop_list.search(0.85);
     expected = .{
         .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
-        .offset = 2.0 / 3.0 + math.floatEps(f32), // (rofl, in testing, this is the smallest fraction off of epsilon)
+        .offset = 2.0 / 3.0 + std.math.floatEps(f32), // (rofl, in testing, this is the smallest fraction off of epsilon)
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // start
     got = stop_list.search(0.1);
@@ -1012,9 +1008,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.4,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // end
     got = stop_list.search(0.95);
@@ -1023,9 +1019,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.05,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // exactly 0
     got = stop_list.search(0.0);
@@ -1034,9 +1030,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.0,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // exactly 1
     got = stop_list.search(1.0);
@@ -1045,9 +1041,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.1,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // exact on stop
     got = stop_list.search(0.25);
@@ -1056,9 +1052,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.0,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // clamped ( < 0)
     got = stop_list.search(-1.0);
@@ -1067,9 +1063,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(0, 0, 0, 0).asColor(),
         .offset = 0.0,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // clamped ( > 1)
     got = stop_list.search(2.0);
@@ -1078,9 +1074,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.HSL.init(300, 1, 0.5, 1).asColor(),
         .offset = 0.1,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 
     // Double offset
     stop_list.addAssumeCapacity(0.25, .{ .hsl = .{ 130, 0.9, 0.45 } });
@@ -1090,9 +1086,9 @@ test "Stop.List.search" {
         .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.0,
     };
-    try testing.expectEqualDeep(expected.c0, got.c0);
-    try testing.expectEqualDeep(expected.c1, got.c1);
-    try testing.expectApproxEqAbs(expected.offset, got.offset, math.floatEps(f32));
+    try std.testing.expectEqualDeep(expected.c0, got.c0);
+    try std.testing.expectEqualDeep(expected.c1, got.c1);
+    try std.testing.expectApproxEqAbs(expected.offset, got.offset, std.math.floatEps(f32));
 }
 
 test "Stop.List.search, hard stops" {
@@ -1108,37 +1104,37 @@ test "Stop.List.search, hard stops" {
     stops.addAssumeCapacity(2.0 / 3.0, .{ .rgb = .{ 0, 0, 1 } });
     stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
 
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.0,
     }, stops.search(0));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .offset = 0.5,
     }, stops.search(1.0 / 6.0));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(1, 0, 0, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.0,
     }, stops.search(1.0 / 3.0));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .offset = 0.49999997,
     }, stops.search(0.5));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(0, 1, 0, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .offset = 0.0,
     }, stops.search(2.0 / 3.0));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .offset = 0.4999999,
     }, stops.search(5.0 / 6.0));
-    try testing.expectEqualDeep(Stop.List.SearchResult{
+    try std.testing.expectEqualDeep(Stop.List.SearchResult{
         .c0 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .c1 = colorpkg.LinearRGB.init(0, 0, 1, 1).asColor(),
         .offset = 0,
@@ -1184,7 +1180,7 @@ test "Linear.initBuffer" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Linear.initBuffer(
+            try std.testing.expectEqualDeep(tc.expected, Linear.initBuffer(
                 tc.x0,
                 tc.y0,
                 tc.x1,
@@ -1243,7 +1239,7 @@ test "Linear.getOffset" {
                 .linear_rgb,
             );
             try gradient.setTransformation(tc.matrix);
-            try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
+            try std.testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1263,13 +1259,13 @@ test "Linear.getPixel" {
 
         // NOTE: Since we start in the middle of the pixel, (0,0) is not
         // exactly on the edge of the gradient. We test (-1, -1) to get that.
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 0,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(-1, -1));
-        try testing.expectEqualDeep(pixel.Pixel{
+        try std.testing.expectEqualDeep(pixel.Pixel{
             .rgba = .{
                 .r = 252, // (0, 0) is technically (0.5, 0.5)
                 .g = 3,
@@ -1277,25 +1273,25 @@ test "Linear.getPixel" {
                 .a = 255,
             },
         }, gradient.getPixel(0, 0));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 124,
             .g = 131,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(25, 25));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 255,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(49, 49));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 126,
             .b = 129,
             .a = 255,
         } }, gradient.getPixel(74, 74));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 0,
             .b = 255,
@@ -1304,25 +1300,25 @@ test "Linear.getPixel" {
 
         // Projection tests, to show the effect of orthogonal projection for pixels
         // not exactly on the gradient line (pretty much all pixels, really).
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 126,
             .g = 129,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(49, 0));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 252,
             .b = 3,
             .a = 255,
         } }, gradient.getPixel(0, 99));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 124,
             .b = 131,
             .a = 255,
         } }, gradient.getPixel(149, 0));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 0,
             .g = 0,
             .b = 255,
@@ -1337,31 +1333,31 @@ test "Linear.getPixel" {
         gradient.stops.addAssumeCapacity(0, .{ .hsl = .{ 300, 1, 0.5 } });
         gradient.stops.addAssumeCapacity(1, .{ .hsl = .{ 50, 1, 0.5 } });
 
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 0,
             .b = 255,
             .a = 255,
         } }, gradient.getPixel(-1, -1));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 0,
             .b = 139,
             .a = 255,
         } }, gradient.getPixel(24, 24));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 0,
             .b = 21,
             .a = 255,
         } }, gradient.getPixel(49, 49));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 97,
             .b = 0,
             .a = 255,
         } }, gradient.getPixel(74, 74));
-        try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+        try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
             .r = 255,
             .g = 213,
             .b = 0,
@@ -1479,7 +1475,7 @@ test "Radial.getOffset" {
                 tc.interpolation_method,
             );
             try gradient.setTransformation(tc.matrix);
-            try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
+            try std.testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1590,7 +1586,7 @@ test "Radial.initBuffer" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Radial.initBuffer(
+            try std.testing.expectEqualDeep(tc.expected, Radial.initBuffer(
                 tc.inner_x,
                 tc.inner_y,
                 tc.inner_radius,
@@ -1610,7 +1606,7 @@ test "Radial.getPixel" {
     var gradient = Radial.initBuffer(49, 49, 0, 49, 49, 50, &stop_buffer, .linear_rgb);
     gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
     gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 1, 0 } });
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+    try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
         .r = 125,
         .g = 130,
         .b = 0,
@@ -1640,7 +1636,7 @@ test "Conic.initBuffer" {
             .name = "basic",
             .expected = .{
                 .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi / 4.0,
+                .angle = std.math.pi / 4.0,
                 .stops = .{
                     .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
                     .interpolation_method = .linear_rgb,
@@ -1648,7 +1644,7 @@ test "Conic.initBuffer" {
             },
             .x = 49,
             .y = 49,
-            .angle = math.pi / 4.0,
+            .angle = std.math.pi / 4.0,
             .buffer = &buf,
             .method = .linear_rgb,
         },
@@ -1656,7 +1652,7 @@ test "Conic.initBuffer" {
             .name = "angle over 2 x pi",
             .expected = .{
                 .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi * 0.5,
+                .angle = std.math.pi * 0.5,
                 .stops = .{
                     .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
                     .interpolation_method = .linear_rgb,
@@ -1664,7 +1660,7 @@ test "Conic.initBuffer" {
             },
             .x = 49,
             .y = 49,
-            .angle = math.pi * 2.5,
+            .angle = std.math.pi * 2.5,
             .buffer = &buf,
             .method = .linear_rgb,
         },
@@ -1672,7 +1668,7 @@ test "Conic.initBuffer" {
             .name = "negative angle",
             .expected = .{
                 .center = .{ .x = 49, .y = 49 },
-                .angle = math.pi * 1.5,
+                .angle = std.math.pi * 1.5,
                 .stops = .{
                     .l = std.ArrayListUnmanaged(Stop).initBuffer(&buf),
                     .interpolation_method = .linear_rgb,
@@ -1680,14 +1676,14 @@ test "Conic.initBuffer" {
             },
             .x = 49,
             .y = 49,
-            .angle = math.pi * -0.5,
+            .angle = std.math.pi * -0.5,
             .buffer = &buf,
             .method = .linear_rgb,
         },
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Conic.initBuffer(
+            try std.testing.expectEqualDeep(tc.expected, Conic.initBuffer(
                 tc.x,
                 tc.y,
                 tc.angle,
@@ -1725,7 +1721,7 @@ test "Conic.getOffset" {
             .expected = 0.125,
             .center_x = 49.5,
             .center_y = 49,
-            .angle = math.pi / 4.0,
+            .angle = std.math.pi / 4.0,
             .x = 49,
             .y = 99,
         },
@@ -1734,7 +1730,7 @@ test "Conic.getOffset" {
             .expected = 0.875,
             .center_x = 49,
             .center_y = 49.5,
-            .angle = math.pi / 4.0,
+            .angle = std.math.pi / 4.0,
             .x = 99,
             .y = 49,
         },
@@ -1759,7 +1755,7 @@ test "Conic.getOffset" {
                 .linear_rgb,
             );
             try gradient.setTransformation(tc.matrix);
-            try testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
+            try std.testing.expectEqual(tc.expected, gradient.getOffset(tc.x, tc.y));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1770,7 +1766,7 @@ test "Conic.getPixel" {
     var gradient = Conic.initBuffer(49, 49.5, 0, &stop_buffer, .linear_rgb);
     gradient.stops.addAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
     gradient.stops.addAssumeCapacity(1, .{ .rgb = .{ 0, 1, 0 } });
-    try testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
+    try std.testing.expectEqualDeep(pixel.Pixel{ .rgba = .{
         .r = 128,
         .g = 128,
         .b = 0,
@@ -1782,7 +1778,7 @@ test "Linear.setTransformation" {
     const matrix = Transformation.identity.scale(2, 3);
     var gradient = Linear.initBuffer(1, 1, 10, 10, &[_]Stop{}, .linear_rgb);
     try gradient.setTransformation(matrix);
-    try testing.expectEqualDeep(Linear{
+    try std.testing.expectEqualDeep(Linear{
         .start = .{ .x = 1, .y = 1 },
         .end = .{ .x = 10, .y = 10 },
         .transformation = try matrix.inverse(),
@@ -1860,15 +1856,15 @@ test "Gradient interface" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             {
-                const alloc = testing.allocator;
+                const alloc = std.testing.allocator;
                 var got = Gradient.init(tc.args);
-                try testing.expectEqual(tc.expected, got);
+                try std.testing.expectEqual(tc.expected, got);
                 defer got.deinit(alloc);
                 try got.addStop(alloc, 0.0, .{ .rgb = .{ 0, 0, 0 } });
                 try got.addStop(alloc, 1.0, .{ .rgb = .{ 1, 1, 1 } });
-                debug.assert(@TypeOf(got.getPixel(0, 0)) == pixel.Pixel);
-                debug.assert(@TypeOf(got.getOffset(0, 0)) == f32);
-                try testing.expectEqualDeep(
+                std.debug.assert(@TypeOf(got.getPixel(0, 0)) == pixel.Pixel);
+                std.debug.assert(@TypeOf(got.getOffset(0, 0)) == f32);
+                try std.testing.expectEqualDeep(
                     Stop.List.SearchResult{
                         .c0 = .{ .linear_rgb = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 } },
                         .c1 = .{ .linear_rgb = .{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 } },
@@ -1876,7 +1872,7 @@ test "Gradient interface" {
                     },
                     got.searchInStops(0.5),
                 );
-                try testing.expectEqual(tc.args.method, got.getInterpolationMethod());
+                try std.testing.expectEqual(tc.args.method, got.getInterpolationMethod());
             }
 
             {
@@ -1886,7 +1882,7 @@ test "Gradient interface" {
                 var got = Gradient.init(args);
                 got.addStopAssumeCapacity(0.0, .{ .rgb = .{ 0, 0, 0 } });
                 got.addStopAssumeCapacity(1.0, .{ .rgb = .{ 1, 1, 1 } });
-                try testing.expectEqualDeep(
+                try std.testing.expectEqualDeep(
                     Stop.List.SearchResult{
                         .c0 = .{ .linear_rgb = .{ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 } },
                         .c1 = .{ .linear_rgb = .{ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 } },

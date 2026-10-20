@@ -10,8 +10,7 @@
 //! the appropriate functionality in the `compositor` package.
 const Dither = @This();
 
-const math = @import("std").math;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const colorpkg = @import("color.zig");
 const gradientpkg = @import("gradient.zig");
@@ -98,7 +97,7 @@ pub fn getPixel(self: *const Dither, x: i32, y: i32) Pixel {
 }
 
 fn apply_dither(value: f32, m: f32, scale: f32) f32 {
-    return math.clamp(value + m * scale, 0.0, 1.0);
+    return std.math.clamp(value + m * scale, 0.0, 1.0);
 }
 
 // Virtual matrix functions for computing pre-calculated threshold values for
@@ -259,7 +258,7 @@ test "Dither.getPixel" {
                 },
                 .scale = tc.scale,
             };
-            try testing.expectEqualDeep(tc.expected, d.getPixel(tc.x, tc.y));
+            try std.testing.expectEqualDeep(tc.expected, d.getPixel(tc.x, tc.y));
         }
     };
     try runCases(name, cases, TestFn.f);

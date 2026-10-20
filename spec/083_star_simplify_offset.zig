@@ -5,9 +5,7 @@
 //! use the path simplification functionality to remove the self-intersections.
 //! We then demonstrate offset functionality by drawing repeated insets of the
 //! star.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -17,7 +15,7 @@ const width = 300;
 const canvas_height = 1200;
 const draw_height = 300;
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, canvas_height);
     var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
@@ -104,6 +102,6 @@ fn setPathArc(context: *z2d.Context) !void {
     defer context.setTransformation(saved_ctm);
     context.translate(x, y);
     context.scale(radius, radius);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     try context.closePath();
 }

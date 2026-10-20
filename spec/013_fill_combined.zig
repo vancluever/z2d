@@ -3,14 +3,13 @@
 
 //! Case: Renders and fills multiple shapes using a single path operation, used
 //! to ensure we can do this without having to fill each polygon individually.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "013_fill_combined";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
     const height = 400;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

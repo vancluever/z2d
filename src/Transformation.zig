@@ -17,8 +17,7 @@
 //! error.
 const Transformation = @This();
 
-const math = @import("std").math;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const Point = @import("internal/Point.zig");
 
@@ -236,8 +235,8 @@ test "equal" {
         .ty = 12,
     };
 
-    try testing.expect(a.equal(a));
-    try testing.expect(!a.equal(b));
+    try std.testing.expect(a.equal(a));
+    try std.testing.expect(!a.equal(b));
 }
 
 test "determinant" {
@@ -250,7 +249,7 @@ test "determinant" {
         .ty = 6,
     };
 
-    try testing.expectEqual(-2, a.determinant());
+    try std.testing.expectEqual(-2, a.determinant());
 }
 
 test "mul" {
@@ -281,7 +280,7 @@ test "mul" {
         .ty = 87,
     };
 
-    try testing.expectEqualDeep(expected, a.mul(b));
+    try std.testing.expectEqualDeep(expected, a.mul(b));
 }
 
 test "mulScalar" {
@@ -303,7 +302,7 @@ test "mulScalar" {
         .ty = 18,
     };
 
-    try testing.expectEqualDeep(expected, a.mulScalar(3));
+    try std.testing.expectEqualDeep(expected, a.mulScalar(3));
 }
 
 test "inverse" {
@@ -327,7 +326,7 @@ test "inverse" {
             .ty = -5,
         };
 
-        try testing.expectEqualDeep(expected, a.inverse());
+        try std.testing.expectEqualDeep(expected, a.inverse());
     }
 
     {
@@ -350,7 +349,7 @@ test "inverse" {
             .ty = -15,
         };
 
-        try testing.expectEqualDeep(expected, a.inverse());
+        try std.testing.expectEqualDeep(expected, a.inverse());
     }
 
     {
@@ -375,12 +374,12 @@ test "inverse" {
 
         // FIXME: see roundf64 comments for details on why we need to round
         // test results.
-        try testing.expectEqualDeep(roundf64(expected), roundf64(try (a.inverse())));
+        try std.testing.expectEqualDeep(roundf64(expected), roundf64(try (a.inverse())));
     }
 
     {
         // Invalid special-case matrix
-        try testing.expectError(error.InvalidMatrix, (Transformation{
+        try std.testing.expectError(error.InvalidMatrix, (Transformation{
             .ax = 0,
             .by = 0,
             .cx = 0,
@@ -392,7 +391,7 @@ test "inverse" {
 
     {
         // Invalid standard-case matrix
-        try testing.expectError(error.InvalidMatrix, (Transformation{
+        try std.testing.expectError(error.InvalidMatrix, (Transformation{
             .ax = 3,
             .by = 3,
             .cx = 3,
@@ -404,7 +403,7 @@ test "inverse" {
 }
 
 test "translate" {
-    try testing.expectEqualDeep(Transformation{
+    try std.testing.expectEqualDeep(Transformation{
         .ax = 1,
         .by = 0,
         .cx = 0,
@@ -415,7 +414,7 @@ test "translate" {
 }
 
 test "scale" {
-    try testing.expectEqualDeep(Transformation{
+    try std.testing.expectEqualDeep(Transformation{
         .ax = 2,
         .by = 0,
         .cx = 0,
@@ -426,10 +425,10 @@ test "scale" {
 }
 
 test "rotate" {
-    const angle = @as(f64, math.pi) / 2.0;
+    const angle = @as(f64, std.math.pi) / 2.0;
     const s = @sin(angle);
     const c = @cos(angle);
-    try testing.expectEqualDeep(Transformation{
+    try std.testing.expectEqualDeep(Transformation{
         .ax = c,
         .by = -s,
         .cx = s,
@@ -451,20 +450,20 @@ test "userToDevice" {
         var got_x = orig_x;
         var got_y = orig_y;
         identity.userToDevice(&got_x, &got_y);
-        try testing.expectEqual(2, got_x);
-        try testing.expectEqual(3, got_y);
+        try std.testing.expectEqual(2, got_x);
+        try std.testing.expectEqual(3, got_y);
         // Translate
         got_x = orig_x;
         got_y = orig_y;
         identity.translate(10, 12).userToDevice(&got_x, &got_y);
-        try testing.expectEqual(12, got_x);
-        try testing.expectEqual(15, got_y);
+        try std.testing.expectEqual(12, got_x);
+        try std.testing.expectEqual(15, got_y);
         // Scale
         got_x = orig_x;
         got_y = orig_y;
         identity.scale(10, 20).userToDevice(&got_x, &got_y);
-        try testing.expectEqual(20, got_x);
-        try testing.expectEqual(60, got_y);
+        try std.testing.expectEqual(20, got_x);
+        try std.testing.expectEqual(60, got_y);
     }
 
     {
@@ -473,13 +472,13 @@ test "userToDevice" {
         var y: f64 = 0;
         const want_x: f64 = 0;
         const want_y: f64 = 9;
-        identity.rotate(math.pi / 2.0).userToDevice(&x, &y);
+        identity.rotate(std.math.pi / 2.0).userToDevice(&x, &y);
         // FIXME: see roundf64 comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
-        try testing.expectEqual(want_x, x);
-        try testing.expectEqual(want_y, y);
+        try std.testing.expectEqual(want_x, x);
+        try std.testing.expectEqual(want_y, y);
     }
 
     {
@@ -488,9 +487,9 @@ test "userToDevice" {
         var y: f64 = 0;
         const want_x: f64 = -200;
         const want_y: f64 = 190;
-        identity.rotate(math.pi / 2.0).scale(10, 10).translate(10, 20).userToDevice(&x, &y);
-        try testing.expectEqual(want_x, x);
-        try testing.expectEqual(want_y, y);
+        identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20).userToDevice(&x, &y);
+        try std.testing.expectEqual(want_x, x);
+        try std.testing.expectEqual(want_y, y);
     }
 }
 
@@ -499,15 +498,15 @@ test "deviceToUser" {
     const original_y: f64 = 0;
     const want_x: f64 = -200;
     const want_y: f64 = 190;
-    const t = identity.rotate(math.pi / 2.0).scale(10, 10).translate(10, 20);
+    const t = identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20);
     var got_x = original_x;
     var got_y = original_y;
     t.userToDevice(&got_x, &got_y);
-    try testing.expectEqual(want_x, got_x);
-    try testing.expectEqual(want_y, got_y);
+    try std.testing.expectEqual(want_x, got_x);
+    try std.testing.expectEqual(want_y, got_y);
     try t.deviceToUser(&got_x, &got_y);
-    try testing.expectEqual(original_x, got_x);
-    try testing.expectEqual(original_y, got_y);
+    try std.testing.expectEqual(original_x, got_x);
+    try std.testing.expectEqual(original_y, got_y);
 }
 
 test "userToDeviceDistance" {
@@ -520,20 +519,20 @@ test "userToDeviceDistance" {
         var got_x = orig_x;
         var got_y = orig_y;
         identity.userToDeviceDistance(&got_x, &got_y);
-        try testing.expectEqual(2, got_x);
-        try testing.expectEqual(3, got_y);
+        try std.testing.expectEqual(2, got_x);
+        try std.testing.expectEqual(3, got_y);
         // Translate
         got_x = orig_x;
         got_y = orig_y;
         identity.translate(10, 12).userToDeviceDistance(&got_x, &got_y);
-        try testing.expectEqual(2, got_x);
-        try testing.expectEqual(3, got_y);
+        try std.testing.expectEqual(2, got_x);
+        try std.testing.expectEqual(3, got_y);
         // Scale
         got_x = orig_x;
         got_y = orig_y;
         identity.scale(10, 20).userToDeviceDistance(&got_x, &got_y);
-        try testing.expectEqual(20, got_x);
-        try testing.expectEqual(60, got_y);
+        try std.testing.expectEqual(20, got_x);
+        try std.testing.expectEqual(60, got_y);
     }
 
     {
@@ -542,13 +541,13 @@ test "userToDeviceDistance" {
         var y: f64 = 0;
         const want_x: f64 = 0;
         const want_y: f64 = 9;
-        identity.rotate(math.pi / 2.0).userToDeviceDistance(&x, &y);
+        identity.rotate(std.math.pi / 2.0).userToDeviceDistance(&x, &y);
         // FIXME: see roundf64 comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
-        try testing.expectEqual(want_x, x);
-        try testing.expectEqual(want_y, y);
+        try std.testing.expectEqual(want_x, x);
+        try std.testing.expectEqual(want_y, y);
     }
 
     {
@@ -557,13 +556,13 @@ test "userToDeviceDistance" {
         var y: f64 = 2;
         const want_x: f64 = -20;
         const want_y: f64 = 90;
-        identity.rotate(math.pi / 2.0).scale(10, 10).translate(10, 20).userToDeviceDistance(&x, &y);
+        identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20).userToDeviceDistance(&x, &y);
         // FIXME: see roundf64 comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
-        try testing.expectEqual(want_x, x);
-        try testing.expectEqual(want_y, y);
+        try std.testing.expectEqual(want_x, x);
+        try std.testing.expectEqual(want_y, y);
     }
 }
 
@@ -572,7 +571,7 @@ test "deviceToUserDistance" {
     const original_y: f64 = 2;
     const want_x: f64 = -20;
     const want_y: f64 = 90;
-    const t = identity.rotate(math.pi / 2.0).scale(10, 10).translate(10, 20);
+    const t = identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20);
     var got_x = original_x;
     var got_y = original_y;
     t.userToDeviceDistance(&got_x, &got_y);
@@ -580,13 +579,13 @@ test "deviceToUserDistance" {
     // test results.
     got_x = @round(got_x);
     got_y = @round(got_y);
-    try testing.expectEqual(want_x, got_x);
-    try testing.expectEqual(want_y, got_y);
+    try std.testing.expectEqual(want_x, got_x);
+    try std.testing.expectEqual(want_y, got_y);
     try t.deviceToUserDistance(&got_x, &got_y);
     got_x = @round(got_x);
     got_y = @round(got_y);
-    try testing.expectEqual(original_x, got_x);
-    try testing.expectEqual(original_y, got_y);
+    try std.testing.expectEqual(original_x, got_x);
+    try std.testing.expectEqual(original_y, got_y);
 }
 
 /// For testing only. Rounds each element in the matrix to 16 significant
@@ -629,6 +628,6 @@ fn roundf64_field(a: f64) f64 {
     if (a == 0) {
         return 0;
     }
-    const b = math.pow(f64, 10, 16 - @ceil(math.log10(@abs(a))));
+    const b = std.math.pow(f64, 10, 16 - @ceil(std.math.log10(@abs(a))));
     return @round(a * b) / b;
 }

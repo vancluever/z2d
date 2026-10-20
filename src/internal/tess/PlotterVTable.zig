@@ -5,13 +5,13 @@
 //! implementations (e.g., spline deconstruction, line capping).
 const PlotterVTable = @This();
 
-const mem = @import("std").mem;
+const std = @import("std");
 
 const nodepkg = @import("../path_nodes.zig");
 
 const InternalError = @import("../InternalError.zig").InternalError;
 
-pub const Error = InternalError || mem.Allocator.Error;
+pub const Error = InternalError || std.mem.Allocator.Error;
 
 ptr: *anyopaque,
 line_to: *const fn (ctx: *anyopaque, err_: *?Error, node: nodepkg.PathLineTo) void,
