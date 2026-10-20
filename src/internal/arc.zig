@@ -6,8 +6,7 @@
 // Cairo project (https://www.cairographics.org/), notably cairo-arc.c and
 // cairo-matrix.c.
 
-const math = @import("std").math;
-const debug = @import("std").debug;
+const std = @import("std");
 
 const options = @import("../options.zig");
 
@@ -38,7 +37,7 @@ const max_full_circles = 65536;
 //      abs (error) =~ 1/2 * e
 
 fn arc_error_normalized(angle: f64) f64 {
-    return 2.0 / 27.0 * math.pow(f64, @sin(angle / 4), 6) / math.pow(f64, @cos(angle / 4), 2);
+    return 2.0 / 27.0 * std.math.pow(f64, @sin(angle / 4), 6) / std.math.pow(f64, @cos(angle / 4), 2);
 }
 
 fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
@@ -47,17 +46,17 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
         angle: f64,
         err: f64,
     }{
-        .{ .angle = math.pi / 1.0, .err = 0.0185185185185185036127 },
-        .{ .angle = math.pi / 2.0, .err = 0.000272567143730179811158 },
-        .{ .angle = math.pi / 3.0, .err = 2.38647043651461047433e-05 },
-        .{ .angle = math.pi / 4.0, .err = 4.2455377443222443279e-06 },
-        .{ .angle = math.pi / 5.0, .err = 1.11281001494389081528e-06 },
-        .{ .angle = math.pi / 6.0, .err = 3.72662000942734705475e-07 },
-        .{ .angle = math.pi / 7.0, .err = 1.47783685574284411325e-07 },
-        .{ .angle = math.pi / 8.0, .err = 6.63240432022601149057e-08 },
-        .{ .angle = math.pi / 9.0, .err = 3.2715520137536980553e-08 },
-        .{ .angle = math.pi / 10.0, .err = 1.73863223499021216974e-08 },
-        .{ .angle = math.pi / 11.0, .err = 9.81410988043554039085e-09 },
+        .{ .angle = std.math.pi / 1.0, .err = 0.0185185185185185036127 },
+        .{ .angle = std.math.pi / 2.0, .err = 0.000272567143730179811158 },
+        .{ .angle = std.math.pi / 3.0, .err = 2.38647043651461047433e-05 },
+        .{ .angle = std.math.pi / 4.0, .err = 4.2455377443222443279e-06 },
+        .{ .angle = std.math.pi / 5.0, .err = 1.11281001494389081528e-06 },
+        .{ .angle = std.math.pi / 6.0, .err = 3.72662000942734705475e-07 },
+        .{ .angle = std.math.pi / 7.0, .err = 1.47783685574284411325e-07 },
+        .{ .angle = std.math.pi / 8.0, .err = 6.63240432022601149057e-08 },
+        .{ .angle = std.math.pi / 9.0, .err = 3.2715520137536980553e-08 },
+        .{ .angle = std.math.pi / 10.0, .err = 1.73863223499021216974e-08 },
+        .{ .angle = std.math.pi / 11.0, .err = 9.81410988043554039085e-09 },
     };
 
     // this value is chosen arbitrarily. this gives an error of about 1.74909e-20
@@ -69,7 +68,7 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
 
     var angle: f64 = undefined;
     for (table.len..max_segments) |i| {
-        angle = math.pi / @as(f64, @floatFromInt(i));
+        angle = std.math.pi / @as(f64, @floatFromInt(i));
         const err = arc_error_normalized(angle);
         if (err <= tolerance) {
             break;
@@ -258,7 +257,7 @@ pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
     g = 0.5 * (i - j);
     h = a * c + b * d;
 
-    return radius * @sqrt(f + math.hypot(g, h));
+    return radius * @sqrt(f + std.math.hypot(g, h));
 
     //
     // we don't need the minor axis length, which is
@@ -344,16 +343,16 @@ pub fn arc_in_direction(
 
     if (!is_finite(amax) or !is_finite(amin)) return;
 
-    debug.assert(amax >= amin);
+    std.debug.assert(amax >= amin);
 
-    if (amax - amin > 2 * math.pi * @as(f64, @floatFromInt(max_full_circles))) {
-        amax = @mod(amax - amin, 2 * math.pi);
-        amin = @mod(amin, 2 * math.pi);
-        amax += amin + 2 * math.pi * @as(f64, @floatFromInt(max_full_circles));
+    if (amax - amin > 2 * std.math.pi * @as(f64, @floatFromInt(max_full_circles))) {
+        amax = @mod(amax - amin, 2 * std.math.pi);
+        amin = @mod(amin, 2 * std.math.pi);
+        amax += amin + 2 * std.math.pi * @as(f64, @floatFromInt(max_full_circles));
     }
 
     // Recurse if drawing arc larger than pi
-    if (amax - amin > math.pi) {
+    if (amax - amin > std.math.pi) {
         const amid = amin + (amax - amin) / 2.0;
         if (dir == .forward) {
             try arc_in_direction(path_impl, xc, yc, radius, amin, amid, dir, ctm, tolerance);

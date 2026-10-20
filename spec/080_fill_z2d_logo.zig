@@ -16,13 +16,13 @@
 //! be done extra. To do so, add the main function (and supporting variables)
 //! as given below:
 //!
-//!     const heap = @import("std").heap;
-//!     var debug_allocator: heap.DebugAllocator(.{}) = .init;
+//!     const std = @import("std");
+//!     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 //!
 //!     pub fn main() !void {
 //!         const alloc, const is_debug = switch (builtin.mode) {
 //!             .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
-//!             .ReleaseFast, .ReleaseSmall => .{ heap.smp_allocator, false },
+//!             .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
 //!         };
 //!
 //!         defer if (is_debug) {
@@ -34,8 +34,7 @@
 //!         try z2d.png_exporter.writeToPNGFile(sfc, "z2d-logo.png", .{});
 //!     }
 //!
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -44,7 +43,7 @@ pub const filename = "080_fill_z2d_logo";
 const title_font = @embedFile("./test-fonts/Montserrat-ExtraBold.ttf");
 const subtitle_font = @embedFile("./test-fonts/Montserrat-Bold.ttf");
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 601;
     const height = 172;
     var sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);

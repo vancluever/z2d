@@ -3,8 +3,7 @@
 
 //! Contains unmanaged painter functions for filling and stroking.
 
-const mem = @import("std").mem;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const compositor = @import("compositor.zig");
 const options = @import("options.zig");
@@ -57,11 +56,11 @@ pub const FillError = error{
     /// value has not been correctly pre-multiplied and will cause overflows
     /// with compositing. See `pixel.ARGB` or `pixel.RGBA` for more details.
     PixelSourceNotPreMultiplied,
-} || Surface.Error || InternalError || mem.Allocator.Error;
+} || Surface.Error || InternalError || std.mem.Allocator.Error;
 
 /// Runs a fill operation on the path set represented by `nodes`.
 pub fn fill(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     nodes: []const PathNode,
@@ -200,13 +199,13 @@ pub const StrokeError = error{
     /// value has not been correctly pre-multiplied and will cause overflows
     /// with compositing. See `pixel.ARGB` or `pixel.RGBA` for more details.
     PixelSourceNotPreMultiplied,
-} || Transformation.Error || Surface.Error || InternalError || mem.Allocator.Error;
+} || Transformation.Error || Surface.Error || InternalError || std.mem.Allocator.Error;
 
 /// Runs a stroke operation on the path set represented by `nodes`. The path(s)
 /// is/are transformed to one or more polygon(s) representing the line(s),
 /// which are then filled.
 pub fn stroke(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     nodes: []const PathNode,
@@ -338,10 +337,10 @@ pub fn stroke(
 }
 
 test "stroke uninvertible matrix error" {
-    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
-    defer sfc.deinit(testing.allocator);
-    try testing.expectError(Transformation.Error.InvalidMatrix, stroke(
-        testing.allocator,
+    var sfc = try Surface.init(.image_surface_rgb, std.testing.allocator, 1, 1);
+    defer sfc.deinit(std.testing.allocator);
+    try std.testing.expectError(Transformation.Error.InvalidMatrix, stroke(
+        std.testing.allocator,
         &sfc,
         &.{
             .opaque_pattern = .{
@@ -361,10 +360,10 @@ test "stroke uninvertible matrix error" {
 }
 
 test "fill, non pre-multiplied pixel" {
-    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
-    defer sfc.deinit(testing.allocator);
-    try testing.expectError(error.PixelSourceNotPreMultiplied, fill(
-        testing.allocator,
+    var sfc = try Surface.init(.image_surface_rgb, std.testing.allocator, 1, 1);
+    defer sfc.deinit(std.testing.allocator);
+    try std.testing.expectError(error.PixelSourceNotPreMultiplied, fill(
+        std.testing.allocator,
         &sfc,
         &.{
             .opaque_pattern = .{
@@ -377,10 +376,10 @@ test "fill, non pre-multiplied pixel" {
 }
 
 test "stroke, non pre-multiplied pixel" {
-    var sfc = try Surface.init(.image_surface_rgb, testing.allocator, 1, 1);
-    defer sfc.deinit(testing.allocator);
-    try testing.expectError(error.PixelSourceNotPreMultiplied, stroke(
-        testing.allocator,
+    var sfc = try Surface.init(.image_surface_rgb, std.testing.allocator, 1, 1);
+    defer sfc.deinit(std.testing.allocator);
+    try std.testing.expectError(error.PixelSourceNotPreMultiplied, stroke(
+        std.testing.allocator,
         &sfc,
         &.{
             .opaque_pattern = .{

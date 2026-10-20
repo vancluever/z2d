@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024-2026 Chris Marchesi
 
-const testing = @import("std").testing;
+const std = @import("std");
 
 const Path = @import("Path.zig");
 const PathNode = @import("internal/path_nodes.zig").PathNode;
@@ -115,7 +115,7 @@ test "StaticPath" {
         path.lineTo(30, 10);
         path.lineTo(20, 30);
         path.close();
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 30, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 20, .y = 30 } } },
@@ -132,7 +132,7 @@ test "StaticPath" {
         path.relLineTo(20, 0);
         path.relLineTo(-10, 20);
         path.close();
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 30, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 20, .y = 30 } } },
@@ -147,7 +147,7 @@ test "StaticPath" {
         path.init();
         path.moveTo(10, 10);
         path.curveTo(30, 10, 30, 30, 10, 30);
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .curve_to = .{
                 .p1 = .{ .x = 30, .y = 10 },
@@ -163,7 +163,7 @@ test "StaticPath" {
         path.init();
         path.moveTo(10, 10);
         path.relCurveTo(20, 0, 20, 20, 0, 20);
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .curve_to = .{
                 .p1 = .{ .x = 30, .y = 10 },
@@ -180,7 +180,7 @@ test "StaticPath" {
         path.moveTo(10, 10);
         path.lineTo(20, 20);
         path.relMoveTo(10, 10);
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 20, .y = 20 } } },
             .{ .move_to = .{ .point = .{ .x = 30, .y = 30 } } },
@@ -195,7 +195,7 @@ test "StaticPath" {
         path.lineTo(30, 10);
         path.lineTo(20, 30);
         path.close();
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 10, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 30, .y = 10 } } },
             .{ .line_to = .{ .point = .{ .x = 20, .y = 30 } } },
@@ -207,7 +207,7 @@ test "StaticPath" {
         path.lineTo(300, 100);
         path.lineTo(200, 300);
         path.close();
-        try testing.expectEqual([_]PathNode{
+        try std.testing.expectEqual([_]PathNode{
             .{ .move_to = .{ .point = .{ .x = 100, .y = 100 } } },
             .{ .line_to = .{ .point = .{ .x = 300, .y = 100 } } },
             .{ .line_to = .{ .point = .{ .x = 200, .y = 300 } } },

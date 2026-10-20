@@ -7,10 +7,7 @@
 // tiny-skia project (https://github.com/linebender/tiny-skia), notably
 // alpha_runs.rs.
 
-const math = @import("std").math;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
-const debug = @import("std").debug;
+const std = @import("std");
 
 const runCases = @import("../util.zig").runCases;
 const TestingError = @import("../util.zig").TestingError;
@@ -53,7 +50,7 @@ pub const SparseCoverageBuffer = struct {
     len: u32,
     capacity: u32,
 
-    pub fn init(alloc: mem.Allocator, capacity: u32) mem.Allocator.Error!SparseCoverageBuffer {
+    pub fn init(alloc: std.mem.Allocator, capacity: u32) std.mem.Allocator.Error!SparseCoverageBuffer {
         const values = try alloc.alloc(u8, capacity);
         errdefer alloc.free(values);
         const lengths: LengthStorage = if (capacity < 256)
@@ -74,7 +71,7 @@ pub const SparseCoverageBuffer = struct {
         };
     }
 
-    pub fn deinit(self: *SparseCoverageBuffer, alloc: mem.Allocator) void {
+    pub fn deinit(self: *SparseCoverageBuffer, alloc: std.mem.Allocator) void {
         alloc.free(self.values);
         switch (self.lengths) {
             inline else => |l| alloc.free(l),
@@ -193,7 +190,7 @@ pub const SparseCoverageBuffer = struct {
     }
 
     fn put(self: *SparseCoverageBuffer, x: u32, value: u8, len: u32) void {
-        debug.assert(x + len <= self.capacity);
+        std.debug.assert(x + len <= self.capacity);
         self.values[x] = value;
         switch (self.lengths) {
             inline else => |l| l[x] = @intCast(len),
@@ -212,117 +209,117 @@ pub const SparseCoverageBuffer = struct {
 };
 
 test "extend, basic" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.put(0, 0, 4);
     coverage.put(4, 0, 4);
     coverage.len = 8;
     coverage.extend(2, 5);
-    try testing.expectEqual(8, coverage.len);
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(2));
-    try testing.expectEqual(.{ 0, 3 }, coverage.get(4));
-    try testing.expectEqual(.{ 0, 1 }, coverage.get(7));
+    try std.testing.expectEqual(8, coverage.len);
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(2));
+    try std.testing.expectEqual(.{ 0, 3 }, coverage.get(4));
+    try std.testing.expectEqual(.{ 0, 1 }, coverage.get(7));
 }
 
 test "extend, new buffer (zero-indexed initial span)" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.extend(0, 5);
-    try testing.expectEqual(5, coverage.len);
-    try testing.expectEqual(.{ 0, 5 }, coverage.get(0));
+    try std.testing.expectEqual(5, coverage.len);
+    try std.testing.expectEqual(.{ 0, 5 }, coverage.get(0));
 }
 
 test "extend, new buffer (non-zero initial span)" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.extend(2, 5);
-    try testing.expectEqual(7, coverage.len);
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 5 }, coverage.get(2));
+    try std.testing.expectEqual(7, coverage.len);
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 5 }, coverage.get(2));
 }
 
 test "extend, split closer to the end (no extend)" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.put(0, 0, 4);
     coverage.put(4, 0, 4);
     coverage.len = 8;
     coverage.extend(7, 1);
-    try testing.expectEqual(8, coverage.len);
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 3 }, coverage.get(4));
-    try testing.expectEqual(.{ 0, 1 }, coverage.get(7));
+    try std.testing.expectEqual(8, coverage.len);
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 3 }, coverage.get(4));
+    try std.testing.expectEqual(.{ 0, 1 }, coverage.get(7));
 }
 
 test "extend, split closer to the end (with extend)" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.put(0, 0, 4);
     coverage.put(4, 0, 4);
     coverage.len = 8;
     coverage.extend(7, 3);
-    try testing.expectEqual(10, coverage.len);
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 3 }, coverage.get(4));
-    try testing.expectEqual(.{ 0, 1 }, coverage.get(7));
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(8));
+    try std.testing.expectEqual(10, coverage.len);
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 3 }, coverage.get(4));
+    try std.testing.expectEqual(.{ 0, 1 }, coverage.get(7));
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(8));
 }
 
 test "extend, append right after end" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.put(0, 0, 4);
     coverage.put(4, 0, 4);
     coverage.len = 8;
     coverage.extend(8, 2);
-    try testing.expectEqual(10, coverage.len);
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(4));
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(8));
+    try std.testing.expectEqual(10, coverage.len);
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(4));
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(8));
 }
 
 test "extend, put something past end of buffer" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 11);
     defer coverage.deinit(alloc);
     coverage.put(0, 0, 4);
     coverage.put(4, 0, 4);
     coverage.len = 8;
     coverage.extend(9, 2);
-    try testing.expectEqual(11, coverage.len);
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(0));
-    try testing.expectEqual(.{ 0, 4 }, coverage.get(4));
-    try testing.expectEqual(.{ 0, 1 }, coverage.get(8));
-    try testing.expectEqual(.{ 0, 2 }, coverage.get(9));
+    try std.testing.expectEqual(11, coverage.len);
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(0));
+    try std.testing.expectEqual(.{ 0, 4 }, coverage.get(4));
+    try std.testing.expectEqual(.{ 0, 1 }, coverage.get(8));
+    try std.testing.expectEqual(.{ 0, 2 }, coverage.get(9));
 }
 
 test "extend, zero len" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 10);
     defer coverage.deinit(alloc);
     coverage.extend(0, 0);
     _, const got_len = coverage.get(0);
-    try testing.expectEqual(0, got_len);
+    try std.testing.expectEqual(0, got_len);
 }
 
 // Uncomment this to test (expect assertion failure or intCast safety check)
 //
 // test "extend, split over underlying type max" {
-//     const alloc = testing.allocator;
+//     const alloc = std.testing.allocator;
 //     var coverage: SparseCoverageBuffer = try .init(alloc, 255);
 //     defer coverage.deinit(alloc);
 //     coverage.extend(192, 500);
 //     var idx: u32 = 0;
 //     while (idx < coverage.len) {
 //         const x_val, const x_inc = coverage.get(idx);
-//         debug.print("(idx: {d:>3}) x_val: {d}, x_inc: {d}, next: {d}\n", .{
+//         std.debug.print("(idx: {d:>3}) x_val: {d}, x_inc: {d}, next: {d}\n", .{
 //             idx,
 //             x_val,
 //             x_inc,
@@ -333,7 +330,7 @@ test "extend, zero len" {
 // }
 
 test "extend, split up to exactly capacity" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 255);
     defer coverage.deinit(alloc);
 
@@ -344,11 +341,11 @@ test "extend, split up to exactly capacity" {
     coverage.extend(192, 63);
 
     var got_val, var got_len = coverage.get(0);
-    try testing.expectEqual(0, got_val);
-    try testing.expectEqual(192, got_len);
+    try std.testing.expectEqual(0, got_val);
+    try std.testing.expectEqual(192, got_len);
     got_val, got_len = coverage.get(192);
-    try testing.expectEqual(0, got_val);
-    try testing.expectEqual(63, got_len);
+    try std.testing.expectEqual(0, got_val);
+    try std.testing.expectEqual(63, got_len);
 
     var idx: u32 = 0;
     var tracked_span_len: usize = 0;
@@ -357,5 +354,5 @@ test "extend, split up to exactly capacity" {
         idx += x_inc;
         tracked_span_len += 1;
     }
-    try testing.expectEqual(2, tracked_span_len);
+    try std.testing.expectEqual(2, tracked_span_len);
 }

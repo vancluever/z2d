@@ -15,11 +15,6 @@
 //! details.
 
 const std = @import("std");
-const debug = @import("std").debug;
-const heap = @import("std").heap;
-const mem = @import("std").mem;
-const meta = @import("std").meta;
-const testing = @import("std").testing;
 
 const compositor = @import("compositor.zig");
 const pixel = @import("pixel.zig");
@@ -96,10 +91,10 @@ pub const Surface = union(SurfaceType) {
     /// `deinit` to release it.
     pub fn init(
         surface_type: SurfaceType,
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         width: i32,
         height: i32,
-    ) (Error || mem.Allocator.Error)!Surface {
+    ) (Error || std.mem.Allocator.Error)!Surface {
         switch (surface_type) {
             inline .image_surface_alpha4, .image_surface_alpha2, .image_surface_alpha1 => |t| {
                 const pt = t.toPixelType();
@@ -127,10 +122,10 @@ pub const Surface = union(SurfaceType) {
     /// make sure to call `deinit` to release it.
     pub fn initPixel(
         initial_px: pixel.Pixel,
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         width: i32,
         height: i32,
-    ) (Error || mem.Allocator.Error)!Surface {
+    ) (Error || std.mem.Allocator.Error)!Surface {
         switch (initial_px) {
             inline .alpha4, .alpha2, .alpha1 => |px| {
                 return (try PackedImageSurface(@TypeOf(px)).init(
@@ -185,7 +180,7 @@ pub const Surface = union(SurfaceType) {
 
     /// Releases the underlying surface memory. The surface is invalid to use
     /// after calling this.
-    pub fn deinit(self: *Surface, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Surface, alloc: std.mem.Allocator) void {
         switch (self.*) {
             inline else => |*s| {
                 s.deinit(alloc);
@@ -202,7 +197,7 @@ pub const Surface = union(SurfaceType) {
     /// `supersample_scale` (4 as the time of this writing). Remainders are
     /// discarded. If either the width of height is smaller than
     /// `supersample_scale`, the operation is aborted.
-    pub fn downsample(self: *Surface, alloc: mem.Allocator) void {
+    pub fn downsample(self: *Surface, alloc: std.mem.Allocator) void {
         switch (self.*) {
             inline else => |*s| s.downsample(alloc),
         }
@@ -380,11 +375,11 @@ pub fn ImageSurface(comptime T: type) type {
         /// used. If non-null, the surface is initialized with the supplied
         /// `initial_px_`.
         pub fn init(
-            alloc: mem.Allocator,
+            alloc: std.mem.Allocator,
             width: i32,
             height: i32,
             initial_px_: ?T,
-        ) (Surface.Error || mem.Allocator.Error)!ImageSurface(T) {
+        ) (Surface.Error || std.mem.Allocator.Error)!ImageSurface(T) {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
@@ -409,7 +404,7 @@ pub fn ImageSurface(comptime T: type) type {
             if (initial_px_) |initial_px| {
                 @memset(buf, initial_px);
             } else {
-                @memset(buf, mem.zeroes(T));
+                @memset(buf, std.mem.zeroes(T));
             }
 
             return .{
@@ -421,7 +416,7 @@ pub fn ImageSurface(comptime T: type) type {
 
         /// De-allocates the surface buffer. The surface is invalid for use after
         /// this is called.
-        pub fn deinit(self: *ImageSurface(T), alloc: mem.Allocator) void {
+        pub fn deinit(self: *ImageSurface(T), alloc: std.mem.Allocator) void {
             alloc.free(self.buf);
             self.* = undefined;
         }
@@ -434,7 +429,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// `supersample_scale` (4 as the time of this writing). Remainders are
         /// discarded. If either the width of height is smaller than
         /// `supersample_scale`, the operation is aborted.
-        pub fn downsample(self: *ImageSurface(T), alloc: mem.Allocator) void {
+        pub fn downsample(self: *ImageSurface(T), alloc: std.mem.Allocator) void {
             self.downsampleBuffer();
             self.resizeBuffer(alloc);
         }
@@ -454,7 +449,7 @@ pub fn ImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels: [scale * scale]T = @splat(mem.zeroes(T));
+                    var pixels: [scale * scale]T = @splat(std.mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -470,7 +465,7 @@ pub fn ImageSurface(comptime T: type) type {
 
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
-        pub fn resizeBuffer(self: *ImageSurface(T), alloc: mem.Allocator) void {
+        pub fn resizeBuffer(self: *ImageSurface(T), alloc: std.mem.Allocator) void {
             const height: usize = @max(0, self.height);
             const width: usize = @max(0, self.width);
             if (self.buf.len == height * width) return;
@@ -619,11 +614,11 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// used. If non-null, the surface is initialized with the supplied
         /// `initial_px_`.
         pub fn init(
-            alloc: mem.Allocator,
+            alloc: std.mem.Allocator,
             width: i32,
             height: i32,
             initial_px_: ?T,
-        ) (Surface.Error || mem.Allocator.Error)!PackedImageSurface(T) {
+        ) (Surface.Error || std.mem.Allocator.Error)!PackedImageSurface(T) {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
@@ -661,7 +656,7 @@ pub fn PackedImageSurface(comptime T: type) type {
 
         /// De-allocates the surface buffer. The surface is invalid for use after
         /// this is called.
-        pub fn deinit(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
+        pub fn deinit(self: *PackedImageSurface(T), alloc: std.mem.Allocator) void {
             alloc.free(self.buf);
             self.* = undefined;
         }
@@ -674,7 +669,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// `supersample_scale` (4 as the time of this writing). Remainders are
         /// discarded. If either the width of height is smaller than
         /// `supersample_scale`, the operation is aborted.
-        pub fn downsample(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
+        pub fn downsample(self: *PackedImageSurface(T), alloc: std.mem.Allocator) void {
             self.downsampleBuffer();
             self.resizeBuffer(alloc);
         }
@@ -694,7 +689,7 @@ pub fn PackedImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels: [scale * scale]T = @splat(mem.zeroes(T));
+                    var pixels: [scale * scale]T = @splat(std.mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -710,7 +705,7 @@ pub fn PackedImageSurface(comptime T: type) type {
 
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
-        pub fn resizeBuffer(self: *PackedImageSurface(T), alloc: mem.Allocator) void {
+        pub fn resizeBuffer(self: *PackedImageSurface(T), alloc: std.mem.Allocator) void {
             const height: usize = @max(0, self.height);
             const width: usize = @max(0, self.width);
             const new_len: usize = (height * width * @bitSizeOf(T) + 7) / 8;
@@ -877,14 +872,14 @@ pub fn PackedImageSurface(comptime T: type) type {
 
         fn _get(self: *const PackedImageSurface(T), index: usize) T {
             const px_int_t = @typeInfo(T).@"struct".backing_integer.?;
-            const px_int = mem.readPackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), .little);
+            const px_int = std.mem.readPackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), .little);
             return @as(T, @bitCast(px_int));
         }
 
         fn _set(self: *PackedImageSurface(T), index: usize, value: T) void {
             const px_int_t = @typeInfo(T).@"struct".backing_integer.?;
             const px_int = @as(px_int_t, @bitCast(value));
-            mem.writePackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), px_int, .little);
+            std.mem.writePackedInt(px_int_t, self.buf, index * @bitSizeOf(px_int_t), px_int, .little);
         }
 
         fn _paintPixel(buf: []u8, px: T) void {
@@ -894,7 +889,7 @@ pub fn PackedImageSurface(comptime T: type) type {
             // slice. Note that this may fill past the end of the canvas into
             // the excess in the last byte, but that's fine as this space is
             // undefined in our implementation anyway.
-            if (meta.eql(px, mem.zeroes(T))) {
+            if (std.meta.eql(px, std.mem.zeroes(T))) {
                 // Short-circuit to writing zeroes if the pixel we're setting is zero
                 @memset(buf, 0);
                 return;
@@ -927,19 +922,19 @@ test "Surface interface" {
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
-            var sfc_if = try Surface.init(surface_type, testing.allocator, 1, 1);
-            defer sfc_if.deinit(testing.allocator);
+            var sfc_if = try Surface.init(surface_type, std.testing.allocator, 1, 1);
+            defer sfc_if.deinit(std.testing.allocator);
 
             // getters
-            try testing.expectEqual(1, sfc_if.getWidth());
-            try testing.expectEqual(1, sfc_if.getHeight());
-            try testing.expectEqual(pixel_type.format, sfc_if.getFormat());
+            try std.testing.expectEqual(1, sfc_if.getWidth());
+            try std.testing.expectEqual(1, sfc_if.getHeight());
+            try std.testing.expectEqual(pixel_type.format, sfc_if.getFormat());
 
             // setters
             sfc_if.putPixel(0, 0, pix);
 
             // getPixel
-            try testing.expectEqual(pix, sfc_if.getPixel(0, 0));
+            try std.testing.expectEqual(pix, sfc_if.getPixel(0, 0));
         }
 
         // initPixel tests
@@ -948,16 +943,16 @@ test "Surface interface" {
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
-            var sfc_if = try Surface.initPixel(pix, testing.allocator, 1, 1);
-            defer sfc_if.deinit(testing.allocator);
+            var sfc_if = try Surface.initPixel(pix, std.testing.allocator, 1, 1);
+            defer sfc_if.deinit(std.testing.allocator);
 
             // getters
-            try testing.expectEqual(1, sfc_if.getWidth());
-            try testing.expectEqual(1, sfc_if.getHeight());
-            try testing.expectEqual(pixel_type.format, sfc_if.getFormat());
+            try std.testing.expectEqual(1, sfc_if.getWidth());
+            try std.testing.expectEqual(1, sfc_if.getHeight());
+            try std.testing.expectEqual(pixel_type.format, sfc_if.getFormat());
 
             // getPixel
-            try testing.expectEqual(pix, sfc_if.getPixel(0, 0));
+            try std.testing.expectEqual(pix, sfc_if.getPixel(0, 0));
         }
 
         // Bring-your-own-buffer tests
@@ -971,30 +966,30 @@ test "Surface interface" {
             var sfc_if = Surface.initBuffer(surface_type, null, &buf, 1, 1);
 
             // getters
-            try testing.expectEqual(1, sfc_if.getWidth());
-            try testing.expectEqual(1, sfc_if.getHeight());
-            try testing.expectEqual(pixel_type.format, sfc_if.getFormat());
+            try std.testing.expectEqual(1, sfc_if.getWidth());
+            try std.testing.expectEqual(1, sfc_if.getHeight());
+            try std.testing.expectEqual(pixel_type.format, sfc_if.getFormat());
 
             // setters
             sfc_if.putPixel(0, 0, pix);
 
             // getPixel
-            try testing.expectEqual(pix, sfc_if.getPixel(0, 0));
+            try std.testing.expectEqual(pix, sfc_if.getPixel(0, 0));
         }
     }
 }
 
 test "ImageSurface, init, deinit" {
     const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 10, 20, null);
-    defer sfc.deinit(testing.allocator);
+    var sfc = try sfc_T.init(std.testing.allocator, 10, 20, null);
+    defer sfc.deinit(std.testing.allocator);
 
     const expected_buffer: [200]pixel.RGBA = @splat(.{ .r = 0, .g = 0, .b = 0, .a = 0 });
-    try testing.expectEqual(20, sfc.height);
-    try testing.expectEqual(10, sfc.width);
-    try testing.expectEqual(200, sfc.buf.len);
-    try testing.expectEqual(meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
-    try testing.expectEqualSlices(
+    try std.testing.expectEqual(20, sfc.height);
+    try std.testing.expectEqual(10, sfc.width);
+    try std.testing.expectEqual(200, sfc.buf.len);
+    try std.testing.expectEqual(std.meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
+    try std.testing.expectEqualSlices(
         pixel.RGBA,
         &expected_buffer,
         sfc.buf,
@@ -1003,8 +998,8 @@ test "ImageSurface, init, deinit" {
 
 test "ImageSurface, getPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
-    defer sfc.deinit(testing.allocator);
+    var sfc = try sfc_T.init(std.testing.allocator, 20, 10, null);
+    defer sfc.deinit(std.testing.allocator);
 
     {
         // OK
@@ -1013,20 +1008,20 @@ test "ImageSurface, getPixel" {
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
         sfc.buf[y * 20 + x] = rgba;
         const expected_px: pixel.Pixel = .{ .rgba = rgba };
-        try testing.expectEqual(expected_px, sfc.getPixel(x, y));
+        try std.testing.expectEqual(expected_px, sfc.getPixel(x, y));
     }
 
     {
         // Out of bounds
-        try testing.expectEqual(null, sfc.getPixel(20, 9));
-        try testing.expectEqual(null, sfc.getPixel(19, 10));
+        try std.testing.expectEqual(null, sfc.getPixel(20, 9));
+        try std.testing.expectEqual(null, sfc.getPixel(19, 10));
     }
 }
 
 test "ImageSurface, putPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
-    var sfc = try sfc_T.init(testing.allocator, 20, 10, null);
-    defer sfc.deinit(testing.allocator);
+    var sfc = try sfc_T.init(std.testing.allocator, 20, 10, null);
+    defer sfc.deinit(std.testing.allocator);
 
     const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
     const pix_rgba = rgba.asPixel();
@@ -1037,17 +1032,17 @@ test "ImageSurface, putPixel" {
         const y: i32 = 5;
         sfc.putPixel(x, y, pix_rgba);
         sfc.buf[y * 20 + x] = rgba;
-        try testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
+        try std.testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
     }
 
     {
         // Error, out of bounds
-        const orig = try testing.allocator.dupe(pixel.RGBA, sfc.buf);
-        defer testing.allocator.free(orig);
+        const orig = try std.testing.allocator.dupe(pixel.RGBA, sfc.buf);
+        defer std.testing.allocator.free(orig);
         sfc.putPixel(20, 9, pix_rgba);
-        try testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
+        try std.testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
         sfc.putPixel(19, 10, pix_rgba);
-        try testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
+        try std.testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
     }
 
     {
@@ -1055,7 +1050,7 @@ test "ImageSurface, putPixel" {
         const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
         sfc.putPixel(1, 1, pix_rgb);
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             pixel.RGBA{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF },
             sfc.buf[21],
         );
@@ -1073,28 +1068,28 @@ test "PackedImageSurface, alpha4" {
         // In this instance, we expect [5]u8 as the buffer, with the
         // appropriate bits set, endian defined. Our padding (last 6 bits in
         // the last byte) is all zeroes.
-        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
         sfc.putPixel(0, 0, .{ .alpha4 = .{ .a = 5 } });
         sfc.putPixel(1, 1, .{ .alpha4 = .{ .a = 10 } });
         sfc.putPixel(2, 2, .{ .alpha4 = .{ .a = 15 } });
 
-        try testing.expectEqual(5, sfc.buf.len);
-        try testing.expectEqual(5, sfc.buf[0]);
-        try testing.expectEqual(0, sfc.buf[1]);
-        try testing.expectEqual(10, sfc.buf[2]);
-        try testing.expectEqual(0, sfc.buf[3]);
-        try testing.expectEqual(15, sfc.buf[4]);
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 5 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 10 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 2));
-        try testing.expectEqual(null, sfc.getPixel(0, 3));
+        try std.testing.expectEqual(5, sfc.buf.len);
+        try std.testing.expectEqual(5, sfc.buf[0]);
+        try std.testing.expectEqual(0, sfc.buf[1]);
+        try std.testing.expectEqual(10, sfc.buf[2]);
+        try std.testing.expectEqual(0, sfc.buf[3]);
+        try std.testing.expectEqual(15, sfc.buf[4]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 5 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 10 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(null, sfc.getPixel(0, 3));
     }
 
     {
@@ -1102,25 +1097,25 @@ test "PackedImageSurface, alpha4" {
         // bytes in the buffer even though the buffer is supposed to only be 18
         // bits (bounds checks are a product of HxW on part of the consumer).
         var sfc = try PackedImageSurface(pixel.Alpha4).init(
-            testing.allocator,
+            std.testing.allocator,
             3,
             3,
             .{ .a = 15 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        try testing.expectEqual(5, sfc.buf.len);
-        try testing.expectEqual(0xFF, sfc.buf[0]);
-        try testing.expectEqual(0xFF, sfc.buf[1]);
-        try testing.expectEqual(0xFF, sfc.buf[2]);
-        try testing.expectEqual(0xFF, sfc.buf[3]);
-        try testing.expectEqual(0xFF, sfc.buf[4]);
+        try std.testing.expectEqual(5, sfc.buf.len);
+        try std.testing.expectEqual(0xFF, sfc.buf[0]);
+        try std.testing.expectEqual(0xFF, sfc.buf[1]);
+        try std.testing.expectEqual(0xFF, sfc.buf[2]);
+        try std.testing.expectEqual(0xFF, sfc.buf[3]);
+        try std.testing.expectEqual(0xFF, sfc.buf[4]);
     }
 
     {
         // Downsampling
-        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 4, 4, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(std.testing.allocator, 4, 4, null);
+        defer sfc.deinit(std.testing.allocator);
         sfc.putPixel(0, 0, .{ .alpha4 = .{ .a = 15 } });
         sfc.putPixel(0, 1, .{ .alpha4 = .{ .a = 15 } });
         sfc.putPixel(0, 2, .{ .alpha4 = .{ .a = 15 } });
@@ -1130,70 +1125,70 @@ test "PackedImageSurface, alpha4" {
         sfc.putPixel(1, 2, .{ .alpha4 = .{ .a = 15 } });
         sfc.putPixel(1, 3, .{ .alpha4 = .{ .a = 15 } });
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        // try testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 7 } }, sfc.getPixel(0, 0));
+        // try std.testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 7 } }, sfc.getPixel(0, 0));
     }
 
     {
         // getStride
-        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 1, .{ .alpha4 = .{ .a = 15 } });
         const stride = sfc.getStride(0, 1, 4);
 
-        try testing.expectEqual(3, stride.alpha4.buf.len);
-        try testing.expectEqual(0xF0, stride.alpha4.buf[0]);
-        try testing.expectEqual(0x00, stride.alpha4.buf[1]);
-        try testing.expectEqual(0x00, stride.alpha4.buf[2]);
-        try testing.expectEqual(1, stride.alpha4.px_offset);
-        try testing.expectEqual(4, stride.alpha4.px_len);
+        try std.testing.expectEqual(3, stride.alpha4.buf.len);
+        try std.testing.expectEqual(0xF0, stride.alpha4.buf[0]);
+        try std.testing.expectEqual(0x00, stride.alpha4.buf[1]);
+        try std.testing.expectEqual(0x00, stride.alpha4.buf[2]);
+        try std.testing.expectEqual(1, stride.alpha4.px_offset);
+        try std.testing.expectEqual(4, stride.alpha4.px_len);
     }
 
     {
         // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
         // make sure only a very specific range of pixels were touched.
-        var sfc = try PackedImageSurface(pixel.Alpha4).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha4).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.paintStride(1, 0, 6, .{ .alpha4 = .{ .a = 15 } });
 
-        try testing.expectEqual(5, sfc.buf.len);
-        try testing.expectEqual(0xF0, sfc.buf[0]);
-        try testing.expectEqual(0xFF, sfc.buf[1]);
-        try testing.expectEqual(0xFF, sfc.buf[2]);
-        try testing.expectEqual(0x0F, sfc.buf[3]);
-        try testing.expectEqual(0x00, sfc.buf[4]);
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(5, sfc.buf.len);
+        try std.testing.expectEqual(0xF0, sfc.buf[0]);
+        try std.testing.expectEqual(0xFF, sfc.buf[1]);
+        try std.testing.expectEqual(0xFF, sfc.buf[2]);
+        try std.testing.expectEqual(0x0F, sfc.buf[3]);
+        try std.testing.expectEqual(0x00, sfc.buf[4]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha4 = .{ .a = 0 } });
         sfc.paintStride(0, 1, 6, .{ .alpha4 = .{ .a = 15 } });
-        try testing.expectEqual(0x00, sfc.buf[0]);
-        try testing.expectEqual(0xF0, sfc.buf[1]);
-        try testing.expectEqual(0xFF, sfc.buf[2]);
-        try testing.expectEqual(0xFF, sfc.buf[3]);
-        try testing.expectEqual(0x0F, sfc.buf[4]);
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(0x00, sfc.buf[0]);
+        try std.testing.expectEqual(0xF0, sfc.buf[1]);
+        try std.testing.expectEqual(0xFF, sfc.buf[2]);
+        try std.testing.expectEqual(0xFF, sfc.buf[3]);
+        try std.testing.expectEqual(0x0F, sfc.buf[4]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 15 } }, sfc.getPixel(2, 2));
     }
 }
 
@@ -1208,26 +1203,26 @@ test "PackedImageSurface, alpha2" {
         // In this instance, we expect [3]u8 as the buffer, with the
         // appropriate bits set, endian defined. Our padding (last 6 bits in
         // the last byte) is all zeroes.
-        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
         sfc.putPixel(0, 0, .{ .alpha2 = .{ .a = 1 } });
         sfc.putPixel(1, 1, .{ .alpha2 = .{ .a = 2 } });
         sfc.putPixel(2, 2, .{ .alpha2 = .{ .a = 3 } });
 
-        try testing.expectEqual(3, sfc.buf.len);
-        try testing.expectEqual(1, sfc.buf[0]);
-        try testing.expectEqual(2, sfc.buf[1]);
-        try testing.expectEqual(3, sfc.buf[2]);
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 1 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 2 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 2));
-        try testing.expectEqual(null, sfc.getPixel(0, 3));
+        try std.testing.expectEqual(3, sfc.buf.len);
+        try std.testing.expectEqual(1, sfc.buf[0]);
+        try std.testing.expectEqual(2, sfc.buf[1]);
+        try std.testing.expectEqual(3, sfc.buf[2]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 2 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(null, sfc.getPixel(0, 3));
     }
 
     {
@@ -1235,23 +1230,23 @@ test "PackedImageSurface, alpha2" {
         // bytes in the buffer even though the buffer is supposed to only be 18
         // bits (bounds checks are a product of HxW on part of the consumer).
         var sfc = try PackedImageSurface(pixel.Alpha2).init(
-            testing.allocator,
+            std.testing.allocator,
             3,
             3,
             .{ .a = 3 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        try testing.expectEqual(3, sfc.buf.len);
-        try testing.expectEqual(0xFF, sfc.buf[0]);
-        try testing.expectEqual(0xFF, sfc.buf[1]);
-        try testing.expectEqual(0xFF, sfc.buf[2]);
+        try std.testing.expectEqual(3, sfc.buf.len);
+        try std.testing.expectEqual(0xFF, sfc.buf[0]);
+        try std.testing.expectEqual(0xFF, sfc.buf[1]);
+        try std.testing.expectEqual(0xFF, sfc.buf[2]);
     }
 
     {
         // Downsampling
-        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 4, 4, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(std.testing.allocator, 4, 4, null);
+        defer sfc.deinit(std.testing.allocator);
         sfc.putPixel(0, 0, .{ .alpha2 = .{ .a = 3 } });
         sfc.putPixel(0, 1, .{ .alpha2 = .{ .a = 3 } });
         sfc.putPixel(0, 2, .{ .alpha2 = .{ .a = 3 } });
@@ -1264,66 +1259,66 @@ test "PackedImageSurface, alpha2" {
         sfc.putPixel(2, 1, .{ .alpha2 = .{ .a = 3 } });
         sfc.putPixel(2, 2, .{ .alpha2 = .{ .a = 3 } });
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        // try testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 2 } }, sfc.getPixel(0, 0));
+        // try std.testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 2 } }, sfc.getPixel(0, 0));
     }
 
     {
         // getStride
-        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 1, .{ .alpha2 = .{ .a = 2 } });
         const stride = sfc.getStride(0, 1, 6);
 
-        try testing.expectEqual(3, stride.alpha2.buf.len);
-        try testing.expectEqual(0x80, stride.alpha2.buf[0]);
-        try testing.expectEqual(0x00, stride.alpha2.buf[1]);
-        try testing.expectEqual(0x00, stride.alpha2.buf[2]);
-        try testing.expectEqual(3, stride.alpha2.px_offset);
-        try testing.expectEqual(6, stride.alpha2.px_len);
+        try std.testing.expectEqual(3, stride.alpha2.buf.len);
+        try std.testing.expectEqual(0x80, stride.alpha2.buf[0]);
+        try std.testing.expectEqual(0x00, stride.alpha2.buf[1]);
+        try std.testing.expectEqual(0x00, stride.alpha2.buf[2]);
+        try std.testing.expectEqual(3, stride.alpha2.px_offset);
+        try std.testing.expectEqual(6, stride.alpha2.px_len);
     }
 
     {
         // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
         // make sure only a very specific range of pixels were touched.
-        var sfc = try PackedImageSurface(pixel.Alpha2).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha2).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.paintStride(1, 0, 6, .{ .alpha2 = .{ .a = 3 } });
 
-        try testing.expectEqual(3, sfc.buf.len);
-        try testing.expectEqual(0xFC, sfc.buf[0]);
-        try testing.expectEqual(0x3F, sfc.buf[1]);
-        try testing.expectEqual(0x00, sfc.buf[2]);
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(3, sfc.buf.len);
+        try std.testing.expectEqual(0xFC, sfc.buf[0]);
+        try std.testing.expectEqual(0x3F, sfc.buf[1]);
+        try std.testing.expectEqual(0x00, sfc.buf[2]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha2 = .{ .a = 0 } });
         sfc.paintStride(0, 1, 6, .{ .alpha2 = .{ .a = 3 } });
-        try testing.expectEqual(0xC0, sfc.buf[0]);
-        try testing.expectEqual(0xFF, sfc.buf[1]);
-        try testing.expectEqual(0x03, sfc.buf[2]);
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(0xC0, sfc.buf[0]);
+        try std.testing.expectEqual(0xFF, sfc.buf[1]);
+        try std.testing.expectEqual(0x03, sfc.buf[2]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 3 } }, sfc.getPixel(2, 2));
     }
 }
 
@@ -1338,25 +1333,25 @@ test "PackedImageSurface, alpha1" {
         // In this instance, we expect [2]u8 as the buffer, with the
         // appropriate bits set in the first index, and 1 in the LSB
         // (endian-dependent) in the second index, with the rest being zeroes.
-        var sfc = try PackedImageSurface(pixel.Alpha1).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
         sfc.putPixel(0, 0, .{ .alpha1 = .{ .a = 1 } });
         sfc.putPixel(1, 1, .{ .alpha1 = .{ .a = 1 } });
         sfc.putPixel(2, 2, .{ .alpha1 = .{ .a = 1 } });
 
-        try testing.expectEqual(2, sfc.buf.len);
-        try testing.expectEqual(0b10001, sfc.buf[0]);
-        try testing.expectEqual(1, sfc.buf[1]);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
-        try testing.expectEqual(null, sfc.getPixel(0, 3));
+        try std.testing.expectEqual(2, sfc.buf.len);
+        try std.testing.expectEqual(0b10001, sfc.buf[0]);
+        try std.testing.expectEqual(1, sfc.buf[1]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(null, sfc.getPixel(0, 3));
     }
 
     {
@@ -1364,117 +1359,117 @@ test "PackedImageSurface, alpha1" {
         // bytes in the buffer even though the buffer is supposed to only be 9
         // bits (bounds checks are a product of HxW on part of the consumer).
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             3,
             3,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        try testing.expectEqual(2, sfc.buf.len);
-        try testing.expectEqual(0xFF, sfc.buf[0]);
-        try testing.expectEqual(0xFF, sfc.buf[1]);
+        try std.testing.expectEqual(2, sfc.buf.len);
+        try std.testing.expectEqual(0xFF, sfc.buf[0]);
+        try std.testing.expectEqual(0xFF, sfc.buf[1]);
     }
 
     {
         // Downsampling. Note that we don't really use downsampling on Alpha1
         // as it's kind of pointless (a pixel is either just off or on).
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             4,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        // try testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        // try std.testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
 
     {
         // Downsampling with a pixel off (will render the whole downsampled
         // pixel off as per the Alpha1 implementation).
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             4,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 0, .{ .alpha1 = .{ .a = 0 } });
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        // try testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        // try std.testing.expectEqual(1, sfc.buf.len); FIXME this broke at some zig-0.14.0
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
     }
 
     {
         // getStride
-        var sfc = try PackedImageSurface(pixel.Alpha1).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 2, .{ .alpha1 = .{ .a = 1 } });
         const stride = sfc.getStride(0, 2, 3);
 
-        try testing.expectEqual(2, stride.alpha1.buf.len);
-        try testing.expectEqual(0x40, stride.alpha1.buf[0]);
-        try testing.expectEqual(0x00, stride.alpha1.buf[1]);
-        try testing.expectEqual(6, stride.alpha1.px_offset);
-        try testing.expectEqual(3, stride.alpha1.px_len);
+        try std.testing.expectEqual(2, stride.alpha1.buf.len);
+        try std.testing.expectEqual(0x40, stride.alpha1.buf[0]);
+        try std.testing.expectEqual(0x00, stride.alpha1.buf[1]);
+        try std.testing.expectEqual(6, stride.alpha1.px_offset);
+        try std.testing.expectEqual(3, stride.alpha1.px_len);
     }
 
     {
         // paintStride, testing contiguous ranges. Unlike paintPixel, we want to
         // make sure only a very specific range of pixels were touched.
-        var sfc = try PackedImageSurface(pixel.Alpha1).init(testing.allocator, 3, 3, null);
-        defer sfc.deinit(testing.allocator);
+        var sfc = try PackedImageSurface(pixel.Alpha1).init(std.testing.allocator, 3, 3, null);
+        defer sfc.deinit(std.testing.allocator);
 
         sfc.paintStride(1, 0, 6, .{ .alpha1 = .{ .a = 1 } });
 
-        try testing.expectEqual(2, sfc.buf.len);
-        try testing.expectEqual(0b1111110, sfc.buf[0]);
-        try testing.expectEqual(0, sfc.buf[1]);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(2, sfc.buf.len);
+        try std.testing.expectEqual(0b1111110, sfc.buf[0]);
+        try std.testing.expectEqual(0, sfc.buf[1]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha1 = .{ .a = 0 } });
         sfc.paintStride(0, 1, 6, .{ .alpha1 = .{ .a = 1 } });
-        try testing.expectEqual(0b11111000, sfc.buf[0]);
-        try testing.expectEqual(1, sfc.buf[1]);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 0));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 2));
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
+        try std.testing.expectEqual(0b11111000, sfc.buf[0]);
+        try std.testing.expectEqual(1, sfc.buf[1]);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(1, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 0));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 1));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(1, 2));
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(2, 2));
     }
 }
 
 test "ImageSurface, dimension validation" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         var sfc = try ImageSurface(pixel.RGB).init(alloc, 1, 1, .{ .r = 255, .g = 255, .b = 255 });
         defer sfc.deinit(alloc);
     }
     {
-        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
+        try std.testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
             alloc,
             0,
             1,
@@ -1482,7 +1477,7 @@ test "ImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
+        try std.testing.expectError(error.InvalidWidth, ImageSurface(pixel.RGB).init(
             alloc,
             -1,
             1,
@@ -1490,7 +1485,7 @@ test "ImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
+        try std.testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
             alloc,
             1,
             0,
@@ -1498,7 +1493,7 @@ test "ImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
+        try std.testing.expectError(error.InvalidHeight, ImageSurface(pixel.RGB).init(
             alloc,
             1,
             -1,
@@ -1508,13 +1503,13 @@ test "ImageSurface, dimension validation" {
 }
 
 test "PackedImageSurface, dimension validation" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         var sfc = try PackedImageSurface(pixel.Alpha1).init(alloc, 1, 1, .{ .a = 1 });
         defer sfc.deinit(alloc);
     }
     {
-        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
+        try std.testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
             alloc,
             0,
             1,
@@ -1522,7 +1517,7 @@ test "PackedImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
+        try std.testing.expectError(error.InvalidWidth, ImageSurface(pixel.Alpha1).init(
             alloc,
             -1,
             1,
@@ -1530,7 +1525,7 @@ test "PackedImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
+        try std.testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
             alloc,
             1,
             0,
@@ -1538,7 +1533,7 @@ test "PackedImageSurface, dimension validation" {
         ));
     }
     {
-        try testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
+        try std.testing.expectError(error.InvalidHeight, ImageSurface(pixel.Alpha1).init(
             alloc,
             1,
             -1,
@@ -1551,66 +1546,66 @@ test "ImageSurface.downsample, edge cases" {
     {
         // Width not divisible by 4
         var sfc = try ImageSurface(pixel.Alpha8).init(
-            testing.allocator,
+            std.testing.allocator,
             7,
             4,
             .{ .a = 255 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
     }
     {
         // Height not divisible by 4
         var sfc = try ImageSurface(pixel.Alpha8).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             7,
             .{ .a = 255 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
     }
     {
         // Width too small
         var sfc = try ImageSurface(pixel.Alpha8).init(
-            testing.allocator,
+            std.testing.allocator,
             3,
             4,
             .{ .a = 255 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(3, sfc.width);
-        try testing.expectEqual(4, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(3, sfc.width);
+        try std.testing.expectEqual(4, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
     }
     {
         // Height too small
         var sfc = try ImageSurface(pixel.Alpha8).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             3,
             .{ .a = 255 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(4, sfc.width);
-        try testing.expectEqual(3, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(4, sfc.width);
+        try std.testing.expectEqual(3, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha8 = .{ .a = 255 } }, sfc.getPixel(0, 0));
     }
 }
 
@@ -1618,71 +1613,71 @@ test "PackedImageSurface.downsample, edge cases" {
     {
         // Width not divisible by 4
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             7,
             4,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
     {
         // Height not divisible by 4
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             7,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(1, sfc.width);
-        try testing.expectEqual(1, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(1, sfc.width);
+        try std.testing.expectEqual(1, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
     {
         // Width too small
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             3,
             4,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(3, sfc.width);
-        try testing.expectEqual(4, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(3, sfc.width);
+        try std.testing.expectEqual(4, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
     {
         // Height too small
         var sfc = try PackedImageSurface(pixel.Alpha1).init(
-            testing.allocator,
+            std.testing.allocator,
             4,
             3,
             .{ .a = 1 },
         );
-        defer sfc.deinit(testing.allocator);
+        defer sfc.deinit(std.testing.allocator);
 
-        sfc.downsample(testing.allocator);
+        sfc.downsample(std.testing.allocator);
 
-        try testing.expectEqual(4, sfc.width);
-        try testing.expectEqual(3, sfc.height);
-        try testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
+        try std.testing.expectEqual(4, sfc.width);
+        try std.testing.expectEqual(3, sfc.height);
+        try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 1 } }, sfc.getPixel(0, 0));
     }
 }
 
 test "getStride, OOB" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     const info = @typeInfo(SurfaceType).@"enum";
     inline for (info.field_names, info.field_values) |f_name, f_value| {
         var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
@@ -1691,13 +1686,13 @@ test "getStride, OOB" {
             inline for (.{ -10, 5, 20 }) |y| {
                 const got = sfc.getStride(x, y, 2);
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
-                    testing.expectEqual(0, got.pxLen()) catch |err| {
-                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
+                    std.testing.expectEqual(0, got.pxLen()) catch |err| {
+                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 } else {
-                    testing.expectEqual(2, got.pxLen()) catch |err| {
-                        debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
+                    std.testing.expectEqual(2, got.pxLen()) catch |err| {
+                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 }
@@ -1707,7 +1702,7 @@ test "getStride, OOB" {
 }
 
 test "compositeStride, simple test w/OOB" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     const info = @typeInfo(SurfaceType).@"enum";
     inline for (info.field_values) |f_value| {
         var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
@@ -1733,13 +1728,13 @@ test "compositeStride, simple test w/OOB" {
                                 sfc.getPixel(want_x, want_y).?,
                             );
                             if (comptime hasField(sfc_type_enum.toPixelType(), "_padding")) got._padding = 0;
-                            testing.expectEqualDeep(
+                            std.testing.expectEqualDeep(
                                 sfc_type_enum.toPixelType().fromPixel(
                                     .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
                                 ),
                                 got,
                             ) catch |err| {
-                                debug.print(
+                                std.debug.print(
                                     "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
                                     .{ x, y, want_x, want_y },
                                 );
@@ -1761,11 +1756,11 @@ test "compositeStride, simple test w/OOB" {
                                 .fromPixel(.{ .rgba = .{ .r = 255, .g = 255, .b = 255, .a = 255 } })
                             else
                                 .fromPixel(.{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } });
-                            testing.expectEqualDeep(
+                            std.testing.expectEqualDeep(
                                 want,
                                 got,
                             ) catch |err| {
-                                debug.print(
+                                std.debug.print(
                                     "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
                                     .{ x, y, want_x, want_y },
                                 );

@@ -4,15 +4,13 @@
 //! Case: Render a smile (similar to 001_smile_rgb.zig and 002_smile_rgba.zig),
 //! but use an alpha mask as the template image instead of iterating over the
 //! image data every single time. Demonstrates basic composting onto a surface.
-const Io = @import("std").Io;
-const debug = @import("std").debug;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "023_smile_alpha_mask";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const w = image.width * 2 + 10;
     const h = image.height * 2 + 10;

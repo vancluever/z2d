@@ -1,9 +1,5 @@
 //! Utility package for miscellaneous functions.
-
-const debug = @import("std").debug;
-const lang = @import("std").lang;
-const mem = @import("std").mem;
-const Io = @import("std").Io;
+const std = @import("std");
 
 const colorpkg = @import("../color.zig");
 
@@ -17,7 +13,7 @@ const vector_length = @import("../z2d.zig").vector_length;
 pub fn runCases(name: []const u8, cases: anytype, comptime f: *const fn (case: anytype) TestingError!void) !void {
     for (cases) |tc| {
         f(tc) catch |err| {
-            debug.print("FAIL: {s}/{s}\n", .{ name, tc.name });
+            std.debug.print("FAIL: {s}/{s}\n", .{ name, tc.name });
             return err;
         };
     }
@@ -42,7 +38,7 @@ pub fn vectorize(comptime T: type) type {
     const info = @typeInfo(T).@"struct";
     const num = info.field_names.len;
     var field_types: [num]type = undefined;
-    var field_attrs: [num]lang.Type.Struct.FieldAttributes = undefined;
+    var field_attrs: [num]std.lang.Type.Struct.FieldAttributes = undefined;
     for (info.field_types, 0..) |f_type, i| {
         field_types[i] = @Vector(vector_length, f_type);
         field_attrs[i] = .{
@@ -94,7 +90,7 @@ pub const zero_color_vec: [vector_length]colorpkg.Color = zero_color_vec: {
 /// a struct.
 pub fn hasField(comptime T: type, field_name: []const u8) bool {
     inline for (@typeInfo(T).@"struct".field_names) |f_name| {
-        if (mem.eql(u8, f_name, field_name)) {
+        if (std.mem.eql(u8, f_name, field_name)) {
             return true;
         }
     }
@@ -102,25 +98,25 @@ pub fn hasField(comptime T: type, field_name: []const u8) bool {
 }
 
 /// Pulled from old stdlib as this function has been removed.
-pub fn readerInt(reader: *Io.Reader, comptime T: type, endian: lang.Endian) Io.Reader.Error!T {
+pub fn readerInt(reader: *std.Io.Reader, comptime T: type, endian: std.lang.Endian) std.Io.Reader.Error!T {
     const bytes = try readerBytesNoEof(reader, @divExact(@typeInfo(T).int.bits, 8));
-    return mem.readInt(T, &bytes, endian);
+    return std.mem.readInt(T, &bytes, endian);
 }
 
 /// Pulled from old stdlib as this function has been removed.
-pub fn readerByteSigned(reader: *Io.Reader) Io.Reader.Error!i8 {
+pub fn readerByteSigned(reader: *std.Io.Reader) std.Io.Reader.Error!i8 {
     return @as(i8, @bitCast(try readerByte(reader)));
 }
 
 /// Pulled from old stdlib as this function has been removed.
-pub fn readerByte(reader: *Io.Reader) Io.Reader.Error!u8 {
+pub fn readerByte(reader: *std.Io.Reader) std.Io.Reader.Error!u8 {
     var result: [1]u8 = undefined;
     try reader.readSliceAll(&result);
     return result[0];
 }
 
 /// Pulled from old stdlib as this function has been removed.
-pub fn readerSkipBytes(reader: *Io.Reader, num_bytes: u64) Io.Reader.Error!void {
+pub fn readerSkipBytes(reader: *std.Io.Reader, num_bytes: u64) std.Io.Reader.Error!void {
     const buf_size = 512;
 
     var buf: [buf_size]u8 = undefined;
@@ -134,14 +130,14 @@ pub fn readerSkipBytes(reader: *Io.Reader, num_bytes: u64) Io.Reader.Error!void 
 }
 
 /// Pulled from old stdlib as this function has been removed.
-fn readerBytesNoEof(reader: *Io.Reader, comptime num_bytes: usize) Io.Reader.Error![num_bytes]u8 {
+fn readerBytesNoEof(reader: *std.Io.Reader, comptime num_bytes: usize) std.Io.Reader.Error![num_bytes]u8 {
     var bytes: [num_bytes]u8 = undefined;
     try reader.readSliceAll(&bytes);
     return bytes;
 }
 
 /// Changes the seek position of the supplied reader, returning an error if it is past the end.
-pub fn readerSeek(reader: *Io.Reader, seek: usize) error{InvalidSeek}!void {
+pub fn readerSeek(reader: *std.Io.Reader, seek: usize) error{InvalidSeek}!void {
     if (seek > reader.end) return error.InvalidSeek;
     reader.seek = seek;
 }

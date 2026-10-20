@@ -21,9 +21,6 @@
 const Face = @This();
 
 const std = @import("std");
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
 
 const options = @import("../../options.zig");
 const nodepkg = @import("../path_nodes.zig");
@@ -115,7 +112,7 @@ fn _init(p0: Point, p1: Point, dev_slope: Slope, thickness: f64, ctm: Transforma
 }
 
 pub fn intersect(in: Face, out: Face, clockwise: bool) Point {
-    debug.assert(in.dev_slope.compare(out.dev_slope) != 0);
+    std.debug.assert(in.dev_slope.compare(out.dev_slope) != 0);
 
     // Intersection taken from Cairo's miter join in
     // cairo-path-stroke-polygon.c et al.
@@ -259,7 +256,7 @@ fn capRound(
     // dealing with a 180 degree joint. So, treat it as if there
     // were two lines going in exactly opposite directions, i.e., flip the
     // incoming slope for the outgoing one.
-    debug.assert(pen != null);
+    std.debug.assert(pen != null);
     var vit = pen.?.vertexIteratorFor(
         self.dev_slope,
         .{ .dx = -self.dev_slope.dx, .dy = -self.dev_slope.dy },

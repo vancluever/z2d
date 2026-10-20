@@ -3,14 +3,13 @@
 
 //! Case: Ensures that certain extents don't get clipped on the larger
 //! y-boundary.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "039_stroke_paint_extent_dontclip";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 50;
     const height = 80;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

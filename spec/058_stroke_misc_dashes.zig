@@ -3,15 +3,13 @@
 
 //! Case: Renders miscellaneous dashed lines, covering some simple and edge
 //! cases.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
-const math = @import("std").math;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "058_stroke_misc_dashes";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
     const height = 2000;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -50,7 +48,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     const diameter = 200;
     context.translate(x_offset + diameter / 2, y_offset + diameter / 2);
     context.scale(diameter / 2, diameter / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     context.setIdentity();
     try context.stroke();
     context.resetPath();
@@ -61,7 +59,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     y_offset = 350;
     context.translate(x_offset + diameter / 2, y_offset + diameter / 2);
     context.scale(diameter / 2, diameter / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     try context.closePath();
     context.setIdentity();
     context.setSourceToPixel(.{ .rgb = .{ .r = 0xAA, .g = 0xAA, .b = 0xAA } });
@@ -80,7 +78,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     const y_diameter = 200;
     context.translate(x_offset + x_diameter / 2, y_offset + y_diameter / 2);
     context.scale(x_diameter / 2, y_diameter / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     context.setIdentity();
     try context.stroke();
     context.resetPath();
@@ -95,7 +93,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     y_offset = 650;
     context.translate(x_offset + x_diameter / 2, y_offset + y_diameter / 2);
     context.scale(x_diameter / 2, y_diameter / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     context.setLineWidth(lw: {
         var ux = ellipse_line_width;
         var uy = ellipse_line_width;

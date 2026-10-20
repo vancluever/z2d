@@ -1,7 +1,4 @@
-const debug = @import("std").debug;
-const heap = @import("std").heap;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const compositor = @import("../../compositor.zig");
 const pixel = @import("../../pixel.zig");
@@ -12,10 +9,10 @@ const Surface = @import("../../surface.zig").Surface;
 const SurfaceType = @import("../../surface.zig").SurfaceType;
 const Polygon = @import("../tess/Polygon.zig");
 
-pub const Error = Surface.Error || mem.Allocator.Error;
+pub const Error = Surface.Error || std.mem.Allocator.Error;
 
 pub fn run(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     polygons: Polygon,
@@ -35,7 +32,7 @@ pub fn run(
     }
 
     // This math expects integer scaling.
-    debug.assert(@floor(scale) == scale);
+    std.debug.assert(@floor(scale) == scale);
     const i_scale: i32 = @intFromFloat(scale);
 
     // This is the area on the original image which our polygons may touch (in
@@ -65,10 +62,10 @@ pub fn run(
         // edge cases and unnecessary work.
         const target_width_scaled: i32 = surface.getWidth() * i_scale;
         const target_height_scaled: i32 = surface.getHeight() * i_scale;
-        const box_x0: i32 = math.clamp(x0 * i_scale, 0, target_width_scaled - 1);
-        const box_y0: i32 = math.clamp(y0 * i_scale, 0, target_height_scaled - 1);
-        const box_x1: i32 = math.clamp(x1 * i_scale, box_x0, target_width_scaled - 1);
-        const box_y1: i32 = math.clamp(y1 * i_scale, box_y0, target_height_scaled - 1);
+        const box_x0: i32 = std.math.clamp(x0 * i_scale, 0, target_width_scaled - 1);
+        const box_y0: i32 = std.math.clamp(y0 * i_scale, 0, target_height_scaled - 1);
+        const box_x1: i32 = std.math.clamp(x1 * i_scale, box_x0, target_width_scaled - 1);
+        const box_y1: i32 = std.math.clamp(y1 * i_scale, box_y0, target_height_scaled - 1);
         const mask_width: i32 = (box_x1 + 1) - box_x0;
         const mask_height: i32 = (box_y1 + 1) - box_y0;
 
@@ -143,7 +140,7 @@ pub fn run(
                     // We're past the mask draw area and can stop drawing.
                     break;
                 }
-                const end_x: i32 = math.clamp(
+                const end_x: i32 = std.math.clamp(
                     filtered_edge_set[edge_pair_start + 1] - box_x0,
                     start_x,
                     mask_width,

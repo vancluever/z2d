@@ -3,15 +3,13 @@
 
 //! Case: Renders ellipses (fill and stroke) using arc commands and
 //! transformation matrices.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "042_arc_ellipses";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -52,7 +50,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     // as the third, but first rotate 45 degrees (at 300, 0)
     saved_ctm = context.getTransformation();
     saved_line_width = context.getLineWidth();
-    context.rotate(math.pi / 4.0);
+    context.rotate(std.math.pi / 4.0);
     try ellipse(&context, 300, 0, 50, 100, false);
     context.setLineWidth(lw: {
         var ux = saved_line_width;
@@ -75,7 +73,7 @@ fn ellipse(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64, reset_ctm: b
     context.resetPath();
     context.translate(x + rx / 2, y + ry / 2);
     context.scale(rx / 2, ry / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     if (reset_ctm) context.setTransformation(saved_ctm);
     try context.closePath();
 }

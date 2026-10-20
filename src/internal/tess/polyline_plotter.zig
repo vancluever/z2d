@@ -8,9 +8,6 @@
 //! plotting a polyline, not edges), and the path can be open, not just
 //! closed.
 const std = @import("std");
-const debug = @import("std").debug;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const nodepkg = @import("../path_nodes.zig");
 
@@ -23,10 +20,10 @@ const Slope = @import("Slope.zig");
 const Spline = @import("Spline.zig");
 
 const InternalError = @import("../InternalError.zig").InternalError;
-pub const Error = InternalError || mem.Allocator.Error;
+pub const Error = InternalError || std.mem.Allocator.Error;
 
 pub fn plot(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     tolerance: f64,
     dashes: []const f64,
@@ -144,7 +141,7 @@ pub fn plot(
 }
 
 const SplinePlotterCtx = struct {
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     contour: *Contour,
     points: *PointBuffer,
     dasher: ?*Dasher,
@@ -183,14 +180,14 @@ const SplinePlotterCtx = struct {
 };
 
 fn dashedLineTo(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     p0: Point,
     p1: Point,
     dasher: *Dasher,
     points: *PointBuffer,
     contour: *Contour,
     result: *Contour.List,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     var slope = Slope.init(p0, p1);
     const total_len = slope.normalize();
     var remaining_len = total_len;

@@ -1,12 +1,6 @@
 const Polygon = @This();
 
 const std = @import("std");
-const debug = @import("std").debug;
-const heap = @import("std").heap;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const stdSort = @import("std").sort;
-const testing = @import("std").testing;
 
 const FillRule = @import("../../options.zig").FillRule;
 const InternalError = @import("../InternalError.zig").InternalError;
@@ -53,20 +47,20 @@ extent_bottom: f64 = 0.0,
 extent_left: f64 = 0.0,
 extent_right: f64 = 0.0,
 
-pub fn deinit(self: *Polygon, alloc: mem.Allocator) void {
+pub fn deinit(self: *Polygon, alloc: std.mem.Allocator) void {
     self.edges.deinit(alloc);
     self.* = undefined;
 }
 
 pub fn addEdge(
     self: *Polygon,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     p0: Point,
     p1: Point,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     // assert for NaNs
-    debug.assert(math.isFinite(p0.x) and math.isFinite(p0.y));
-    debug.assert(math.isFinite(p1.x) and math.isFinite(p1.y));
+    std.debug.assert(std.math.isFinite(p0.x) and std.math.isFinite(p0.y));
+    std.debug.assert(std.math.isFinite(p1.x) and std.math.isFinite(p1.y));
     const p0_scaled: Point = .{ .x = p0.x * self.scale, .y = p0.y * self.scale };
     const p1_scaled: Point = .{ .x = p1.x * self.scale, .y = p1.y * self.scale };
 
@@ -114,9 +108,9 @@ pub fn addEdge(
 /// after it if that's the intent.
 pub fn addEdgesFromContour(
     self: *Polygon,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     contour: Contour,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     var node_ = contour.corners.first;
     var initial_point_: ?Point = null;
     var last_point_: ?Point = null;
@@ -140,13 +134,13 @@ pub fn addEdgesFromContour(
 /// (0,0) with the width box_width and the height box_height. Used to check if
 /// we should actually proceed with drawing.
 pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) bool {
-    if (!math.isFinite(self.extent_left) or !math.isFinite(self.extent_top) or
-        !math.isFinite(self.extent_right) or !math.isFinite(self.extent_bottom))
+    if (!std.math.isFinite(self.extent_left) or !std.math.isFinite(self.extent_top) or
+        !std.math.isFinite(self.extent_right) or !std.math.isFinite(self.extent_bottom))
     {
         @panic("invalid polygon dimensions. this is a bug, please report it");
     }
 
-    if (!math.isFinite(scale) or scale < 1.0) {
+    if (!std.math.isFinite(scale) or scale < 1.0) {
         @panic("invalid value for scale. this is a bug, please report it");
     }
 
@@ -205,7 +199,7 @@ pub const WorkingEdgeSet = struct {
     edges: []Edge,
     x_values: []i32,
 
-    pub fn init(alloc: mem.Allocator, polygon: *const Polygon) mem.Allocator.Error!WorkingEdgeSet {
+    pub fn init(alloc: std.mem.Allocator, polygon: *const Polygon) std.mem.Allocator.Error!WorkingEdgeSet {
         // Allocate our scratch space for the whole of the length of the
         // polygon edges. Note that we re-slice this often, so the source of
         // truth for the length here is the actual number of polygon edges,
@@ -221,7 +215,7 @@ pub const WorkingEdgeSet = struct {
         };
     }
 
-    pub fn deinit(self: *WorkingEdgeSet, alloc: mem.Allocator) void {
+    pub fn deinit(self: *WorkingEdgeSet, alloc: std.mem.Allocator) void {
         // Reset the x-value scratch space to the full edge length before
         // freeing.
         self.x_values.len = self.polygon.edges.items.len;
@@ -231,14 +225,14 @@ pub const WorkingEdgeSet = struct {
 
     pub fn breakpoints(
         self: *WorkingEdgeSet,
-        alloc: mem.Allocator,
-    ) mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
+        alloc: std.mem.Allocator,
+    ) std.mem.Allocator.Error!std.ArrayListUnmanaged(i32) {
         const InsertFn = struct {
             fn f(
-                insert_alloc: mem.Allocator,
+                insert_alloc: std.mem.Allocator,
                 insert_list: *std.ArrayListUnmanaged(i32),
                 insert_value: i32,
-            ) mem.Allocator.Error!void {
+            ) std.mem.Allocator.Error!void {
                 if (insert_list.items.len == 0) return insert_list.append(insert_alloc, insert_value);
 
                 var low: usize = 0;
@@ -284,7 +278,7 @@ pub const WorkingEdgeSet = struct {
             if (self.polygon.edges.items[from].top() < line_y_middle and
                 self.polygon.edges.items[from].bottom() >= line_y_middle)
             {
-                if (from != to) mem.swap(
+                if (from != to) std.mem.swap(
                     Edge,
                     &self.polygon.edges.items[to],
                     &self.polygon.edges.items[from],
@@ -296,7 +290,7 @@ pub const WorkingEdgeSet = struct {
         self.edges = self.polygon.edges.items[0..to];
         self.x_values.len = to;
 
-        debug.assert(self.edges.len == self.x_values.len);
+        std.debug.assert(self.edges.len == self.x_values.len);
     }
 
     pub fn inc(self: *WorkingEdgeSet, y: i32) void {
@@ -315,12 +309,12 @@ pub const WorkingEdgeSet = struct {
             }
 
             pub fn swap(ctx: @This(), a: usize, b: usize) void {
-                mem.swap(Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
-                mem.swap(i32, &ctx.s.x_values[a], &ctx.s.x_values[b]);
+                std.mem.swap(Edge, &ctx.s.edges[a], &ctx.s.edges[b]);
+                std.mem.swap(i32, &ctx.s.x_values[a], &ctx.s.x_values[b]);
             }
         };
 
-        stdSort.pdqContext(0, self.x_values.len, Context{ .s = self });
+        std.sort.pdqContext(0, self.x_values.len, Context{ .s = self });
     }
 
     pub fn filter(self: *WorkingEdgeSet, fill_rule: FillRule) []i32 {
@@ -370,7 +364,7 @@ pub const Contour = struct {
     corners: std.DoublyLinkedList = .{},
     scale: f64,
 
-    pub fn deinit(self: *Contour, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Contour, alloc: std.mem.Allocator) void {
         var node_ = self.corners.first;
         while (node_) |node| {
             node_ = node.next;
@@ -383,11 +377,11 @@ pub const Contour = struct {
     /// plotted before it.
     pub fn plot(
         self: *Contour,
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         point: Point,
         before_: ?*std.DoublyLinkedList.Node,
-    ) mem.Allocator.Error!void {
-        debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
+    ) std.mem.Allocator.Error!void {
+        std.debug.assert(std.math.isFinite(point.x) and std.math.isFinite(point.y));
         const scaled: Point = .{
             .x = point.x * self.scale,
             .y = point.y * self.scale,
@@ -403,8 +397,8 @@ pub const Contour = struct {
 
     /// Like plot, but adds points in the reverse direction (i.e., at the start of
     /// the polygon instead of the end.
-    pub fn plotReverse(self: *Contour, alloc: mem.Allocator, point: Point) mem.Allocator.Error!void {
-        debug.assert(math.isFinite(point.x) and math.isFinite(point.y));
+    pub fn plotReverse(self: *Contour, alloc: std.mem.Allocator, point: Point) std.mem.Allocator.Error!void {
+        std.debug.assert(std.math.isFinite(point.x) and std.math.isFinite(point.y));
         const scaled: Point = .{
             .x = point.x * self.scale,
             .y = point.y * self.scale,
@@ -434,7 +428,7 @@ pub const Contour = struct {
 
         pub const empty: List = .{ .list = .empty };
 
-        pub fn deinit(self: *List, alloc: mem.Allocator) void {
+        pub fn deinit(self: *List, alloc: std.mem.Allocator) void {
             for (self.list.items) |*c| {
                 c.deinit(alloc);
             }
@@ -443,7 +437,7 @@ pub const Contour = struct {
             self.* = undefined;
         }
 
-        pub fn append(self: *List, alloc: mem.Allocator, contour: Contour) mem.Allocator.Error!void {
+        pub fn append(self: *List, alloc: std.mem.Allocator, contour: Contour) std.mem.Allocator.Error!void {
             try self.list.append(alloc, contour);
         }
     };
@@ -800,7 +794,7 @@ test "Polygon.inBox" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(
+            try std.testing.expectEqualDeep(
                 tc.expected,
                 tc.polygon.inBox(tc.scale, tc.box_height, tc.box_width),
             );

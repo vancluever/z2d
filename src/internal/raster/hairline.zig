@@ -12,8 +12,7 @@
 //!
 //! Note that these technically don't "raster", but we've put them in this
 //! context for a lack of a better name.
-const math = @import("std").math;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const AntiAliasMode = @import("../../options.zig").AntiAliasMode;
 const Surface = @import("../../surface.zig").Surface;
@@ -121,8 +120,8 @@ fn drawLine(opts: DrawOptions, x0: i32, y0: i32, x1: i32, y1: i32) void {
 }
 
 fn drawHorizontal(opts: DrawOptions, x0: i32, x1: i32, y: i32) void {
-    const start_x: i32 = math.clamp(@min(x0, x1), 0, opts.surface.getWidth() - 1);
-    const end_x: i32 = math.clamp(@max(x0, x1), 0, opts.surface.getWidth() - 1);
+    const start_x: i32 = std.math.clamp(@min(x0, x1), 0, opts.surface.getWidth() - 1);
+    const end_x: i32 = std.math.clamp(@max(x0, x1), 0, opts.surface.getWidth() - 1);
     const len: i32 = end_x - start_x + 1;
     if (len > 0) {
         compositeOpaque(
@@ -138,8 +137,8 @@ fn drawHorizontal(opts: DrawOptions, x0: i32, x1: i32, y: i32) void {
 }
 
 fn drawVertical(opts: DrawOptions, x: i32, y0: i32, y1: i32) void {
-    const start_y: u32 = @intCast(math.clamp(@min(y0, y1), 0, opts.surface.getHeight() - 1));
-    const end_y: u32 = @intCast(math.clamp(@max(y0, y1), 0, opts.surface.getHeight() - 1));
+    const start_y: u32 = @intCast(std.math.clamp(@min(y0, y1), 0, opts.surface.getHeight() - 1));
+    const end_y: u32 = @intCast(std.math.clamp(@max(y0, y1), 0, opts.surface.getHeight() - 1));
 
     for (start_y..end_y + 1) |y_u| {
         const y_i: i32 = @intCast(y_u);
@@ -388,7 +387,7 @@ fn errInc(a: i32, b: i32) u16 {
         // Guards against dx == dy. Note that this case should always be
         // fast-pathed outside of the Wu algorithm (or even Bresenham, for that
         // matter).
-        return math.maxInt(u16);
+        return std.math.maxInt(u16);
     }
     const c: u32 = @as(u32, @intCast(a)) << 16;
     const d: u32 = @intCast(b);

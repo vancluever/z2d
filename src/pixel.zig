@@ -3,11 +3,7 @@
 
 //! Pixel types represented by the library.
 
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const meta = @import("std").meta;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const compositor = @import("compositor.zig");
 
@@ -375,10 +371,10 @@ fn RGBA_T(T: type) type {
 
     return struct {
         fn fromClamped(r: f64, g: f64, b: f64, a: f64) T {
-            const rc = math.clamp(r, 0, 1);
-            const gc = math.clamp(g, 0, 1);
-            const bc = math.clamp(b, 0, 1);
-            const ac = math.clamp(a, 0, 1);
+            const rc = std.math.clamp(r, 0, 1);
+            const gc = std.math.clamp(g, 0, 1);
+            const bc = std.math.clamp(b, 0, 1);
+            const ac = std.math.clamp(a, 0, 1);
             if (is_rgba) {
                 const result: T = .{
                     .r = @intFromFloat(@round(255.0 * rc)),
@@ -433,7 +429,7 @@ fn RGBA_T(T: type) type {
         }
 
         fn average(ps: []const T) T {
-            debug.assert(ps.len <= 256);
+            std.debug.assert(ps.len <= 256);
             if (ps.len == 0) return if (is_rgba)
                 .{ .r = 0, .g = 0, .b = 0, .a = 0 }
             else
@@ -481,7 +477,7 @@ fn RGBA_T(T: type) type {
         }
 
         fn multiply(self: T) T {
-            debug.assert(is_rgba);
+            std.debug.assert(is_rgba);
             return .{
                 .r = @intCast(@as(u16, self.r) * self.a / 255),
                 .g = @intCast(@as(u16, self.g) * self.a / 255),
@@ -491,7 +487,7 @@ fn RGBA_T(T: type) type {
         }
 
         fn demultiply(self: T) T {
-            debug.assert(is_rgba);
+            std.debug.assert(is_rgba);
             if (self.a == 0) return .{ .r = 0, .g = 0, .b = 0, .a = 0 };
             return .{
                 .r = @intCast(@as(u16, self.r) * 255 / self.a),
@@ -502,7 +498,7 @@ fn RGBA_T(T: type) type {
         }
 
         fn canDemultiply(self: T) bool {
-            debug.assert(is_rgba);
+            std.debug.assert(is_rgba);
             if (self.a == 0) return true;
             inline for (.{ "r", "g", "b" }) |f| {
                 if (@as(u16, @field(self, f)) * 255 / self.a > 255) {
@@ -528,10 +524,10 @@ pub const Alpha2 = Alpha(.alpha2);
 pub const Alpha1 = Alpha(.alpha1);
 
 comptime {
-    debug.assert(@bitSizeOf(Alpha8) == 8);
-    debug.assert(@bitSizeOf(Alpha4) == 4);
-    debug.assert(@bitSizeOf(Alpha2) == 2);
-    debug.assert(@bitSizeOf(Alpha1) == 1);
+    std.debug.assert(@bitSizeOf(Alpha8) == 8);
+    std.debug.assert(@bitSizeOf(Alpha4) == 4);
+    std.debug.assert(@bitSizeOf(Alpha2) == 2);
+    std.debug.assert(@bitSizeOf(Alpha1) == 1);
 }
 
 /// Returns a generated alpha-channel pixel type.
@@ -631,7 +627,7 @@ fn Alpha(comptime fmt: Format) type {
         /// This function is limited to 256 entries; any higher than this is
         /// safety-checked undefined behavior.
         pub fn average(ps: []const Self) Self {
-            debug.assert(ps.len <= 256);
+            std.debug.assert(ps.len <= 256);
             if (ps.len == 0) return .{ .a = 0 };
 
             var a: u16 = 0;
@@ -662,8 +658,8 @@ fn Alpha(comptime fmt: Format) type {
         /// available for packed types, for non-packed types (e.g., `Alpha8`),
         /// use standard indexing.
         pub fn getFromPacked(buf: []const u8, index: usize) Self {
-            comptime debug.assert(NumBits < 8);
-            const px_int = mem.readPackedInt(IntType, buf, index * @bitSizeOf(IntType), .little);
+            comptime std.debug.assert(NumBits < 8);
+            const px_int = std.mem.readPackedInt(IntType, buf, index * @bitSizeOf(IntType), .little);
             return @bitCast(px_int);
         }
 
@@ -671,9 +667,9 @@ fn Alpha(comptime fmt: Format) type {
         /// available for packed types, for non-packed types (e.g., `Alpha8`),
         /// use standard indexing.
         pub fn setInPacked(buf: []u8, index: usize, value: Self) void {
-            comptime debug.assert(NumBits < 8);
+            comptime std.debug.assert(NumBits < 8);
             const px_int = @as(IntType, @bitCast(value));
-            mem.writePackedInt(IntType, buf, index * @bitSizeOf(IntType), px_int, .little);
+            std.mem.writePackedInt(IntType, buf, index * @bitSizeOf(IntType), px_int, .little);
         }
     };
 }
@@ -688,14 +684,14 @@ test "pixel interface, asPixel" {
     const alpha2: Alpha2 = .{ .a = 2 };
     const alpha1: Alpha1 = .{ .a = 1 };
 
-    try testing.expectEqual(Pixel{ .argb = argb }, argb.asPixel());
-    try testing.expectEqual(Pixel{ .xrgb = xrgb }, xrgb.asPixel());
-    try testing.expectEqual(Pixel{ .rgb = rgb }, rgb.asPixel());
-    try testing.expectEqual(Pixel{ .rgba = rgba }, rgba.asPixel());
-    try testing.expectEqual(Pixel{ .alpha8 = alpha8 }, alpha8.asPixel());
-    try testing.expectEqual(Pixel{ .alpha4 = alpha4 }, alpha4.asPixel());
-    try testing.expectEqual(Pixel{ .alpha2 = alpha2 }, alpha2.asPixel());
-    try testing.expectEqual(Pixel{ .alpha1 = alpha1 }, alpha1.asPixel());
+    try std.testing.expectEqual(Pixel{ .argb = argb }, argb.asPixel());
+    try std.testing.expectEqual(Pixel{ .xrgb = xrgb }, xrgb.asPixel());
+    try std.testing.expectEqual(Pixel{ .rgb = rgb }, rgb.asPixel());
+    try std.testing.expectEqual(Pixel{ .rgba = rgba }, rgba.asPixel());
+    try std.testing.expectEqual(Pixel{ .alpha8 = alpha8 }, alpha8.asPixel());
+    try std.testing.expectEqual(Pixel{ .alpha4 = alpha4 }, alpha4.asPixel());
+    try std.testing.expectEqual(Pixel{ .alpha2 = alpha2 }, alpha2.asPixel());
+    try std.testing.expectEqual(Pixel{ .alpha1 = alpha1 }, alpha1.asPixel());
 }
 
 test "pixel interface, average" {
@@ -771,15 +767,15 @@ test "pixel interface, average" {
     };
     const alpha1_partial_expected: Alpha1 = .{ .a = 0 };
 
-    try testing.expectEqual(argb_expected, ARGB.average(&argb));
-    try testing.expectEqual(xrgb_expected, XRGB.average(&xrgb));
-    try testing.expectEqual(rgb_expected, RGB.average(&rgb));
-    try testing.expectEqual(rgba_expected, RGBA.average(&rgba));
-    try testing.expectEqual(alpha8_expected, Alpha8.average(&alpha8));
-    try testing.expectEqual(alpha4_expected, Alpha4.average(&alpha4));
-    try testing.expectEqual(alpha2_expected, Alpha2.average(&alpha2));
-    try testing.expectEqual(alpha1_full_expected, Alpha1.average(&alpha1_full));
-    try testing.expectEqual(alpha1_partial_expected, Alpha1.average(&alpha1_partial));
+    try std.testing.expectEqual(argb_expected, ARGB.average(&argb));
+    try std.testing.expectEqual(xrgb_expected, XRGB.average(&xrgb));
+    try std.testing.expectEqual(rgb_expected, RGB.average(&rgb));
+    try std.testing.expectEqual(rgba_expected, RGBA.average(&rgba));
+    try std.testing.expectEqual(alpha8_expected, Alpha8.average(&alpha8));
+    try std.testing.expectEqual(alpha4_expected, Alpha4.average(&alpha4));
+    try std.testing.expectEqual(alpha2_expected, Alpha2.average(&alpha2));
+    try std.testing.expectEqual(alpha1_full_expected, Alpha1.average(&alpha1_full));
+    try std.testing.expectEqual(alpha1_partial_expected, Alpha1.average(&alpha1_partial));
 }
 
 test "ARGB/RGBA, multiply/demultiply" {
@@ -792,8 +788,8 @@ test "ARGB/RGBA, multiply/demultiply" {
             const expected_multiplied: T = .{ .r = 85, .g = 93, .b = 102, .a = 128 };
             const expected_demultiplied: T = .{ .r = 169, .g = 185, .b = 203, .a = 128 };
 
-            try testing.expectEqual(expected_multiplied, rgba.multiply());
-            try testing.expectEqual(expected_demultiplied, expected_multiplied.demultiply());
+            try std.testing.expectEqual(expected_multiplied, rgba.multiply());
+            try std.testing.expectEqual(expected_demultiplied, expected_multiplied.demultiply());
         }
     }
 
@@ -803,39 +799,39 @@ test "ARGB/RGBA, multiply/demultiply" {
             const rgba: T = .{ .r = 170, .g = 187, .b = 204, .a = 0 };
             const expected_multiplied: T = .{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
-            try testing.expectEqual(expected_multiplied, rgba.multiply());
-            try testing.expectEqual(expected_multiplied, expected_multiplied.demultiply());
+            try std.testing.expectEqual(expected_multiplied, rgba.multiply());
+            try std.testing.expectEqual(expected_multiplied, expected_multiplied.demultiply());
         }
     }
 }
 
 test "XRGB/RGB, fromClamped" {
     inline for (.{ XRGB, RGB }) |T| {
-        try testing.expectEqual(T{ .r = 77, .g = 153, .b = 230 }, T.fromClamped(0.3, 0.6, 0.9));
-        try testing.expectEqual(T{ .r = 0, .g = 0, .b = 0 }, T.fromClamped(-1, -1, -1));
-        try testing.expectEqual(T{ .r = 255, .g = 255, .b = 255 }, T.fromClamped(2, 2, 2));
+        try std.testing.expectEqual(T{ .r = 77, .g = 153, .b = 230 }, T.fromClamped(0.3, 0.6, 0.9));
+        try std.testing.expectEqual(T{ .r = 0, .g = 0, .b = 0 }, T.fromClamped(-1, -1, -1));
+        try std.testing.expectEqual(T{ .r = 255, .g = 255, .b = 255 }, T.fromClamped(2, 2, 2));
     }
 }
 
 test "ARGB/RGBA, fromClamped" {
     inline for (.{ ARGB, RGBA }) |T| {
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             T{ .r = 77, .g = 153, .b = 230, .a = 255 },
             T.fromClamped(0.3, 0.6, 0.9, 1),
         );
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             T{ .r = 38, .g = 76, .b = 115, .a = 128 },
             T.fromClamped(0.3, 0.6, 0.9, 0.5),
         );
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             T{ .r = 0, .g = 0, .b = 0, .a = 0 },
             T.fromClamped(-1, -1, -1, -1),
         );
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             T{ .r = 255, .g = 255, .b = 255, .a = 255 },
             T.fromClamped(2, 2, 2, 2),
         );
-        try testing.expectEqual(
+        try std.testing.expectEqual(
             T{ .r = 128, .g = 128, .b = 128, .a = 128 },
             T.fromClamped(2, 2, 2, 0.5),
         );
@@ -1155,8 +1151,8 @@ test "fromPixel" {
             for (tc.pairs, 0..) |pair, idx| {
                 switch (pair.a) {
                     inline else => |expected| {
-                        testing.expectEqualDeep(expected, @TypeOf(expected).fromPixel(pair.b)) catch |err| {
-                            debug.print("index {d}: mismatch detected.\n", .{idx});
+                        std.testing.expectEqualDeep(expected, @TypeOf(expected).fromPixel(pair.b)) catch |err| {
+                            std.debug.print("index {d}: mismatch detected.\n", .{idx});
                             return err;
                         };
                     },
@@ -1172,59 +1168,59 @@ test "Alpha, shlr" {
     const test_T = Alpha(.alpha8);
     {
         // zero
-        try testing.expectEqual(0, test_T.shlr(u8, 0));
+        try std.testing.expectEqual(0, test_T.shlr(u8, 0));
     }
 
     {
         // equal types
-        try testing.expectEqual(255, test_T.shlr(u8, @as(u8, 255)));
+        try std.testing.expectEqual(255, test_T.shlr(u8, @as(u8, 255)));
     }
 
     {
         // shift down
-        try testing.expectEqual(15, test_T.shlr(u4, @as(u8, 255)));
-        try testing.expectEqual(3, test_T.shlr(u2, @as(u8, 255)));
-        try testing.expectEqual(1, test_T.shlr(u1, @as(u8, 255)));
-        try testing.expectEqual(0, test_T.shlr(u1, @as(u8, 127)));
+        try std.testing.expectEqual(15, test_T.shlr(u4, @as(u8, 255)));
+        try std.testing.expectEqual(3, test_T.shlr(u2, @as(u8, 255)));
+        try std.testing.expectEqual(1, test_T.shlr(u1, @as(u8, 255)));
+        try std.testing.expectEqual(0, test_T.shlr(u1, @as(u8, 127)));
 
-        try testing.expectEqual(3, test_T.shlr(u2, @as(u4, 15)));
-        try testing.expectEqual(1, test_T.shlr(u2, @as(u4, 4)));
-        try testing.expectEqual(0, test_T.shlr(u2, @as(u4, 3)));
-        try testing.expectEqual(1, test_T.shlr(u1, @as(u4, 15)));
-        try testing.expectEqual(0, test_T.shlr(u1, @as(u4, 7)));
+        try std.testing.expectEqual(3, test_T.shlr(u2, @as(u4, 15)));
+        try std.testing.expectEqual(1, test_T.shlr(u2, @as(u4, 4)));
+        try std.testing.expectEqual(0, test_T.shlr(u2, @as(u4, 3)));
+        try std.testing.expectEqual(1, test_T.shlr(u1, @as(u4, 15)));
+        try std.testing.expectEqual(0, test_T.shlr(u1, @as(u4, 7)));
 
-        try testing.expectEqual(1, test_T.shlr(u1, @as(u2, 3)));
-        try testing.expectEqual(0, test_T.shlr(u1, @as(u2, 1)));
+        try std.testing.expectEqual(1, test_T.shlr(u1, @as(u2, 3)));
+        try std.testing.expectEqual(0, test_T.shlr(u1, @as(u2, 1)));
     }
 
     {
         // shift up (u2)
-        try testing.expectEqual(5, test_T.shlr(u4, @as(u2, 1)));
-        try testing.expectEqual(10, test_T.shlr(u4, @as(u2, 2)));
-        try testing.expectEqual(15, test_T.shlr(u4, @as(u2, 3)));
+        try std.testing.expectEqual(5, test_T.shlr(u4, @as(u2, 1)));
+        try std.testing.expectEqual(10, test_T.shlr(u4, @as(u2, 2)));
+        try std.testing.expectEqual(15, test_T.shlr(u4, @as(u2, 3)));
 
-        try testing.expectEqual(85, test_T.shlr(u8, @as(u2, 1)));
-        try testing.expectEqual(170, test_T.shlr(u8, @as(u2, 2)));
-        try testing.expectEqual(255, test_T.shlr(u8, @as(u2, 3)));
+        try std.testing.expectEqual(85, test_T.shlr(u8, @as(u2, 1)));
+        try std.testing.expectEqual(170, test_T.shlr(u8, @as(u2, 2)));
+        try std.testing.expectEqual(255, test_T.shlr(u8, @as(u2, 3)));
     }
 
     {
         // shift up (u4)
-        try testing.expectEqual(17, test_T.shlr(u8, @as(u4, 1)));
-        try testing.expectEqual(34, test_T.shlr(u8, @as(u4, 2)));
-        try testing.expectEqual(51, test_T.shlr(u8, @as(u4, 3)));
-        try testing.expectEqual(68, test_T.shlr(u8, @as(u4, 4)));
-        try testing.expectEqual(85, test_T.shlr(u8, @as(u4, 5)));
-        try testing.expectEqual(102, test_T.shlr(u8, @as(u4, 6)));
-        try testing.expectEqual(119, test_T.shlr(u8, @as(u4, 7)));
-        try testing.expectEqual(136, test_T.shlr(u8, @as(u4, 8)));
-        try testing.expectEqual(153, test_T.shlr(u8, @as(u4, 9)));
-        try testing.expectEqual(170, test_T.shlr(u8, @as(u4, 10)));
-        try testing.expectEqual(187, test_T.shlr(u8, @as(u4, 11)));
-        try testing.expectEqual(204, test_T.shlr(u8, @as(u4, 12)));
-        try testing.expectEqual(221, test_T.shlr(u8, @as(u4, 13)));
-        try testing.expectEqual(238, test_T.shlr(u8, @as(u4, 14)));
-        try testing.expectEqual(255, test_T.shlr(u8, @as(u4, 15)));
+        try std.testing.expectEqual(17, test_T.shlr(u8, @as(u4, 1)));
+        try std.testing.expectEqual(34, test_T.shlr(u8, @as(u4, 2)));
+        try std.testing.expectEqual(51, test_T.shlr(u8, @as(u4, 3)));
+        try std.testing.expectEqual(68, test_T.shlr(u8, @as(u4, 4)));
+        try std.testing.expectEqual(85, test_T.shlr(u8, @as(u4, 5)));
+        try std.testing.expectEqual(102, test_T.shlr(u8, @as(u4, 6)));
+        try std.testing.expectEqual(119, test_T.shlr(u8, @as(u4, 7)));
+        try std.testing.expectEqual(136, test_T.shlr(u8, @as(u4, 8)));
+        try std.testing.expectEqual(153, test_T.shlr(u8, @as(u4, 9)));
+        try std.testing.expectEqual(170, test_T.shlr(u8, @as(u4, 10)));
+        try std.testing.expectEqual(187, test_T.shlr(u8, @as(u4, 11)));
+        try std.testing.expectEqual(204, test_T.shlr(u8, @as(u4, 12)));
+        try std.testing.expectEqual(221, test_T.shlr(u8, @as(u4, 13)));
+        try std.testing.expectEqual(238, test_T.shlr(u8, @as(u4, 14)));
+        try std.testing.expectEqual(255, test_T.shlr(u8, @as(u4, 15)));
     }
 
     {
@@ -1235,7 +1231,7 @@ test "Alpha, shlr" {
         // proposal for this so once it will get implemented eventually, after
         // which we can enable permanently.
         //
-        // try testing.expectEqual(255, test_T.shlr(u8, @as(u1, 1)));
+        // try std.testing.expectEqual(255, test_T.shlr(u8, @as(u1, 1)));
     }
 }
 
@@ -1298,9 +1294,9 @@ test "equal" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expect(tc.a.equal(tc.a));
-            try testing.expect(!tc.a.equal(tc.b));
-            try testing.expect(!tc.a.equal(tc.other));
+            try std.testing.expect(tc.a.equal(tc.a));
+            try std.testing.expect(!tc.a.equal(tc.b));
+            try std.testing.expect(!tc.a.equal(tc.other));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1362,7 +1358,7 @@ test "Endianness for 32-bit pixels" {
                 inline .argb, .xrgb, .rgb, .rgba => |p| @bitCast(p),
                 else => unreachable,
             };
-            try testing.expectEqualSlices(u8, &tc.expected, &@as([4]u8, got));
+            try std.testing.expectEqualSlices(u8, &tc.expected, &@as([4]u8, got));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1408,7 +1404,7 @@ test "Pixel.fromColor" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Pixel.fromColor(tc.args));
+            try std.testing.expectEqualDeep(tc.expected, Pixel.fromColor(tc.args));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1449,7 +1445,7 @@ test "ARGB.canDemultiply" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqual(tc.expected, tc.px.canDemultiply());
+            try std.testing.expectEqual(tc.expected, tc.px.canDemultiply());
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1490,7 +1486,7 @@ test "RGBA.canDemultiply" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqual(tc.expected, tc.px.canDemultiply());
+            try std.testing.expectEqual(tc.expected, tc.px.canDemultiply());
         }
     };
     try runCases(name, cases, TestFn.f);

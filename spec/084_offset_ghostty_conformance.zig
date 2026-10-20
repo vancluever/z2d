@@ -31,9 +31,7 @@
 //! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -45,7 +43,7 @@ const sub_canvas_width = 100;
 const sub_canvas_height = 200;
 const box_thickness = 10;
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     var sfc = try z2d.Surface.init(.image_surface_alpha8, alloc, canvas_width, canvas_height);
     var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();
@@ -70,8 +68,8 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
 
 /// Adapted from innerStrokePath from Ghostty.
 fn strokePathWorkaround(
-    pathFunc: *const fn (alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
-    alloc: mem.Allocator,
+    pathFunc: *const fn (alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
+    alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     aa_mode: z2d.options.AntiAliasMode,
     dst_x: i32,
@@ -140,8 +138,8 @@ fn strokePathWorkaround(
     // The z2d composite operation doesn't seem to work for
     // this with alpha8 surfaces, so we have to do it manually.
     for (
-        mem.sliceAsBytes(fill_sfc.image_surface_alpha8.buf),
-        mem.sliceAsBytes(stroke_sfc.image_surface_alpha8.buf),
+        std.mem.sliceAsBytes(fill_sfc.image_surface_alpha8.buf),
+        std.mem.sliceAsBytes(stroke_sfc.image_surface_alpha8.buf),
     ) |*d, s| {
         d.* = @intFromFloat(@round(
             255.0 *
@@ -155,8 +153,8 @@ fn strokePathWorkaround(
 }
 
 fn strokePathNormal(
-    pathFunc: *const fn (alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
-    alloc: mem.Allocator,
+    pathFunc: *const fn (alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
+    alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     aa_mode: z2d.options.AntiAliasMode,
     dst_x: i32,
@@ -186,16 +184,16 @@ fn strokePathNormal(
     dst_sfc.composite(&draw_sfc, .src_over, dst_x, dst_y, .{});
 }
 
-const DrawPathError = z2d.Path.Error || mem.Allocator.Error || z2d.Path.OffsetError;
+const DrawPathError = z2d.Path.Error || std.mem.Allocator.Error || z2d.Path.OffsetError;
 
-fn drawE0B5(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn drawE0B5(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
     var result: z2d.Path = .empty;
     defer if (offset != 0) {
         result.deinit(alloc);
     };
 
     // Coefficient for approximating a circular arc.
-    const c: f64 = (math.sqrt2 - 1.0) * 4.0 / 3.0;
+    const c: f64 = (std.math.sqrt2 - 1.0) * 4.0 / 3.0;
     const radius: f64 = @min(width, height / 2);
     try result.moveTo(alloc, 0, 0);
     try result.curveTo(
@@ -221,19 +219,19 @@ fn drawE0B5(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPath
     return if (offset != 0) try result.offset(alloc, offset) else result;
 }
 
-fn draw25F8(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25F8(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.tl, alloc, width, height, offset);
 }
 
-fn draw25F9(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25F9(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.tr, alloc, width, height, offset);
 }
 
-fn draw25FA(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25FA(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.bl, alloc, width, height, offset);
 }
 
-pub fn draw25FF(alloc: mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+pub fn draw25FF(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.br, alloc, width, height, offset);
 }
 
@@ -241,7 +239,7 @@ const Corner = enum { tl, tr, bl, br };
 
 fn cornerTriangleOutline(
     comptime corner: Corner,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     width: f64,
     height: f64,
     offset: f64,

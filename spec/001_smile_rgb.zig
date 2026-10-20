@@ -2,15 +2,13 @@
 //! surface, and exporting them to a PNG file.
 //!
 //! This test uses the RGB pixel format.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
-const debug = @import("std").debug;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "001_smile_rgb";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const w = image.width * 2 + 10;
     const h = image.height * 2 + 10;

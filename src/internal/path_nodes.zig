@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024-2026 Chris Marchesi
 
-const testing = @import("std").testing;
+const std = @import("std");
 
 const Point = @import("Point.zig");
 
@@ -70,7 +70,7 @@ test "isClosedNodeSet" {
             .{ .close_path = .{} },
             .{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } },
         };
-        try testing.expectEqual(true, PathNode.isClosedNodeSet(&nodes));
+        try std.testing.expectEqual(true, PathNode.isClosedNodeSet(&nodes));
     }
 
     {
@@ -87,7 +87,7 @@ test "isClosedNodeSet" {
             .{ .close_path = .{} },
             .{ .move_to = .{ .point = .{ .x = 4, .y = 4 } } },
         };
-        try testing.expectEqual(true, PathNode.isClosedNodeSet(&nodes));
+        try std.testing.expectEqual(true, PathNode.isClosedNodeSet(&nodes));
     }
 
     {
@@ -99,7 +99,7 @@ test "isClosedNodeSet" {
             .{ .line_to = .{ .point = .{ .x = 4, .y = 4 } } },
             .{ .line_to = .{ .point = .{ .x = 5, .y = 5 } } },
         };
-        try testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
+        try std.testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
     }
 
     {
@@ -113,7 +113,7 @@ test "isClosedNodeSet" {
             .{ .line_to = .{ .point = .{ .x = 4, .y = 4 } } },
             .{ .line_to = .{ .point = .{ .x = 5, .y = 5 } } },
         };
-        try testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
+        try std.testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
     }
 
     {
@@ -127,11 +127,11 @@ test "isClosedNodeSet" {
             .{ .close_path = .{} },
             .{ .move_to = .{ .point = .{ .x = 3, .y = 3 } } },
         };
-        try testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
+        try std.testing.expectEqual(false, PathNode.isClosedNodeSet(&nodes));
     }
 
     {
         // Empty node set
-        try testing.expectEqual(false, PathNode.isClosedNodeSet(&.{}));
+        try std.testing.expectEqual(false, PathNode.isClosedNodeSet(&.{}));
     }
 }

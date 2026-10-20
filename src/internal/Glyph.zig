@@ -8,10 +8,6 @@
 pub const Glyph = @This();
 
 const std = @import("std");
-const debug = @import("std").debug;
-const Io = @import("std").Io;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const fontpkg = @import("../font.zig");
 
@@ -97,7 +93,7 @@ pub fn byIndex(font: *Font, index: u32) fontpkg.ReaderError!Glyph {
 }
 
 fn findGlyphIndexBMP(
-    file: *Io.Reader,
+    file: *std.Io.Reader,
     cmap_subtable_offset: u32,
     codepoint: u21,
 ) fontpkg.ReaderError!u32 {
@@ -164,7 +160,7 @@ fn findGlyphIndexBMP(
 }
 
 fn findGlyphIndexFull(
-    file: *Io.Reader,
+    file: *std.Io.Reader,
     cmap_subtable_offset: u32,
     codepoint: u21,
 ) fontpkg.ReaderError!u32 {
@@ -208,7 +204,7 @@ pub fn getKernAdvance(font: *Font, current: u32, next: u32) fontpkg.ReaderError!
 }
 
 fn getKernAdvanceKern(font: *Font, current: u32, next: u32) fontpkg.ReaderError!i16 {
-    debug.assert(font.dir.kern != 0); // Should have been checked before
+    std.debug.assert(font.dir.kern != 0); // Should have been checked before
 
     try readerSeek(&font.file, font.dir.kern + 2);
     const num_tables = try readerInt(&font.file, u16, .big);
@@ -237,7 +233,7 @@ fn getKernAdvanceKern(font: *Font, current: u32, next: u32) fontpkg.ReaderError!
 }
 
 fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) fontpkg.ReaderError!i16 {
-    debug.assert(font.dir.GPOS != 0); // Should have been checked before
+    std.debug.assert(font.dir.GPOS != 0); // Should have been checked before
 
     try readerSeek(&font.file, font.dir.GPOS);
     const major = try readerInt(&font.file, u16, .big);
@@ -275,7 +271,7 @@ fn getKernAdvanceGPOS(font: *Font, current: u32, next: u32) fontpkg.ReaderError!
                     // This is ultimately a "link" to another table.
                     try readerSeek(&font.file, lookup_table + subtable_offset);
                     const ext_format = try readerInt(&font.file, u16, .big);
-                    debug.assert(ext_format == 1); // There is currently only one format
+                    std.debug.assert(ext_format == 1); // There is currently only one format
                     const ext_lookup_type = try readerInt(&font.file, u16, .big);
                     // If we don't have a lookup type of 2 for our nested table
                     // we can skip the rest of the subtables, as each
@@ -483,17 +479,17 @@ pub const Outline = struct {
         /// Malformed or corrupted outline data was found and the outline could not
         /// be properly parsed into a path.
         MalformedGlyph,
-    } || fontpkg.ReaderError || Path.Error || mem.Allocator.Error;
+    } || fontpkg.ReaderError || Path.Error || std.mem.Allocator.Error;
 
     /// deinit should be called to release the outline.
     pub fn init(
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         font: *Font,
         glyph: Glyph,
         orientation: GlyphOrientation,
     ) InitError!Outline {
         // Not supported when there is no outline detail
-        debug.assert(glyph.outline != .none);
+        std.debug.assert(glyph.outline != .none);
 
         // Get our dimensions ahead of time. We don't need to process the contour
         // count right now as we do that further down when plotting (so that we can
@@ -541,7 +537,7 @@ pub const Outline = struct {
         };
     }
 
-    fn runOutline(alloc: mem.Allocator, font: *Font, path: *Path, glyf_offset: u32) InitError!void {
+    fn runOutline(alloc: std.mem.Allocator, font: *Font, path: *Path, glyf_offset: u32) InitError!void {
         // The local point representation (different than our floating-point
         // representation).
         const Point = struct {
@@ -837,19 +833,19 @@ pub const Outline = struct {
         }
     }
 
-    pub fn deinit(self: *Outline, alloc: mem.Allocator) void {
+    pub fn deinit(self: *Outline, alloc: std.mem.Allocator) void {
         self.path.deinit(alloc);
         self.* = undefined;
     }
 
     fn quadCurveTo(
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         path: *Path,
         control_x: i16,
         control_y: i16,
         to_x: i16,
         to_y: i16,
-    ) (error{MalformedGlyph} || Path.Error || mem.Allocator.Error)!void {
+    ) (error{MalformedGlyph} || Path.Error || std.mem.Allocator.Error)!void {
         // NOTE: We take the current point here directly as we don't have a call to
         // do it right now. We also need to apply the inverse of the transformation
         // to get it in user space. If we add this to Path proper, we can just use
@@ -916,19 +912,19 @@ test "Glyph.init" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             var font: Font = try testInitFont(data);
-            try testing.expectEqualDeep(tc.expected, Glyph.init(&font, tc.codepoint));
+            try std.testing.expectEqualDeep(tc.expected, Glyph.init(&font, tc.codepoint));
         }
     };
     try runCases(name, cases, TestFn.f);
 }
 
 test "Glyph.Outline.parseF2Dot14" {
-    try testing.expectEqual(1.99993896484375e0, Glyph.Outline.parseF2Dot14(0x7FFF));
-    try testing.expectEqual(1.75, Glyph.Outline.parseF2Dot14(0x7000));
-    try testing.expectEqual(0.00006103515625, Glyph.Outline.parseF2Dot14(0x0001));
-    try testing.expectEqual(0.0, Glyph.Outline.parseF2Dot14(0x0));
-    try testing.expectEqual(-0.00006103515625, Glyph.Outline.parseF2Dot14(0xffff));
-    try testing.expectEqual(-2.0, Glyph.Outline.parseF2Dot14(0x8000));
+    try std.testing.expectEqual(1.99993896484375e0, Glyph.Outline.parseF2Dot14(0x7FFF));
+    try std.testing.expectEqual(1.75, Glyph.Outline.parseF2Dot14(0x7000));
+    try std.testing.expectEqual(0.00006103515625, Glyph.Outline.parseF2Dot14(0x0001));
+    try std.testing.expectEqual(0.0, Glyph.Outline.parseF2Dot14(0x0));
+    try std.testing.expectEqual(-0.00006103515625, Glyph.Outline.parseF2Dot14(0xffff));
+    try std.testing.expectEqual(-2.0, Glyph.Outline.parseF2Dot14(0x8000));
 }
 
 test "Glyph.Outline.init" {
@@ -961,22 +957,22 @@ test "Glyph.Outline.init" {
         fn f(tc: anytype) TestingError!void {
             var font: Font = try testInitFont(data);
             const glyph: Glyph = Glyph.init(&font, tc.codepoint) catch |err| {
-                debug.print("unexpected error from Glyph.init: {}\n", .{err});
+                std.debug.print("unexpected error from Glyph.init: {}\n", .{err});
                 return error.TestUnexpectedError;
             };
-            var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph, .top) catch |err| {
-                debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
+            var outline: Glyph.Outline = Glyph.Outline.init(std.testing.allocator, &font, glyph, .top) catch |err| {
+                std.debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
                 return error.TestUnexpectedError;
             };
-            defer outline.deinit(testing.allocator);
-            try testing.expect(outline.path.isClosed());
+            defer outline.deinit(std.testing.allocator);
+            try std.testing.expect(outline.path.isClosed());
             var has_curve_to = false;
             for (outline.path.nodes.items) |node| {
                 if (node == .curve_to) {
                     has_curve_to = true;
                 }
             }
-            try testing.expectEqual(tc.expect_curve_to, has_curve_to);
+            try std.testing.expectEqual(tc.expect_curve_to, has_curve_to);
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -986,15 +982,15 @@ test "outline, composite processing, ensure no int overflow" {
     // Happens on the Inter semibold "i".
     var font: Font = try testInitFont(@embedFile("./test-fonts/Inter-SemiBold.subset.ttf"));
     const glyph: Glyph = Glyph.init(&font, 'i') catch |err| {
-        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        std.debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };
-    var outline: Glyph.Outline = Glyph.Outline.init(testing.allocator, &font, glyph, .top) catch |err| {
-        debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
+    var outline: Glyph.Outline = Glyph.Outline.init(std.testing.allocator, &font, glyph, .top) catch |err| {
+        std.debug.print("unexpected error from Glyph.Outline.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };
-    defer outline.deinit(testing.allocator);
-    try testing.expect(outline.path.isClosed());
+    defer outline.deinit(std.testing.allocator);
+    try std.testing.expect(outline.path.isClosed());
 }
 
 test "init correctly loads advance for glyph past max hmetrics" {
@@ -1005,29 +1001,29 @@ test "init correctly loads advance for glyph past max hmetrics" {
     // in a way that the long hmetric entry does exist, breaking the test.
     var font: Font = try testInitFont(@embedFile("./test-fonts/AnnotationMono-Regular.ttf"));
     const glyph: Glyph = Glyph.init(&font, 'u') catch |err| {
-        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        std.debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };
-    try testing.expectEqual(676, glyph.index);
-    try testing.expectEqual(500, glyph.advance);
-    try testing.expectEqual(85, glyph.lsb);
+    try std.testing.expectEqual(676, glyph.index);
+    try std.testing.expectEqual(500, glyph.advance);
+    try std.testing.expectEqual(85, glyph.lsb);
 }
 
 test "init correctly loads advance/lsb for last glyph" {
     var font: Font = try testInitFont(@embedFile("./test-fonts/AnnotationMono-Regular.ttf"));
     const glyph: Glyph = Glyph.init(&font, 0x1E95) catch |err| {
-        debug.print("unexpected error from Glyph.init: {}\n", .{err});
+        std.debug.print("unexpected error from Glyph.init: {}\n", .{err});
         return error.TestUnexpectedError;
     };
-    try testing.expectEqual(765, glyph.index);
-    try testing.expectEqual(500, glyph.advance);
-    try testing.expectEqual(64, glyph.lsb);
+    try std.testing.expectEqual(765, glyph.index);
+    try std.testing.expectEqual(500, glyph.advance);
+    try std.testing.expectEqual(64, glyph.lsb);
 }
 
 /// For testing only. Expects a single font (no TTC).
 fn testInitFont(data: []const u8) !Font {
     return Font.loadBufferOffset(data, 0) catch |err| {
-        debug.print("unexpected error from Font.loadBufferOffset: {}\n", .{err});
+        std.debug.print("unexpected error from Font.loadBufferOffset: {}\n", .{err});
         return error.TestUnexpectedError;
     };
 }

@@ -3,14 +3,13 @@
 
 //! Case: Renders a stroked cross (used to validate correct join direction for
 //! strokes when changing direction (clockwise -> counter-clockwise and vice versa).
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "034_stroke_cross";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 250;
     const height = 250;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

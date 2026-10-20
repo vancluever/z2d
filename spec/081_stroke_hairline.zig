@@ -2,9 +2,7 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Renders hairline strokes of various shapes.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -13,7 +11,7 @@ pub const filename = "081_stroke_hairline";
 const sub_sfc_width = 300;
 const sub_sfc_height = 300;
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 600;
     const height = 2100;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -177,7 +175,7 @@ fn arc(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64) !void {
     defer context.resetPath();
     context.translate(x + rx / 2, y + ry / 2);
     context.scale(rx / 2, ry / 2);
-    try context.arc(0, 0, 1, 0, 2 * math.pi);
+    try context.arc(0, 0, 1, 0, 2 * std.math.pi);
     try context.closePath();
     try context.stroke();
 }

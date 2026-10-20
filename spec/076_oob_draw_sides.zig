@@ -5,14 +5,13 @@
 //! overlapping images on each four sides. The image should be clipped on the
 //! corners, particularly on strokes, which should not not display where they
 //! would be out-of-bounds (e.g., not snapped).
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "076_oob_draw_sides";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 300;
     const height = 300;
     const cx = width / 2;
