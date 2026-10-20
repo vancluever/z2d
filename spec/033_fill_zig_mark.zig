@@ -7,14 +7,13 @@
 //! The [Zig logo](https://github.com/ziglang/logo) and logomark are licensed
 //! CC-BY-SA 4.0. To view a copy of the license, visit
 //! https://creativecommons.org/licenses/by-sa/4.0/.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "033_fill_zig_mark";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 153;
     const height = 140;
     var sfc = try z2d.Surface.init(.image_surface_rgba, alloc, width, height);

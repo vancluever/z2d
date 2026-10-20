@@ -2,10 +2,6 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 const std = @import("std");
-const debug = @import("std").debug;
-const heap = @import("std").heap;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const options = @import("../../options.zig");
 const nodepkg = @import("../path_nodes.zig");
@@ -30,7 +26,7 @@ const InternalError = @import("../InternalError.zig").InternalError;
 const Error = @import("stroke_plotter.zig").Error;
 
 pub fn plot(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: PlotterOptions,
 ) Error!Polygon {
@@ -76,7 +72,7 @@ pub fn plot(
 
 const Plotter = struct {
     const InitialPolygon = struct {
-        alloc: mem.Allocator,
+        alloc: std.mem.Allocator,
         opts: *const PlotterOptions,
         pen: ?*const Pen,
         points: PointBuffer,
@@ -87,7 +83,7 @@ const Plotter = struct {
         current_slope: Slope,
     };
 
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
     opts: *const PlotterOptions,
 
@@ -227,7 +223,7 @@ const Plotter = struct {
                 if (self.dasher.on and self.points.len > 1) {
                     // We're on, so we need to join our last segment to the
                     // initial polygon.
-                    debug.assert(poly.points.len > 0);
+                    std.debug.assert(poly.points.len > 0);
                     if (poly.points.len == 1) {
                         // Our initial polygon was a dot (zero-length dash).
                         // Since we actually have already plotted back to our
@@ -386,12 +382,12 @@ const Plotter = struct {
         // stroke.
         //
         // All other zero-length strokes draw nothing.
-        debug.assert(self.inner.len == 0); // should have not been used
+        std.debug.assert(self.inner.len == 0); // should have not been used
         switch (self.opts.cap_mode) {
             .round => {
                 // Just plot off all of the pen's vertices, no need to
                 // determine a subset as we're doing a 360-degree plot.
-                debug.assert(self.pen != null);
+                std.debug.assert(self.pen != null);
                 for (self.pen.?.vertices.items) |v| {
                     try self.outer.plot(
                         self.alloc,
@@ -515,7 +511,7 @@ const Plotter = struct {
             // currently in. This can happen when dash offsets have
             // pushed/pulled the state into an off segment at the start of
             // the stroke.
-            debug.assert(self.points.len > 0);
+            std.debug.assert(self.points.len > 0);
             self.initial_polygon = .{ .off = self.points.first() orelse unreachable };
         }
 
@@ -674,14 +670,14 @@ test "error in dashed plotter should not cause inner_polygon to leak" {
     // the outer miter, 3 for the knot that creates the inner miter), which
     // gets saved to the initial polygon afterwards, and then the next plot
     // after that will fail.
-    var debug_alloc: heap.DebugAllocator(.{}) = .init;
-    var failing_alloc: testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 4 });
-    try testing.expectError(error.OutOfMemory, plot(
+    var debug_alloc: std.heap.DebugAllocator(.{}) = .init;
+    var failing_alloc: std.testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 4 });
+    try std.testing.expectError(error.OutOfMemory, plot(
         failing_alloc.allocator(),
         static_path.wrapped_path.nodes.items,
         opts,
     ));
-    testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
+    std.testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
         // so we don't report the leak twice
         debug_alloc.deinitWithoutLeakChecks();
         return err;

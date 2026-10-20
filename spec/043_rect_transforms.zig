@@ -2,15 +2,13 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 //! Case: Renders rectangles (fill and stroke) using transformation matrices.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "043_rect_transforms";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -51,7 +49,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     // // as the third, but first rotate 45 degrees (at 300, 0)
     saved_ctm = context.getTransformation();
     saved_line_width = context.getLineWidth();
-    context.rotate(math.pi / 4.0);
+    context.rotate(std.math.pi / 4.0);
     try rect(&context, 300, 0, 50, 100, false);
     context.setLineWidth(lw: {
         var ux = saved_line_width;

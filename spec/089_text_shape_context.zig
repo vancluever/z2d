@@ -5,14 +5,13 @@
 //! positions that text in the center of a surface for drawing.
 //!
 //! This version uses API out of `Context`.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "089_text_shape_context";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const text = "The quick brown fox jumps over the lazy dog";
     const font_buf = @embedFile("test-fonts/Inter-Regular.ttf");
     const font_size = 36.0;

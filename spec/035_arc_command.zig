@@ -7,15 +7,13 @@
 //! https://www.w3.org/TR/SVG11/paths.html#PathDataEllipticalArcCommands.
 //! Copyright © 2011 World Wide Web Consortium.
 //! https://www.w3.org/copyright/software-license-2023/
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "035_arc_command";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 400;
     const height = 400;
     var sfc = try z2d.Surface.initPixel(
@@ -32,7 +30,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
     context.setLineWidth(5);
 
     try context.moveTo(200, 200);
-    try context.arcNegative(200, 200, 150, math.pi, math.pi * 1.5);
+    try context.arcNegative(200, 200, 150, std.math.pi, std.math.pi * 1.5);
     try context.closePath();
     try context.fill();
     context.pattern = .{
@@ -44,7 +42,7 @@ pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) 
 
     context.resetPath();
     try context.moveTo(175, 175);
-    try context.arc(175, 175, 150, math.pi, math.pi * 1.5);
+    try context.arc(175, 175, 150, std.math.pi, std.math.pi * 1.5);
     try context.closePath();
     context.pattern = .{
         .opaque_pattern = .{

@@ -62,10 +62,6 @@
 const Path = @This();
 
 const std = @import("std");
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const testing = @import("std").testing;
 
 const arcpkg = @import("internal/arc.zig");
 const options = @import("options.zig");
@@ -124,7 +120,7 @@ pub const empty: Path = .{};
 
 /// Initializes the path set with an initial capacity of exactly `num`. Call
 /// `deinit` to release the node list when complete.
-pub fn initCapacity(alloc: mem.Allocator, num: usize) mem.Allocator.Error!Path {
+pub fn initCapacity(alloc: std.mem.Allocator, num: usize) std.mem.Allocator.Error!Path {
     return .{
         .nodes = try std.ArrayListUnmanaged(PathNode).initCapacity(alloc, num),
     };
@@ -143,7 +139,7 @@ pub const LoadSerializedError = DeserializeSharedError || AppendSerializedHandle
 
 /// Loads a new path from a string representing the result of a previous
 /// `serialize` operation.
-pub fn loadSerialized(alloc: mem.Allocator, serialized: []const u8) LoadSerializedError!Path {
+pub fn loadSerialized(alloc: std.mem.Allocator, serialized: []const u8) LoadSerializedError!Path {
     var result: Path = .empty;
     errdefer result.deinit(alloc);
     try deserializeInner(
@@ -158,14 +154,14 @@ pub fn loadSerialized(alloc: mem.Allocator, serialized: []const u8) LoadSerializ
 
 /// Releases the `Path`'s node array list. It's invalid to use the path set
 /// after this call.
-pub fn deinit(self: *Path, alloc: mem.Allocator) void {
+pub fn deinit(self: *Path, alloc: std.mem.Allocator) void {
     self.nodes.deinit(alloc);
     self.* = undefined;
 }
 
 /// Creates a copy of this path using the supplied allocator. Caller owns the
 /// memory.
-pub fn clone(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!Path {
+pub fn clone(self: *Path, alloc: std.mem.Allocator) std.mem.Allocator.Error!Path {
     return .{
         .nodes = try self.nodes.clone(alloc),
         .current_point = self.current_point,
@@ -187,9 +183,9 @@ pub fn reset(self: *Path) void {
 /// expect the individual path builder to use, e.g., transformation matrices.
 pub fn appendPath(
     self: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     src: *const Path,
-) (Path.Error || mem.Allocator.Error)!void {
+) (Path.Error || std.mem.Allocator.Error)!void {
     for (src.nodes.items) |node| {
         switch (node) {
             .move_to => |n| try self.moveTo(alloc, n.point.x, n.point.y),
@@ -206,7 +202,7 @@ pub const AppendSerializedError = DeserializeSharedError || AppendSerializedHand
 /// previous `serialize` operation. This is a higher-level function that takes
 /// into account features that would normally expect the individual path
 /// builder to use, e.g., transformation matrices.
-pub fn appendSerialized(path: *Path, alloc: mem.Allocator, serialized: []const u8) AppendSerializedError!void {
+pub fn appendSerialized(path: *Path, alloc: std.mem.Allocator, serialized: []const u8) AppendSerializedError!void {
     try deserializeInner(
         AppendSerializedHandlerError,
         appendSerializedHandler,
@@ -217,7 +213,7 @@ pub fn appendSerialized(path: *Path, alloc: mem.Allocator, serialized: []const u
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.Error!void {
+pub fn moveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.moveToAssumeCapacity(x, y);
@@ -250,7 +246,7 @@ pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Begins a new sub-path relative to the current point. It is an error to call
 /// this without a current point.
-pub fn relMoveTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
+pub fn relMoveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         return self.moveTo(alloc, user_point.x + x, user_point.y + y);
@@ -268,7 +264,7 @@ pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
 
 /// Draws a line from the current point to the specified point and sets it as
 /// the current point. Acts as a `moveTo` instead if there is no current point.
-pub fn lineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) mem.Allocator.Error!void {
+pub fn lineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.lineToAssumeCapacity(x, y);
@@ -288,7 +284,7 @@ pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Draws a line relative to the current point. It is an error to call this
 /// without a current point.
-pub fn relLineTo(self: *Path, alloc: mem.Allocator, x: f64, y: f64) (Error || mem.Allocator.Error)!void {
+pub fn relLineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         return self.lineTo(alloc, user_point.x + x, user_point.y + y);
@@ -309,14 +305,14 @@ pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
 /// to call this without a current point.
 pub fn curveTo(
     self: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     x1: f64,
     y1: f64,
     x2: f64,
     y2: f64,
     x3: f64,
     y3: f64,
-) (Error || mem.Allocator.Error)!void {
+) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point == null) return error.NoCurrentPoint;
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
@@ -367,14 +363,14 @@ fn _curveToAssumeCapacity(
 /// this without a current point.
 pub fn relCurveTo(
     self: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     x1: f64,
     y1: f64,
     x2: f64,
     y2: f64,
     x3: f64,
     y3: f64,
-) (Error || mem.Allocator.Error)!void {
+) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         return self.curveTo(
@@ -442,21 +438,21 @@ pub fn relCurveToAssumeCapacity(
 /// path.transformation = path.transformation
 ///     .translate(x + width / 2, y + height / 2)
 ///     .scale(width / 2, height / 2);
-/// try path.arc(alloc, 0, 0, 1, 0, 2 * math.pi);
+/// try path.arc(alloc, 0, 0, 1, 0, 2 * std.math.pi);
 /// path.transformation = saved_ctm;
 /// ```
 ///
 pub fn arc(
     self: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     xc: f64,
     yc: f64,
     radius: f64,
     angle1: f64,
     angle2: f64,
-) (Error || mem.Allocator.Error)!void {
+) (Error || std.mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
-    while (effective_angle2 < angle1) effective_angle2 += math.pi * 2;
+    while (effective_angle2 < angle1) effective_angle2 += std.math.pi * 2;
     try arcpkg.arc_in_direction(
         &.{
             .ptr = self,
@@ -481,15 +477,15 @@ pub fn arc(
 /// Π until it's less than `angle1`.
 pub fn arcNegative(
     self: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     xc: f64,
     yc: f64,
     radius: f64,
     angle1: f64,
     angle2: f64,
-) (Error || mem.Allocator.Error)!void {
+) (Error || std.mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
-    while (effective_angle2 > angle1) effective_angle2 -= math.pi * 2;
+    while (effective_angle2 > angle1) effective_angle2 -= std.math.pi * 2;
     try arcpkg.arc_in_direction(
         &.{
             .ptr = self,
@@ -510,8 +506,8 @@ pub fn arcNegative(
 
 fn arc_line_to(
     ctx: *anyopaque,
-    alloc: mem.Allocator,
-    err_: *?mem.Allocator.Error,
+    alloc: std.mem.Allocator,
+    err_: *?std.mem.Allocator.Error,
     x: f64,
     y: f64,
 ) void {
@@ -530,7 +526,7 @@ fn arc_line_to(
 
 fn arc_curve_to(
     ctx: *anyopaque,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     err_: *?PathVTable.Error,
     x1: f64,
     y1: f64,
@@ -548,9 +544,9 @@ fn arc_curve_to(
 
 /// Closes the path by drawing a line from the current point by the starting
 /// point. No effect if there is no current point.
-pub fn close(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!void {
+pub fn close(self: *Path, alloc: std.mem.Allocator) std.mem.Allocator.Error!void {
     if (self.current_point == null) return;
-    debug.assert(self.initial_point != null);
+    std.debug.assert(self.initial_point != null);
     const newlen = self.nodes.items.len + 2;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self._closeAssumeCapacity();
@@ -564,7 +560,7 @@ pub fn close(self: *Path, alloc: mem.Allocator) mem.Allocator.Error!void {
 /// space for both.
 pub fn closeAssumeCapacity(self: *Path) void {
     if (self.current_point == null) return;
-    debug.assert(self.initial_point != null);
+    std.debug.assert(self.initial_point != null);
     self._closeAssumeCapacity();
 }
 
@@ -608,7 +604,7 @@ pub const SimplifyError = simplifypkg.Error;
 ///
 /// The returned `Path` is a completely new path that the caller owns - call
 /// `deinit` to release as normal.
-pub fn simplify(self: *const Path, alloc: mem.Allocator) SimplifyError!Path {
+pub fn simplify(self: *const Path, alloc: std.mem.Allocator) SimplifyError!Path {
     const result_nodes = try simplifypkg.run(alloc, self.nodes.items, self.tolerance);
     var result: Path = .{
         .nodes = .fromOwnedSlice(result_nodes),
@@ -636,7 +632,7 @@ pub const OffsetError = simplifypkg.Error;
 ///
 /// The returned `Path` is a completely new path that the caller owns - call
 /// `deinit` to release as normal.
-pub fn offset(self: *const Path, alloc: mem.Allocator, value: f64) OffsetError!Path {
+pub fn offset(self: *const Path, alloc: std.mem.Allocator, value: f64) OffsetError!Path {
     const result_nodes = try offsetpkg.run(alloc, self.nodes.items, self.tolerance, value);
     var result: Path = .{
         .nodes = .fromOwnedSlice(result_nodes),
@@ -647,7 +643,7 @@ pub fn offset(self: *const Path, alloc: mem.Allocator, value: f64) OffsetError!P
     return result;
 }
 
-pub const SerializeError = std.Io.Writer.Error || mem.Allocator.Error;
+pub const SerializeError = std.Io.Writer.Error || std.mem.Allocator.Error;
 
 /// Serializes the current path into a minified string that can be stored and
 /// loaded as a new path using `deserialize`.
@@ -655,7 +651,7 @@ pub const SerializeError = std.Io.Writer.Error || mem.Allocator.Error;
 /// Caller owns the memory.
 ///
 /// `prettify` can be set to make the serialization more human-readable.
-pub fn serialize(self: *Path, alloc: mem.Allocator, prettify: bool) SerializeError![]const u8 {
+pub fn serialize(self: *Path, alloc: std.mem.Allocator, prettify: bool) SerializeError![]const u8 {
     var serialized: std.Io.Writer.Allocating = .init(alloc);
     errdefer serialized.deinit();
     var last_: ?PathNode = null;
@@ -702,12 +698,12 @@ fn serializeNode(writer: *std.Io.Writer, node: PathNode, prettify: bool) std.Io.
 }
 
 fn DeserializeHandler(err_T: type) type {
-    return *const fn (path: *Path, alloc: mem.Allocator, node: PathNode) err_T!void;
+    return *const fn (path: *Path, alloc: std.mem.Allocator, node: PathNode) err_T!void;
 }
 
-const AppendSerializedHandlerError = Error || mem.Allocator.Error;
+const AppendSerializedHandlerError = Error || std.mem.Allocator.Error;
 
-fn appendSerializedHandler(path: *Path, alloc: mem.Allocator, node: PathNode) AppendSerializedHandlerError!void {
+fn appendSerializedHandler(path: *Path, alloc: std.mem.Allocator, node: PathNode) AppendSerializedHandlerError!void {
     switch (node) {
         .move_to => |n| try path.moveTo(alloc, n.point.x, n.point.y),
         .line_to => |n| try path.lineTo(alloc, n.point.x, n.point.y),
@@ -726,7 +722,7 @@ fn deserializeInner(
     handler_err_T: type,
     handler: DeserializeHandler(handler_err_T),
     path: *Path,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     serialized: []const u8,
 ) !void {
     var reader: std.Io.Reader = .fixed(serialized);
@@ -860,11 +856,11 @@ fn fixState(self: *Path) FixStateError!void {
 }
 
 fn clampI24(x: f64) f64 {
-    return math.clamp(x, math.minInt(i24), math.maxInt(i24));
+    return std.math.clamp(x, std.math.minInt(i24), std.math.maxInt(i24));
 }
 
 test "clone" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var path: Path = .empty;
     defer path.deinit(alloc);
     try path.moveTo(alloc, 49.5, 0);
@@ -873,126 +869,126 @@ test "clone" {
     path.transformation = path.transformation.scale(2.0, 3.0);
     var cloned = try path.clone(alloc);
     defer cloned.deinit(alloc);
-    try testing.expectEqualDeep(path, cloned);
+    try std.testing.expectEqualDeep(path, cloned);
 }
 
 test "moveTo clamped" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 2);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[0]);
-        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 2 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
     }
     {
         // Clamped
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try p.moveTo(alloc, math.minInt(i24) - 1, math.maxInt(i24) + 1);
-        try testing.expectEqual(PathNode{
-            .move_to = .{ .point = .{ .x = math.minInt(i24), .y = math.maxInt(i24) } },
+        try p.moveTo(alloc, std.math.minInt(i24) - 1, std.math.maxInt(i24) + 1);
+        try std.testing.expectEqual(PathNode{
+            .move_to = .{ .point = .{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) } },
         }, p.nodes.items[0]);
-        try testing.expectEqual(Point{ .x = math.minInt(i24), .y = math.maxInt(i24) }, p.initial_point);
-        try testing.expectEqual(Point{ .x = math.minInt(i24), .y = math.maxInt(i24) }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) }, p.current_point);
     }
 }
 
 test "lineTo clamped" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.lineTo(alloc, 1, 2);
-        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 1, .y = 2 } } }, p.nodes.items[1]);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 2 }, p.current_point);
     }
     {
         // Clamped
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
-        try p.lineTo(alloc, math.minInt(i24) - 1, math.maxInt(i24) + 1);
-        try testing.expectEqual(PathNode{
-            .line_to = .{ .point = .{ .x = math.minInt(i24), .y = math.maxInt(i24) } },
+        try p.lineTo(alloc, std.math.minInt(i24) - 1, std.math.maxInt(i24) + 1);
+        try std.testing.expectEqual(PathNode{
+            .line_to = .{ .point = .{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) } },
         }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = math.minInt(i24), .y = math.maxInt(i24) }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) }, p.current_point);
     }
 }
 
 test "curveTo clamped" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.curveTo(alloc, 1, 2, 3, 4, 5, 6);
-        try testing.expectEqual(PathNode{
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{ .x = 1, .y = 2 },
                 .p2 = .{ .x = 3, .y = 4 },
                 .p3 = .{ .x = 5, .y = 6 },
             },
         }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
     }
     {
         // Clamped
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
-        try p.curveTo(alloc, math.minInt(i24) - 1, math.maxInt(i24) + 1, 3, 4, 5, 6);
-        try testing.expectEqual(PathNode{
+        try p.curveTo(alloc, std.math.minInt(i24) - 1, std.math.maxInt(i24) + 1, 3, 4, 5, 6);
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{
-                    .x = math.minInt(i24),
-                    .y = math.maxInt(i24),
+                    .x = std.math.minInt(i24),
+                    .y = std.math.maxInt(i24),
                 },
                 .p2 = .{ .x = 3, .y = 4 },
                 .p3 = .{ .x = 5, .y = 6 },
             },
         }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
-        try p.curveTo(alloc, 1, 2, math.minInt(i24) - 1, math.maxInt(i24) + 1, 5, 6);
-        try testing.expectEqual(PathNode{
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+        try p.curveTo(alloc, 1, 2, std.math.minInt(i24) - 1, std.math.maxInt(i24) + 1, 5, 6);
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{ .x = 1, .y = 2 },
                 .p2 = .{
-                    .x = math.minInt(i24),
-                    .y = math.maxInt(i24),
+                    .x = std.math.minInt(i24),
+                    .y = std.math.maxInt(i24),
                 },
                 .p3 = .{ .x = 5, .y = 6 },
             },
         }, p.nodes.items[2]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
-        try p.curveTo(alloc, 1, 2, 3, 4, math.minInt(i24) - 1, math.maxInt(i24) + 1);
-        try testing.expectEqual(PathNode{
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 5, .y = 6 }, p.current_point);
+        try p.curveTo(alloc, 1, 2, 3, 4, std.math.minInt(i24) - 1, std.math.maxInt(i24) + 1);
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{ .x = 1, .y = 2 },
                 .p2 = .{ .x = 3, .y = 4 },
                 .p3 = .{
-                    .x = math.minInt(i24),
-                    .y = math.maxInt(i24),
+                    .x = std.math.minInt(i24),
+                    .y = std.math.maxInt(i24),
                 },
             },
         }, p.nodes.items[3]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = math.minInt(i24), .y = math.maxInt(i24) }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = std.math.minInt(i24), .y = std.math.maxInt(i24) }, p.current_point);
     }
 }
 
 test "isClosed" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Basic (closed)
         var p = try initCapacity(alloc, 0);
@@ -1001,7 +997,7 @@ test "isClosed" {
         try p.lineTo(alloc, 2, 2);
         try p.lineTo(alloc, 3, 3);
         try p.close(alloc);
-        try testing.expectEqual(true, p.isClosed());
+        try std.testing.expectEqual(true, p.isClosed());
     }
 
     {
@@ -1016,7 +1012,7 @@ test "isClosed" {
         try p.lineTo(alloc, 5, 5);
         try p.lineTo(alloc, 6, 6);
         try p.close(alloc);
-        try testing.expectEqual(true, p.isClosed());
+        try std.testing.expectEqual(true, p.isClosed());
     }
 
     {
@@ -1028,7 +1024,7 @@ test "isClosed" {
         try p.moveTo(alloc, 3, 3);
         try p.lineTo(alloc, 4, 4);
         try p.lineTo(alloc, 5, 5);
-        try testing.expectEqual(false, p.isClosed());
+        try std.testing.expectEqual(false, p.isClosed());
     }
 
     {
@@ -1041,7 +1037,7 @@ test "isClosed" {
         try p.moveTo(alloc, 3, 3);
         try p.lineTo(alloc, 4, 4);
         try p.lineTo(alloc, 5, 5);
-        try testing.expectEqual(false, p.isClosed());
+        try std.testing.expectEqual(false, p.isClosed());
     }
 
     {
@@ -1054,29 +1050,29 @@ test "isClosed" {
         try p.lineTo(alloc, 4, 4);
         try p.lineTo(alloc, 5, 5);
         try p.close(alloc);
-        try testing.expectEqual(false, p.isClosed());
+        try std.testing.expectEqual(false, p.isClosed());
     }
 
     {
         // Empty node set
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(false, p.isClosed());
+        try std.testing.expectEqual(false, p.isClosed());
     }
 }
 
 test "relMoveTo" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relMoveTo(alloc, 1, 1);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
+        try std.testing.expectEqual(Point{ .x = 2, .y = 2 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
     }
 
     {
@@ -1085,32 +1081,32 @@ test "relMoveTo" {
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relMoveTo(alloc, -10, -10);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
+        try std.testing.expectEqual(Point{ .x = -9, .y = -9 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
     }
 
     {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(error.NoCurrentPoint, p.relMoveTo(alloc, 1, 1));
+        try std.testing.expectEqual(error.NoCurrentPoint, p.relMoveTo(alloc, 1, 1));
     }
 }
 
 test "relLineTo" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relLineTo(alloc, 1, 1);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = 2, .y = 2 } } }, p.nodes.items[1]);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 2, .y = 2 }, p.current_point);
     }
 
     {
@@ -1119,38 +1115,38 @@ test "relLineTo" {
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relLineTo(alloc, -10, -10);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{ .line_to = .{ .point = .{ .x = -9, .y = -9 } } }, p.nodes.items[1]);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = -9, .y = -9 }, p.current_point);
     }
 
     {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(error.NoCurrentPoint, p.relLineTo(alloc, 1, 1));
+        try std.testing.expectEqual(error.NoCurrentPoint, p.relLineTo(alloc, 1, 1));
     }
 }
 
 test "relCurveTo" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     {
         // Normal
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{ .x = 2, .y = 2 },
                 .p2 = .{ .x = 3, .y = 3 },
                 .p3 = .{ .x = 4, .y = 4 },
             },
         }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = 4, .y = 4 }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = 4, .y = 4 }, p.current_point);
     }
 
     {
@@ -1159,40 +1155,40 @@ test "relCurveTo" {
         defer p.deinit(alloc);
         try p.moveTo(alloc, 1, 1);
         try p.relCurveTo(alloc, -10, -10, -11, -11, -12, -12);
-        try testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
-        try testing.expectEqual(PathNode{
+        try std.testing.expectEqual(PathNode{ .move_to = .{ .point = .{ .x = 1, .y = 1 } } }, p.nodes.items[0]);
+        try std.testing.expectEqual(PathNode{
             .curve_to = .{
                 .p1 = .{ .x = -9, .y = -9 },
                 .p2 = .{ .x = -10, .y = -10 },
                 .p3 = .{ .x = -11, .y = -11 },
             },
         }, p.nodes.items[1]);
-        try testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
-        try testing.expectEqual(Point{ .x = -11, .y = -11 }, p.current_point);
+        try std.testing.expectEqual(Point{ .x = 1, .y = 1 }, p.initial_point);
+        try std.testing.expectEqual(Point{ .x = -11, .y = -11 }, p.current_point);
     }
 
     {
         // No current point
         var p = try initCapacity(alloc, 0);
         defer p.deinit(alloc);
-        try testing.expectEqual(error.NoCurrentPoint, p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3));
+        try std.testing.expectEqual(error.NoCurrentPoint, p.relCurveTo(alloc, 1, 1, 2, 2, 3, 3));
     }
 }
 
 test "relative helpers with transformations" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var p = try initCapacity(alloc, 0);
     defer p.deinit(alloc);
 
     p.transformation = p.transformation.translate(100, 200);
     try p.moveTo(alloc, 0, 0);
-    try testing.expectEqual(PathNode{
+    try std.testing.expectEqual(PathNode{
         .move_to = .{
             .point = .{ .x = 100, .y = 200 },
         },
     }, p.nodes.items[0]);
     try p.relMoveTo(alloc, -10, -20);
-    try testing.expectEqual(PathNode{
+    try std.testing.expectEqual(PathNode{
         .move_to = .{
             .point = .{ .x = 90, .y = 180 },
         },
@@ -1201,7 +1197,7 @@ test "relative helpers with transformations" {
     p.reset();
     try p.moveTo(alloc, 0, 0);
     try p.relLineTo(alloc, -10, -20);
-    try testing.expectEqual(PathNode{
+    try std.testing.expectEqual(PathNode{
         .line_to = .{
             .point = .{ .x = 90, .y = 180 },
         },
@@ -1210,7 +1206,7 @@ test "relative helpers with transformations" {
     p.reset();
     try p.moveTo(alloc, 0, 0);
     try p.relCurveTo(alloc, -10, -20, 30, 40, -50, -60);
-    try testing.expectEqual(PathNode{
+    try std.testing.expectEqual(PathNode{
         .curve_to = .{
             .p1 = .{ .x = 90, .y = 180 },
             .p2 = .{ .x = 130, .y = 240 },
@@ -1235,8 +1231,8 @@ test "fixState" {
             .nodes = .fromOwnedSlice(&nodes),
         };
         try got.fixState();
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
     }
     {
         // Open (line_to)
@@ -1249,8 +1245,8 @@ test "fixState" {
             .nodes = .fromOwnedSlice(&nodes),
         };
         try got.fixState();
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
-        try testing.expectEqualDeep(Point{ .x = 15, .y = 13 }, got.current_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try std.testing.expectEqualDeep(Point{ .x = 15, .y = 13 }, got.current_point);
     }
     {
         // Open (curve_to)
@@ -1268,8 +1264,8 @@ test "fixState" {
             .nodes = .fromOwnedSlice(&nodes),
         };
         try got.fixState();
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
-        try testing.expectEqualDeep(Point{ .x = 4, .y = 4 }, got.current_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try std.testing.expectEqualDeep(Point{ .x = 4, .y = 4 }, got.current_point);
     }
     {
         // Closed w/o move_to after
@@ -1285,8 +1281,8 @@ test "fixState" {
             .nodes = .fromOwnedSlice(&nodes),
         };
         try got.fixState();
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
-        try testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.initial_point);
+        try std.testing.expectEqualDeep(Point{ .x = 25, .y = 5 }, got.current_point);
     }
     {
         // Invalid path (line_to)
@@ -1296,7 +1292,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        try testing.expectError(error.InvalidPath, got.fixState());
+        try std.testing.expectError(error.InvalidPath, got.fixState());
     }
     {
         // Invalid path (curve_to)
@@ -1310,7 +1306,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        try testing.expectError(error.InvalidPath, got.fixState());
+        try std.testing.expectError(error.InvalidPath, got.fixState());
     }
     {
         // Invalid path (close_path)
@@ -1320,7 +1316,7 @@ test "fixState" {
         var got: Path = .{
             .nodes = .fromOwnedSlice(&nodes),
         };
-        try testing.expectError(error.InvalidPath, got.fixState());
+        try std.testing.expectError(error.InvalidPath, got.fixState());
     }
 }
 
@@ -1490,7 +1486,7 @@ test "serialize, deserialize e2e" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            const alloc = testing.allocator;
+            const alloc = std.testing.allocator;
             var path: Path = .empty;
             defer path.deinit(alloc);
             try path.nodes.appendSlice(alloc, tc.nodes);
@@ -1504,7 +1500,7 @@ test "serialize, deserialize e2e" {
                     return error.TestUnexpectedError;
                 };
                 defer alloc.free(got_serialized);
-                try testing.expectEqualSlices(u8, tc.serialized, got_serialized);
+                try std.testing.expectEqualSlices(u8, tc.serialized, got_serialized);
             }
 
             if (tc.test_deserialize) {
@@ -1514,9 +1510,9 @@ test "serialize, deserialize e2e" {
                         return error.TestUnexpectedError;
                     };
                     defer deserialized.deinit(alloc);
-                    try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
-                    try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
-                    try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                    try std.testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
+                    try std.testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
+                    try std.testing.expectEqualDeep(path.current_point, deserialized.current_point);
                 }
                 {
                     var deserialized: Path = .empty;
@@ -1525,9 +1521,9 @@ test "serialize, deserialize e2e" {
                         std.debug.print("unexpected error: {}\n", .{err});
                         return error.TestUnexpectedError;
                     };
-                    try testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
-                    try testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
-                    try testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                    try std.testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
+                    try std.testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
+                    try std.testing.expectEqualDeep(path.current_point, deserialized.current_point);
                 }
             }
         }
@@ -1536,9 +1532,9 @@ test "serialize, deserialize e2e" {
 }
 
 test "serialize OOM to trigger errdefer" {
-    const main_alloc = testing.allocator;
+    const main_alloc = std.testing.allocator;
     var debug_alloc: std.heap.DebugAllocator(.{}) = .init;
-    var failing_alloc: testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 1 });
+    var failing_alloc: std.testing.FailingAllocator = .init(debug_alloc.allocator(), .{ .fail_index = 1 });
 
     var path: Path = .empty;
     defer path.deinit(main_alloc);
@@ -1550,8 +1546,8 @@ test "serialize OOM to trigger errdefer" {
         .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
     });
 
-    try testing.expectEqual(error.OutOfMemory, path.serialize(failing_alloc.allocator(), false));
-    testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
+    try std.testing.expectEqual(error.OutOfMemory, path.serialize(failing_alloc.allocator(), false));
+    std.testing.expectEqual(0, debug_alloc.detectLeaks()) catch |err| {
         // so we don't report the leak twice
         debug_alloc.deinitWithoutLeakChecks();
         return err;
@@ -1559,27 +1555,27 @@ test "serialize OOM to trigger errdefer" {
 }
 
 test "deserialize, expected command" {
-    try testing.expectError(error.ExpectedCommand, loadSerialized(testing.allocator, "M1.5,2.5,3.5,4.5"));
+    try std.testing.expectError(error.ExpectedCommand, loadSerialized(std.testing.allocator, "M1.5,2.5,3.5,4.5"));
 }
 
 test "deserialize, expected delimiter" {
-    try testing.expectError(error.ExpectedValueDelimiter, loadSerialized(testing.allocator, "M1.5x"));
+    try std.testing.expectError(error.ExpectedValueDelimiter, loadSerialized(std.testing.allocator, "M1.5x"));
 }
 
 test "deserialize, unexpected end of stream" {
-    try testing.expectError(error.EndOfStream, loadSerialized(testing.allocator, "M1.5"));
+    try std.testing.expectError(error.EndOfStream, loadSerialized(std.testing.allocator, "M1.5"));
 }
 
 test "deserialize, expected value" {
-    try testing.expectError(error.ExpectedValue, loadSerialized(testing.allocator, "M1.5,"));
+    try std.testing.expectError(error.ExpectedValue, loadSerialized(std.testing.allocator, "M1.5,"));
 }
 
 test "deserialize, fractions close to zero must have leading zero" {
-    try testing.expectError(error.ExpectedValue, loadSerialized(testing.allocator, "M.5,2.5"));
+    try std.testing.expectError(error.ExpectedValue, loadSerialized(std.testing.allocator, "M.5,2.5"));
 }
 
 test "appendPath" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var src: Path = .empty;
     defer src.deinit(alloc);
     var dst: Path = .empty;
@@ -1590,16 +1586,16 @@ test "appendPath" {
     try src.curveTo(alloc, 89, 49, 209, 49, 279, 249);
     try src.close(alloc);
     try dst.appendPath(alloc, &src);
-    try testing.expectEqualDeep(src, dst);
+    try std.testing.expectEqualDeep(src, dst);
 }
 
 test "close moves current point to initial point" {
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var path: Path = .empty;
     defer path.deinit(alloc);
     try path.moveTo(alloc, 49, 0);
     try path.lineTo(alloc, 100, 100);
     try path.lineTo(alloc, 100, 0);
     try path.close(alloc);
-    try testing.expectEqualDeep(path.initial_point, path.current_point);
+    try std.testing.expectEqualDeep(path.initial_point, path.current_point);
 }

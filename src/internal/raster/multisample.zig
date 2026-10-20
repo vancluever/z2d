@@ -1,7 +1,4 @@
-const math = @import("std").math;
-const mem = @import("std").mem;
-const heap = @import("std").heap;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const compositor = @import("../../compositor.zig");
 const pixel = @import("../../pixel.zig");
@@ -20,14 +17,14 @@ const TestingError = @import("../util.zig").TestingError;
 pub const scale = 4;
 
 pub fn run(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     polygons: Polygon,
     fill_rule: FillRule,
     operator: compositor.Operator,
     precision: compositor.Precision,
-) mem.Allocator.Error!void {
+) std.mem.Allocator.Error!void {
     const coverage_full = scale * scale;
     const alpha_scale: i32 = 256 / coverage_full;
 
@@ -43,7 +40,7 @@ pub fn run(
     // a mask first, downsample, it, and then paint that to a particular
     // location. As such, our draw area is taken as a scanline range, versus a
     // box.
-    const start_scanline: i32 = math.clamp(
+    const start_scanline: i32 = std.math.clamp(
         @as(i32, @intFromFloat(@floor(polygons.extent_top / scale))),
         0,
         sfc_height - 1,
@@ -58,7 +55,7 @@ pub fn run(
     // need to worry about scanlines, but rather controls the x-bounds of the
     // draw area for both the coverage buffer length and also clear area for
     // unbounded operations.
-    const end_scanline: i32 = math.clamp(
+    const end_scanline: i32 = std.math.clamp(
         @as(i32, @intFromFloat(@ceil(polygons.extent_bottom / scale))),
         start_scanline,
         sfc_height - 1,
@@ -66,12 +63,12 @@ pub fn run(
 
     // We create our coverage buffer once and reset it separately, this is
     // because reset is simple so we don't need to tie it into the arena.
-    const scanline_start_x: i32 = math.clamp(
+    const scanline_start_x: i32 = std.math.clamp(
         @as(i32, @intFromFloat(@floor(polygons.extent_left / scale))),
         0,
         sfc_width - 1,
     );
-    const scanline_end_x: i32 = math.clamp(
+    const scanline_end_x: i32 = std.math.clamp(
         @as(i32, @intFromFloat(@ceil(polygons.extent_right / scale))),
         scanline_start_x,
         sfc_width,
@@ -172,7 +169,7 @@ pub fn run(
                 // principle, this is similar to the clamping we do in SSAA
                 // (i.e., clamping to the width of the mask, not the width of
                 // the final target surface).
-                const end_x: i32 = math.clamp(
+                const end_x: i32 = std.math.clamp(
                     filtered_edge_set[edge_pair_start + 1] - scanline_start_x_scaled,
                     start_x,
                     scanline_draw_width_scaled,
@@ -198,7 +195,7 @@ pub fn run(
             const coverage_val_raw, const coverage_len_raw = coverage_buffer.get(coverage_x_u);
             // Clamp our coverage values (guards against uninitialized values
             // in the sparse buffer)
-            const coverage_val: u8 = math.clamp(coverage_val_raw, 0, coverage_full);
+            const coverage_val: u8 = std.math.clamp(coverage_val_raw, 0, coverage_full);
             const coverage_len: u32 = @min(coverage_len_raw, @max(0, sfc_width - x));
             switch (coverage_val) {
                 0 => {}, // Skip zero entries
@@ -218,7 +215,7 @@ pub fn run(
                         y,
                         coverage_len,
                         _precision,
-                        @intCast(math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
+                        @intCast(std.math.clamp(coverage_val * alpha_scale - 1, 0, 255)),
                     );
                 },
             }
@@ -282,26 +279,26 @@ test "addSpan" {
     // Simple triangle in the midpoint/cross-section, assuming a scanline
     // edge of (50, 0) to (149, 0), so len = 100. We start out and expand
     // in.
-    const alloc = testing.allocator;
+    const alloc = std.testing.allocator;
     var coverage: SparseCoverageBuffer = try .init(alloc, 1024);
     defer coverage.deinit(alloc);
     addSpan(&coverage, 200, 400);
-    try testing.expectEqual(.{ 4, 100 }, coverage.get(50));
+    try std.testing.expectEqual(.{ 4, 100 }, coverage.get(50));
 
     addSpan(&coverage, 201, 398);
-    try testing.expectEqual(.{ 7, 1 }, coverage.get(50));
-    try testing.expectEqual(.{ 8, 98 }, coverage.get(51));
-    try testing.expectEqual(.{ 7, 1 }, coverage.get(149));
+    try std.testing.expectEqual(.{ 7, 1 }, coverage.get(50));
+    try std.testing.expectEqual(.{ 8, 98 }, coverage.get(51));
+    try std.testing.expectEqual(.{ 7, 1 }, coverage.get(149));
 
     addSpan(&coverage, 202, 396);
-    try testing.expectEqual(.{ 9, 1 }, coverage.get(50));
-    try testing.expectEqual(.{ 12, 98 }, coverage.get(51));
-    try testing.expectEqual(.{ 9, 1 }, coverage.get(149));
+    try std.testing.expectEqual(.{ 9, 1 }, coverage.get(50));
+    try std.testing.expectEqual(.{ 12, 98 }, coverage.get(51));
+    try std.testing.expectEqual(.{ 9, 1 }, coverage.get(149));
 
     addSpan(&coverage, 203, 394);
-    try testing.expectEqual(.{ 10, 1 }, coverage.get(50));
-    try testing.expectEqual(.{ 16, 98 }, coverage.get(51));
-    try testing.expectEqual(.{ 10, 1 }, coverage.get(149));
+    try std.testing.expectEqual(.{ 10, 1 }, coverage.get(50));
+    try std.testing.expectEqual(.{ 16, 98 }, coverage.get(51));
+    try std.testing.expectEqual(.{ 10, 1 }, coverage.get(149));
 
     var x: u32 = 0;
     var tracked_span_len: usize = 0;
@@ -310,7 +307,7 @@ test "addSpan" {
         x += x_inc;
         tracked_span_len += 1;
     }
-    try testing.expectEqual(4, tracked_span_len);
+    try std.testing.expectEqual(4, tracked_span_len);
 }
 
 test "addSpan, capacity tests/checks" {
@@ -366,10 +363,10 @@ test "addSpan, capacity tests/checks" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            const alloc = testing.allocator;
+            const alloc = std.testing.allocator;
             var coverage: SparseCoverageBuffer = try .init(alloc, tc.capacity);
             defer coverage.deinit(alloc);
-            try testing.expectEqualSlices(u8, tc.expected_T, @tagName(coverage.lengths));
+            try std.testing.expectEqualSlices(u8, tc.expected_T, @tagName(coverage.lengths));
 
             var got_val: u8 = undefined;
             var got_len: u32 = undefined;
@@ -378,41 +375,41 @@ test "addSpan, capacity tests/checks" {
 
             addSpan(&coverage, 0, cap_supersample);
             got_val, got_len = coverage.get(0);
-            try testing.expectEqual(4, got_val);
-            try testing.expectEqual(tc.capacity, got_len);
+            try std.testing.expectEqual(4, got_val);
+            try std.testing.expectEqual(tc.capacity, got_len);
 
             addSpan(&coverage, 1, cap_supersample - 2);
             got_val, got_len = coverage.get(0);
-            try testing.expectEqual(7, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(7, got_val);
+            try std.testing.expectEqual(1, got_len);
             got_val, got_len = coverage.get(1);
-            try testing.expectEqual(8, got_val);
-            try testing.expectEqual(tc.capacity - 2, got_len);
+            try std.testing.expectEqual(8, got_val);
+            try std.testing.expectEqual(tc.capacity - 2, got_len);
             got_val, got_len = coverage.get(tc.capacity - 1);
-            try testing.expectEqual(7, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(7, got_val);
+            try std.testing.expectEqual(1, got_len);
 
             addSpan(&coverage, 2, cap_supersample - 4);
             got_val, got_len = coverage.get(0);
-            try testing.expectEqual(9, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(9, got_val);
+            try std.testing.expectEqual(1, got_len);
             got_val, got_len = coverage.get(1);
-            try testing.expectEqual(12, got_val);
-            try testing.expectEqual(tc.capacity - 2, got_len);
+            try std.testing.expectEqual(12, got_val);
+            try std.testing.expectEqual(tc.capacity - 2, got_len);
             got_val, got_len = coverage.get(tc.capacity - 1);
-            try testing.expectEqual(9, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(9, got_val);
+            try std.testing.expectEqual(1, got_len);
 
             addSpan(&coverage, 3, cap_supersample - 6);
             got_val, got_len = coverage.get(0);
-            try testing.expectEqual(10, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(10, got_val);
+            try std.testing.expectEqual(1, got_len);
             got_val, got_len = coverage.get(1);
-            try testing.expectEqual(16, got_val);
-            try testing.expectEqual(tc.capacity - 2, got_len);
+            try std.testing.expectEqual(16, got_val);
+            try std.testing.expectEqual(tc.capacity - 2, got_len);
             got_val, got_len = coverage.get(tc.capacity - 1);
-            try testing.expectEqual(10, got_val);
-            try testing.expectEqual(1, got_len);
+            try std.testing.expectEqual(10, got_val);
+            try std.testing.expectEqual(1, got_len);
 
             var x: u32 = 0;
             var tracked_span_len: usize = 0;
@@ -421,7 +418,7 @@ test "addSpan, capacity tests/checks" {
                 x += x_inc;
                 tracked_span_len += 1;
             }
-            try testing.expectEqual(3, tracked_span_len);
+            try std.testing.expectEqual(3, tracked_span_len);
         }
     };
     try runCases(name, cases, TestFn.f);

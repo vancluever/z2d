@@ -2,7 +2,7 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 //! Pattern types and interfaces.
-const testing = @import("std").testing;
+const std = @import("std");
 
 const gradient = @import("gradient.zig");
 
@@ -52,5 +52,5 @@ pub const OpaquePattern = struct {
 test "OpaquePattern, as interface" {
     const px: Pixel = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } };
     const pt: Pattern = .{ .opaque_pattern = .{ .pixel = px } };
-    try testing.expectEqual(px, pt.getPixel(1, 1));
+    try std.testing.expectEqual(px, pt.getPixel(1, 1));
 }

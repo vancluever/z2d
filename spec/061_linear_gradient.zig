@@ -3,14 +3,13 @@
 
 //! Case: renders some linear gradients using lower-level compositing on
 //! intermediary surfaces.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "061_linear_gradient";
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     _ = io;
     const width = 200;
     const height = 400;

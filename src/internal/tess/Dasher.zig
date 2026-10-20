@@ -4,7 +4,7 @@
 //! Used to keep track of dash state.
 const Dasher = @This();
 
-const testing = @import("std").testing;
+const std = @import("std");
 
 dashes: []const f64,
 offset: f64,
@@ -76,23 +76,23 @@ pub fn step(self: *Dasher, len: f64) bool {
 
 test "validate" {
     // Good (single)
-    try testing.expect(validate(&.{1}));
+    try std.testing.expect(validate(&.{1}));
 
     // Good (even)
-    try testing.expect(validate(&.{ 1, 2 }));
+    try std.testing.expect(validate(&.{ 1, 2 }));
 
     // Good (odd)
-    try testing.expect(validate(&.{ 1, 2, 3 }));
+    try std.testing.expect(validate(&.{ 1, 2, 3 }));
 
     // Good (zero stops)
-    try testing.expect(validate(&.{ 0, 2, 0 }));
+    try std.testing.expect(validate(&.{ 0, 2, 0 }));
 
     // Bad (single zero)
-    try testing.expect(!validate(&.{0}));
+    try std.testing.expect(!validate(&.{0}));
 
     // Bad (all zeroes)
-    try testing.expect(!validate(&.{ 0, 0, 0 }));
+    try std.testing.expect(!validate(&.{ 0, 0, 0 }));
 
     // Bad (negative value)
-    try testing.expect(!validate(&.{ 1, -2, 3 }));
+    try std.testing.expect(!validate(&.{ 1, -2, 3 }));
 }

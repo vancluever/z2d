@@ -15,10 +15,6 @@
 //! details on loading fonts and passing them in.
 
 const std = @import("std");
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const unicode = @import("std").unicode;
 
 const fontpkg = @import("font.zig");
 const painter = @import("painter.zig");
@@ -55,7 +51,7 @@ pub const ShowTextError = ShapeTextError || painter.FillError;
 /// Shows the text supplied in the UTF-8 string at the co-ordinates specified
 /// by `(x, y)`.
 pub fn show(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     surface: *Surface,
     pattern: *const Pattern,
     font: *Font,
@@ -157,7 +153,7 @@ pub const ShapeTextError = error{
 
     /// The supplied text has an invalid UTF-8 sequence.
     InvalidSequence,
-} || mem.Allocator.Error || fontpkg.ReaderError || Glyph.Outline.InitError;
+} || std.mem.Allocator.Error || fontpkg.ReaderError || Glyph.Outline.InitError;
 
 /// Represents the result of `shape`.
 pub const ShapeTextResult = union(ShapeMode) {
@@ -169,7 +165,7 @@ pub const ShapeTextResult = union(ShapeMode) {
     },
 
     /// Releases the result's `Path`, if it exists.
-    pub fn deinit(self: *ShapeTextResult, alloc: mem.Allocator) void {
+    pub fn deinit(self: *ShapeTextResult, alloc: std.mem.Allocator) void {
         switch (self.*) {
             .path_only => |*p| p.deinit(alloc),
             .extents_only => {},
@@ -205,7 +201,7 @@ pub const ShapeTextResult = union(ShapeMode) {
 /// Note that the co-ordinates supplied this function are only useful when
 /// generating a path with `opts.mode` set to `.all`.
 pub fn shape(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     font: *Font,
     utf8: []const u8,
     x: f64,
@@ -242,15 +238,15 @@ pub fn shape(
     {
         var i: usize = 0;
         while (i < utf8.len) {
-            const codepoint_len = try unicode.utf8ByteSequenceLength(utf8[i]);
+            const codepoint_len = try std.unicode.utf8ByteSequenceLength(utf8[i]);
             if (i + codepoint_len > utf8.len) {
                 return error.InvalidSequence;
             }
             const codepoint: u21 = switch (codepoint_len) {
                 1 => @intCast(utf8[i]),
-                2 => try unicode.utf8Decode2(utf8[i..][0..2].*),
-                3 => try unicode.utf8Decode3(utf8[i..][0..3].*),
-                4 => try unicode.utf8Decode4(utf8[i..][0..4].*),
+                2 => try std.unicode.utf8Decode2(utf8[i..][0..2].*),
+                3 => try std.unicode.utf8Decode3(utf8[i..][0..3].*),
+                4 => try std.unicode.utf8Decode4(utf8[i..][0..4].*),
                 else => unreachable,
             };
             try codepoints.append(alloc, codepoint);

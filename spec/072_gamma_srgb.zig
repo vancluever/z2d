@@ -31,8 +31,7 @@
 //! Note that YMMV may examining this and 071_gamma_linear.zig for differences or
 //! for the notes above, depending on how hard your image viewer works to
 //! properly adjust the color.
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -42,7 +41,7 @@ pub const color_profile: z2d.color.RGBProfile = .srgb;
 const width = 400;
 const height = 300;
 
-pub fn render(io: Io, alloc: mem.Allocator) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
     var context = z2d.Context.init(io, alloc, &sfc);
     defer context.deinit();

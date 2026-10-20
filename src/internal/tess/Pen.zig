@@ -10,8 +10,6 @@
 const Pen = @This();
 
 const std = @import("std");
-const math = @import("std").math;
-const mem = @import("std").mem;
 
 const arc = @import("../arc.zig");
 
@@ -34,11 +32,11 @@ vertices: std.ArrayListUnmanaged(PenVertex),
 /// based on the maximum error along the radius, being equal to or less
 /// than tolerance.
 pub fn init(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     thickness: f64,
     tolerance: f64,
     ctm: Transformation,
-) mem.Allocator.Error!Pen {
+) std.mem.Allocator.Error!Pen {
     // You can find the proof for our calculation here in cairo-pen.c in the
     // Cairo project. It shows that ultimately, the maximum error of an ellipse
     // is along its major axis, and to get our needed number of vertices, we
@@ -66,13 +64,13 @@ pub fn init(
 
         // Calculate our delta first just in case we fall on zero for some
         // reason, and break on the minimum if it is.
-        const delta = math.acos(1 - tolerance / major_axis);
+        const delta = std.math.acos(1 - tolerance / major_axis);
         if (delta == 0) {
             break :verts 4;
         }
 
         // Regular calculation can be done now
-        const n: i32 = @intFromFloat(@ceil(2 * math.pi / delta));
+        const n: i32 = @intFromFloat(@ceil(2 * std.math.pi / delta));
         if (n < 4) {
             // Below minimum
             break :verts 4;
@@ -94,7 +92,7 @@ pub fn init(
     const reflect = ctm.determinant() < 0;
     for (0..@max(0, num_vertices)) |i| {
         const theta: f64 = th: {
-            var t = 2 * math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
+            var t = 2 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
             if (reflect) t = -t;
             break :th t;
         };
@@ -128,7 +126,7 @@ pub fn init(
     };
 }
 
-pub fn deinit(self: *Pen, alloc: mem.Allocator) void {
+pub fn deinit(self: *Pen, alloc: std.mem.Allocator) void {
     self.vertices.deinit(alloc);
     self.* = undefined;
 }

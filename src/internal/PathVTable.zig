@@ -5,23 +5,23 @@
 //! operations into spline instructions.
 const PathVTable = @This();
 
-const mem = @import("std").mem;
+const std = @import("std");
 
-pub const Error = @import("../Path.zig").Error || mem.Allocator.Error;
+pub const Error = @import("../Path.zig").Error || std.mem.Allocator.Error;
 
 ptr: *anyopaque,
-alloc: mem.Allocator,
+alloc: std.mem.Allocator,
 line_to: *const fn (
     ctx: *anyopaque,
-    alloc: mem.Allocator,
-    err_: *?mem.Allocator.Error,
+    alloc: std.mem.Allocator,
+    err_: *?std.mem.Allocator.Error,
     x: f64,
     y: f64,
 ) void,
 
 curve_to: *const fn (
     ctx: *anyopaque,
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     err_: *?Error,
     x1: f64,
     y1: f64,
@@ -31,8 +31,8 @@ curve_to: *const fn (
     y3: f64,
 ) void,
 
-pub fn lineTo(self: *const PathVTable, x: f64, y: f64) mem.Allocator.Error!void {
-    var err_: ?mem.Allocator.Error = null;
+pub fn lineTo(self: *const PathVTable, x: f64, y: f64) std.mem.Allocator.Error!void {
+    var err_: ?std.mem.Allocator.Error = null;
     self.line_to(self.ptr, self.alloc, &err_, x, y);
     if (err_) |err| return err;
 }

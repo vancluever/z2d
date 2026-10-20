@@ -7,15 +7,13 @@
 //! NOTE 2: Several of the line width calculations make degenerate lines, these
 //! are intentional, as they behave the same in Cairo, so they serve as a way
 //! to test correctness against Cairo.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "045_round_join_transforms";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 800;
     const height = 600;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -45,11 +43,11 @@ fn line(context: *z2d.Context, i: f64) !void {
     const saved_source = context.getSource();
     defer context.setSourceToPixel(saved_source.opaque_pattern.pixel);
 
-    const x_offset: f64 = 200 * @mod(i, 4.0) + 100 - 50 * @cos(math.pi / 6.0 * i);
-    const y_offset: f64 = 200 * @floor(i / 4.0) + 75 - 37.5 * @sin(math.pi / 6.0 * i);
+    const x_offset: f64 = 200 * @mod(i, 4.0) + 100 - 50 * @cos(std.math.pi / 6.0 * i);
+    const y_offset: f64 = 200 * @floor(i / 4.0) + 75 - 37.5 * @sin(std.math.pi / 6.0 * i);
 
     context.translate(x_offset, y_offset);
-    context.rotate(math.pi / 6.0 * i);
+    context.rotate(std.math.pi / 6.0 * i);
     context.scale(2, 1);
     try context.moveTo(0, 0);
     try context.lineTo(25, 75);

@@ -3,15 +3,13 @@
 
 //! Case: Renders and fills bezier curves on a 900x300 surface at varying
 //! levels of error tolerance.
-const Io = @import("std").Io;
-const debug = @import("std").debug;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "028_fill_bezier_tolerance";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 900;
     const height = 300;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);

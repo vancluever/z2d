@@ -10,15 +10,13 @@
 //! to fix eventually. With that said, these differences currently seem to be
 //! minimal, mostly having to do with restricting cap and join at extremely
 //! small line widths.
-const Io = @import("std").Io;
-const math = @import("std").math;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
 pub const filename = "044_line_transforms";
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     const width = 700;
     const height = 400;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, width, height);
@@ -60,12 +58,12 @@ fn line(context: *z2d.Context, i: f64, reverse: bool, round: bool) !void {
     };
 
     if (reverse) {
-        context.translate(i * 100 + 25, y_offset + 25 * @sin(math.pi / 6.0 * i));
-        context.rotate(-math.pi / 6.0 * i);
+        context.translate(i * 100 + 25, y_offset + 25 * @sin(std.math.pi / 6.0 * i));
+        context.rotate(-std.math.pi / 6.0 * i);
         context.scale(2, 1);
     } else {
-        context.translate(i * 100 + 25, y_offset - 25 * @sin(math.pi / 6.0 * i));
-        context.rotate(math.pi / 6.0 * i);
+        context.translate(i * 100 + 25, y_offset - 25 * @sin(std.math.pi / 6.0 * i));
+        context.rotate(std.math.pi / 6.0 * i);
         context.scale(2, 1);
     }
     if (reverse) {

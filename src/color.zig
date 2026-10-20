@@ -29,8 +29,7 @@
 //! Note that all color values are stored de-multiplied, and are expected to be
 //! supplied as such (unless otherwise specified).
 
-const math = @import("std").math;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const pixel = @import("pixel.zig");
 
@@ -216,10 +215,10 @@ fn RGB(profile: RGBProfile) type {
         /// Returns a value with the fields clamped to the expected 0-1 range.
         pub fn init(r: f32, g: f32, b: f32, a: f32) Self {
             return .{
-                .r = math.clamp(r, 0, 1),
-                .g = math.clamp(g, 0, 1),
-                .b = math.clamp(b, 0, 1),
-                .a = math.clamp(a, 0, 1),
+                .r = std.math.clamp(r, 0, 1),
+                .g = std.math.clamp(g, 0, 1),
+                .b = std.math.clamp(b, 0, 1),
+                .a = std.math.clamp(a, 0, 1),
             };
         }
 
@@ -335,9 +334,9 @@ fn RGB(profile: RGBProfile) type {
         /// color to a gamma-corrected value.
         pub fn applyGamma(src: Self) Self {
             return .{
-                .r = math.pow(f32, src.r, 1 / gamma),
-                .g = math.pow(f32, src.g, 1 / gamma),
-                .b = math.pow(f32, src.b, 1 / gamma),
+                .r = std.math.pow(f32, src.r, 1 / gamma),
+                .g = std.math.pow(f32, src.g, 1 / gamma),
+                .b = std.math.pow(f32, src.b, 1 / gamma),
                 .a = src.a,
             };
         }
@@ -346,9 +345,9 @@ fn RGB(profile: RGBProfile) type {
         /// the color to a linear value.
         pub fn removeGamma(src: Self) Self {
             return .{
-                .r = math.pow(f32, src.r, gamma),
-                .g = math.pow(f32, src.g, gamma),
-                .b = math.pow(f32, src.b, gamma),
+                .r = std.math.pow(f32, src.r, gamma),
+                .g = std.math.pow(f32, src.g, gamma),
+                .b = std.math.pow(f32, src.b, gamma),
                 .a = src.a,
             };
         }
@@ -412,9 +411,9 @@ pub const HSL = struct {
     pub fn init(h: f32, s: f32, l: f32, a: f32) HSL {
         return .{
             .h = if (h < 0 or h > 360) @mod(h, 360) else h,
-            .s = math.clamp(s, 0, 1),
-            .l = math.clamp(l, 0, 1),
-            .a = math.clamp(a, 0, 1),
+            .s = std.math.clamp(s, 0, 1),
+            .l = std.math.clamp(l, 0, 1),
+            .a = std.math.clamp(a, 0, 1),
         };
     }
 
@@ -616,7 +615,7 @@ test "Color.init" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, Color.init(tc.args));
+            try std.testing.expectEqualDeep(tc.expected, Color.init(tc.args));
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -632,7 +631,7 @@ test "LinearRGB.init" {
             .b = 0.75,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -644,7 +643,7 @@ test "LinearRGB.init" {
             .b = 1,
             .a = 0,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 }
 
@@ -658,19 +657,19 @@ test "LinearRGB.fromColor" {
             .b = 0.75,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
         // From gamma-corrected
         const got = LinearRGB.fromColor(SRGB.init(0.25, 0.5, 0.75, 1).asColor());
         const expected: LinearRGB = .{
-            .r = math.pow(f32, 0.25, 2.2),
-            .g = math.pow(f32, 0.5, 2.2),
-            .b = math.pow(f32, 0.75, 2.2),
-            .a = math.pow(f32, 1, 2.2),
+            .r = std.math.pow(f32, 0.25, 2.2),
+            .g = std.math.pow(f32, 0.5, 2.2),
+            .b = std.math.pow(f32, 0.75, 2.2),
+            .a = std.math.pow(f32, 1, 2.2),
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -682,7 +681,7 @@ test "LinearRGB.fromColor" {
             .b = 0,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 }
 
@@ -707,14 +706,14 @@ test "LinearRGB.decodeRGBA, LinearRGB.decodeRGBARaw" {
 
     // Set our epsilon to help accommodate integer mul/demul error
     const epsilon: f32 = 1.0 / 128.0;
-    try testing.expectApproxEqAbs(expected.r, got.r, epsilon);
-    try testing.expectApproxEqAbs(expected.g, got.g, epsilon);
-    try testing.expectApproxEqAbs(expected.b, got.b, epsilon);
-    try testing.expectApproxEqAbs(expected.a, got.a, epsilon);
-    try testing.expectApproxEqAbs(expected_raw.r, got_raw.r, epsilon);
-    try testing.expectApproxEqAbs(expected_raw.g, got_raw.g, epsilon);
-    try testing.expectApproxEqAbs(expected_raw.b, got_raw.b, epsilon);
-    try testing.expectApproxEqAbs(expected_raw.a, got_raw.a, epsilon);
+    try std.testing.expectApproxEqAbs(expected.r, got.r, epsilon);
+    try std.testing.expectApproxEqAbs(expected.g, got.g, epsilon);
+    try std.testing.expectApproxEqAbs(expected.b, got.b, epsilon);
+    try std.testing.expectApproxEqAbs(expected.a, got.a, epsilon);
+    try std.testing.expectApproxEqAbs(expected_raw.r, got_raw.r, epsilon);
+    try std.testing.expectApproxEqAbs(expected_raw.g, got_raw.g, epsilon);
+    try std.testing.expectApproxEqAbs(expected_raw.b, got_raw.b, epsilon);
+    try std.testing.expectApproxEqAbs(expected_raw.a, got_raw.a, epsilon);
 }
 
 test "LinearRGB.encodeRGBA LinearRGB.encodeRGBARaw" {
@@ -728,8 +727,8 @@ test "LinearRGB.encodeRGBA LinearRGB.encodeRGBARaw" {
         .b = 191,
         .a = 230,
     };
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_raw, got_raw);
+    try std.testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected_raw, got_raw);
 }
 
 test "LinearRGB.multiply" {
@@ -740,10 +739,10 @@ test "LinearRGB.multiply" {
         .b = 0.675,
         .a = 0.9,
     };
-    try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "LinearRGB.demultiply" {
@@ -754,10 +753,10 @@ test "LinearRGB.demultiply" {
         .b = 0.75,
         .a = 0.9,
     };
-    try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "LinearRGB.removeGamma" {
@@ -769,7 +768,7 @@ test "LinearRGB.removeGamma" {
         .b = 0.75,
         .a = 0.9,
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "LinearRGB.applyGamma" {
@@ -782,7 +781,7 @@ test "LinearRGB.applyGamma" {
         .b = 0.75,
         .a = 0.9,
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "LinearRGB.interpolate, LinearRGB.interpolateEncode" {
@@ -874,11 +873,11 @@ test "LinearRGB.interpolate, LinearRGB.interpolateEncode" {
             const got = LinearRGB.interpolate(tc.a, tc.b, tc.t);
             const got_rgba = LinearRGB.interpolateEncode(tc.a, tc.b, tc.t);
             const expected_rgba = tc.expected.encodeRGBA();
-            try testing.expectApproxEqAbs(tc.expected.r, got.r, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.g, got.g, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.b, got.b, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.a, got.a, math.floatEps(f32));
-            try testing.expectEqualDeep(expected_rgba, got_rgba);
+            try std.testing.expectApproxEqAbs(tc.expected.r, got.r, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.g, got.g, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.b, got.b, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.a, got.a, std.math.floatEps(f32));
+            try std.testing.expectEqualDeep(expected_rgba, got_rgba);
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -894,7 +893,7 @@ test "SRGB.init" {
             .b = 0.75,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -906,7 +905,7 @@ test "SRGB.init" {
             .b = 1,
             .a = 0,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 }
 
@@ -920,10 +919,10 @@ test "SRGB.fromColor" {
             .b = 0.8774243,
             .a = 1,
         };
-        try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
     }
 
     {
@@ -935,7 +934,7 @@ test "SRGB.fromColor" {
             .b = 0.75,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -947,10 +946,10 @@ test "SRGB.fromColor" {
             .b = 0.7297400,
             .a = 1,
         };
-        try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
     }
 }
 
@@ -977,8 +976,8 @@ test "SRGB.decodeRGBA, SRGB.decodeRGBARaw" {
         .b = 0.6745098,
         .a = 0.9019608,
     });
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_raw, got_raw);
+    try std.testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected_raw, got_raw);
 }
 
 test "SRGB.encodeRGBA, SRGB.encodeRGBARaw" {
@@ -997,8 +996,8 @@ test "SRGB.encodeRGBA, SRGB.encodeRGBARaw" {
         .b = 223,
         .a = 230,
     };
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_raw, got_raw);
+    try std.testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected_raw, got_raw);
 }
 
 test "SRGB.multiply" {
@@ -1009,10 +1008,10 @@ test "SRGB.multiply" {
         .b = 0.675,
         .a = 0.9,
     };
-    try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "SRGB.demultiply" {
@@ -1023,10 +1022,10 @@ test "SRGB.demultiply" {
         .b = 0.75,
         .a = 0.9,
     };
-    try testing.expectApproxEqAbs(expected.r, got.r, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.g, got.g, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.b, got.b, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.r, got.r, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.g, got.g, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.b, got.b, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "SRGB.removeGamma" {
@@ -1038,7 +1037,7 @@ test "SRGB.removeGamma" {
         .b = 0.53104925,
         .a = 0.9,
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "SRGB.applyGamma" {
@@ -1050,7 +1049,7 @@ test "SRGB.applyGamma" {
         .b = 0.8774243,
         .a = 0.9,
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "SRGB.interpolate, SRGB.interpolateEncode" {
@@ -1142,11 +1141,11 @@ test "SRGB.interpolate, SRGB.interpolateEncode" {
             const got = SRGB.interpolate(tc.a, tc.b, tc.t);
             const got_rgba = SRGB.interpolateEncode(tc.a, tc.b, tc.t);
             const expected_rgba = SRGB.encodeRGBA(tc.expected);
-            try testing.expectApproxEqAbs(tc.expected.r, got.r, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.g, got.g, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.b, got.b, math.floatEps(f32));
-            try testing.expectApproxEqAbs(tc.expected.a, got.a, math.floatEps(f32));
-            try testing.expectEqualDeep(expected_rgba, got_rgba);
+            try std.testing.expectApproxEqAbs(tc.expected.r, got.r, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.g, got.g, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.b, got.b, std.math.floatEps(f32));
+            try std.testing.expectApproxEqAbs(tc.expected.a, got.a, std.math.floatEps(f32));
+            try std.testing.expectEqualDeep(expected_rgba, got_rgba);
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1162,7 +1161,7 @@ test "HSL.init" {
             .l = 0.5,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -1174,7 +1173,7 @@ test "HSL.init" {
             .l = 0.5,
             .a = 1,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -1186,7 +1185,7 @@ test "HSL.init" {
             .l = 1,
             .a = 0,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 
     {
@@ -1198,7 +1197,7 @@ test "HSL.init" {
             .l = 1,
             .a = 0,
         };
-        try testing.expectEqualDeep(expected, got);
+        try std.testing.expectEqualDeep(expected, got);
     }
 }
 
@@ -1242,9 +1241,9 @@ test "HSL.fromColor" {
         .{
             .name = "sRGB default gamma - navy blue",
             .color = SRGB.init(
-                math.pow(f32, 10.0 / 255.0, 1.0 / 2.2),
-                math.pow(f32, 10.0 / 255.0, 1.0 / 2.2),
-                math.pow(f32, 118.0 / 255.0, 1.0 / 2.2),
+                std.math.pow(f32, 10.0 / 255.0, 1.0 / 2.2),
+                std.math.pow(f32, 10.0 / 255.0, 1.0 / 2.2),
+                std.math.pow(f32, 118.0 / 255.0, 1.0 / 2.2),
                 1,
             ).asColor(),
             .expected = HSL.init(240, 0.85, 0.25, 1),
@@ -1267,7 +1266,7 @@ test "HSL.fromColor" {
             // difference.
             const epsilon: f32 = 1.0 / 128.0;
             inline for ("hsla") |field| {
-                try testing.expectApproxEqAbs(
+                try std.testing.expectApproxEqAbs(
                     @field(tc.expected, &[_]u8{field}),
                     @field(got, &[_]u8{field}),
                     epsilon,
@@ -1282,7 +1281,7 @@ test "HSL.fromRGB, zero value (black)" {
     // Asserts that we return zero values for pure black.
     //
     // NOTE: Other fromRGB tests are just handled in fromColor.
-    try testing.expectEqualDeep(
+    try std.testing.expectEqualDeep(
         HSL.init(0, 0, 0, 1),
         HSL.fromRGB(LinearRGB.init(0, 0, 0, 1)),
     );
@@ -1297,10 +1296,10 @@ test "HSL.toRGB" {
         .a = 1,
     };
     const epsilon: f32 = 1.0 / 256.0; // small epsilon here to deal with rounding errors from converters
-    try testing.expectApproxEqAbs(expected.r, got.r, epsilon);
-    try testing.expectApproxEqAbs(expected.g, got.g, epsilon);
-    try testing.expectApproxEqAbs(expected.b, got.b, epsilon);
-    try testing.expectApproxEqAbs(expected.a, got.a, epsilon);
+    try std.testing.expectApproxEqAbs(expected.r, got.r, epsilon);
+    try std.testing.expectApproxEqAbs(expected.g, got.g, epsilon);
+    try std.testing.expectApproxEqAbs(expected.b, got.b, epsilon);
+    try std.testing.expectApproxEqAbs(expected.a, got.a, epsilon);
 }
 
 test "HSL.multiply" {
@@ -1311,10 +1310,10 @@ test "HSL.multiply" {
         .l = 0.25,
         .a = 0.5,
     };
-    try testing.expectApproxEqAbs(expected.h, got.h, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.s, got.s, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.l, got.l, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.h, got.h, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.s, got.s, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.l, got.l, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "HSL.demultiply" {
@@ -1325,10 +1324,10 @@ test "HSL.demultiply" {
         .l = 0.5,
         .a = 0.5,
     };
-    try testing.expectApproxEqAbs(expected.h, got.h, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.s, got.s, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.l, got.l, math.floatEps(f32));
-    try testing.expectApproxEqAbs(expected.a, got.a, math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.h, got.h, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.s, got.s, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.l, got.l, std.math.floatEps(f32));
+    try std.testing.expectApproxEqAbs(expected.a, got.a, std.math.floatEps(f32));
 }
 
 test "HSL.interpolate, HSL.interpolateEncode" {
@@ -1503,8 +1502,8 @@ test "HSL.interpolate, HSL.interpolateEncode" {
             const got = HSL.interpolate(tc.a, tc.b, tc.t, tc.method);
             const got_rgba = HSL.interpolateEncode(tc.a, tc.b, tc.t, tc.method);
             const expected_rgba = tc.expected.toRGB().encodeRGBA();
-            try testing.expectEqualDeep(tc.expected, got);
-            try testing.expectEqualDeep(expected_rgba, got_rgba);
+            try std.testing.expectEqualDeep(tc.expected, got);
+            try std.testing.expectEqualDeep(expected_rgba, got_rgba);
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1557,8 +1556,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .method = .{ .linear_rgb = {} },
             // Expected here accommodates the f32 epsilon
             .expected = LinearRGB.init(0.24999996, 0.24999996, 0, 1).asColor(),
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1638,8 +1637,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .method = .{ .hsl = .shorter },
             // Expected here accommodates the f32 epsilon
             .expected = HSL.init(60, 1, 0.24999996, 1).asColor(),
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1679,8 +1678,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .method = .{ .hsl = .longer },
             // Expected here accommodates the f32 epsilon
             .expected = HSL.init(240, 1, 0.24999996, 1).asColor(),
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1720,8 +1719,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .method = .{ .hsl = .increasing },
             // Expected here accommodates the f32 epsilon
             .expected = HSL.init(60, 1, 0.24999996, 1).asColor(),
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1761,8 +1760,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             .method = .{ .hsl = .decreasing },
             // Expected here accommodates the f32 epsilon
             .expected = HSL.init(240, 1, 0.24999996, 1).asColor(),
-            .a = SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
     };
@@ -1771,8 +1770,8 @@ test "InterpolationMethod.interpolate, InterpolationMethod.interpolateEncode" {
             const got = tc.method.interpolate(tc.a, tc.b, tc.t);
             const expected_rgba = LinearRGB.fromColor(tc.expected).encodeRGBA();
             const got_rgba = tc.method.interpolateEncode(tc.a, tc.b, tc.t);
-            try testing.expectEqualDeep(tc.expected, got);
-            try testing.expectEqualDeep(expected_rgba, got_rgba);
+            try std.testing.expectEqualDeep(tc.expected, got);
+            try std.testing.expectEqualDeep(expected_rgba, got_rgba);
         }
     };
     try runCases(name, cases, TestFn.f);

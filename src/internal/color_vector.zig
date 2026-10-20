@@ -3,9 +3,7 @@
 
 //! Internal vector types and helpers for color functionality.
 
-const debug = @import("std").debug;
-const math = @import("std").math;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const color = @import("../color.zig");
 const gradient = @import("../gradient.zig");
@@ -112,7 +110,7 @@ pub fn fromDitherVec(
     comptime limit: bool,
     limit_len: usize,
 ) LinearRGB.T {
-    if (limit) debug.assert(limit_len < vector_length);
+    if (limit) std.debug.assert(limit_len < vector_length);
     const rgba: LinearRGB.T = switch (dither.source) {
         .pixel => |src| c: {
             const c = color.LinearRGB.decodeRGBA(pixel.RGBA.fromPixel(src));
@@ -182,7 +180,7 @@ fn apply_dither(
 ) @Vector(vector_length, f32) {
     const lower = splat(f32, 0.0);
     const upper = splat(f32, 1.0);
-    return math.clamp(value + m * scale, lower, upper);
+    return std.math.clamp(value + m * scale, lower, upper);
 }
 
 pub const LinearRGB = RGBVec(color.LinearRGB);
@@ -211,13 +209,13 @@ fn RGBVec(comptime underlying_T: type) type {
             if (underlying_T == color.LinearRGB) {
                 return src;
             }
-            // math.pow is not implemented for vectors, so we need to do this
+            // std.math.pow is not implemented for vectors, so we need to do this
             // element-by-element.
             var result: T = undefined;
             inline for (0..vector_length) |i| {
-                result.r[i] = math.pow(f32, src.r[i], 1 / underlying_T.gamma);
-                result.g[i] = math.pow(f32, src.g[i], 1 / underlying_T.gamma);
-                result.b[i] = math.pow(f32, src.b[i], 1 / underlying_T.gamma);
+                result.r[i] = std.math.pow(f32, src.r[i], 1 / underlying_T.gamma);
+                result.g[i] = std.math.pow(f32, src.g[i], 1 / underlying_T.gamma);
+                result.b[i] = std.math.pow(f32, src.b[i], 1 / underlying_T.gamma);
                 result.a[i] = src.a[i];
             }
             return result;
@@ -228,13 +226,13 @@ fn RGBVec(comptime underlying_T: type) type {
             if (underlying_T == color.LinearRGB) {
                 return src;
             }
-            // math.pow is not implemented for vectors, so we need to do this
+            // std.math.pow is not implemented for vectors, so we need to do this
             // element-by-element.
             var result: T = undefined;
             inline for (0..vector_length) |i| {
-                result.r[i] = math.pow(f32, src.r[i], underlying_T.gamma);
-                result.g[i] = math.pow(f32, src.g[i], underlying_T.gamma);
-                result.b[i] = math.pow(f32, src.b[i], underlying_T.gamma);
+                result.r[i] = std.math.pow(f32, src.r[i], underlying_T.gamma);
+                result.g[i] = std.math.pow(f32, src.g[i], underlying_T.gamma);
+                result.b[i] = std.math.pow(f32, src.b[i], underlying_T.gamma);
                 result.a[i] = src.a[i];
             }
             return result;
@@ -537,7 +535,7 @@ test "LinearRGB.fromColorVec" {
         expected.a[i] = 1;
     }
     const got = LinearRGB.fromColorVec(colors);
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "LinearRGB.decodeRGBAVecRaw" {
@@ -567,7 +565,7 @@ test "LinearRGB.decodeRGBAVecRaw" {
         expected_raw_vec.a[i] = got_raw.a;
     }
 
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
+    try std.testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBAVecRaw" {
@@ -597,8 +595,8 @@ test "LinearRGB.encodeRGBAVec, LinearRGB.encodeRGBAVecRaw" {
         expected_raw_vec.b[i] = got_raw.b;
         expected_raw_vec.a[i] = got_raw.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "LinearRGB.demultiplyVec, divide by zero" {
@@ -617,7 +615,7 @@ test "LinearRGB.demultiplyVec, divide by zero" {
         .b = @splat(0.0),
         .a = @splat(0.0),
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "LinearRGB.removeGammaVec" {
@@ -638,7 +636,7 @@ test "LinearRGB.removeGammaVec" {
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "LinearRGB.applyGammaVec" {
@@ -660,7 +658,7 @@ test "LinearRGB.applyGammaVec" {
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
@@ -704,8 +702,8 @@ test "LinearRGB.interpolateVec, LinearRGB.interpolateEncodeVec" {
 
     const got = LinearRGB.interpolateVec(red_vec, green_vec, t_vec);
     const got_encoded = LinearRGB.interpolateEncodeVec(red_vec, green_vec, t_vec);
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_encoded, got_encoded);
+    try std.testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected_encoded, got_encoded);
 }
 
 test "SRGB.fromColorVec" {
@@ -718,17 +716,17 @@ test "SRGB.fromColorVec" {
         const j: f32 = @floatFromInt(i);
         const k: f32 = @floatFromInt(vector_length);
         colors[i] = color.HSL.init(0, 1, 0.5 * (1 / k * j), 1).asColor();
-        expected.r[i] = math.pow(f32, 1.0 * (1.0 / k * j), 1.0 / 2.2);
+        expected.r[i] = std.math.pow(f32, 1.0 * (1.0 / k * j), 1.0 / 2.2);
         expected.g[i] = 0;
         expected.b[i] = 0;
         expected.a[i] = 1;
     }
     const got = SRGB.fromColorVec(colors);
     inline for (0..vector_length) |i| {
-        try testing.expectApproxEqAbs(expected.r[i], got.r[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.g[i], got.g[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.b[i], got.b[i], math.floatEps(f32));
-        try testing.expectApproxEqAbs(expected.a[i], got.a[i], math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.r[i], got.r[i], std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.g[i], got.g[i], std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.b[i], got.b[i], std.math.floatEps(f32));
+        try std.testing.expectApproxEqAbs(expected.a[i], got.a[i], std.math.floatEps(f32));
     }
 }
 
@@ -759,8 +757,8 @@ test "SRGB.encodeRGBAVec, SRGB.encodeRGBAVecRaw" {
         expected_raw_vec.b[i] = got_raw.b;
         expected_raw_vec.a[i] = got_raw.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
-    try testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_raw_vec, got_raw_vec);
 }
 
 test "SRGB.removeGammaVec" {
@@ -781,7 +779,7 @@ test "SRGB.removeGammaVec" {
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "SRGB.applyGammaVec" {
@@ -802,7 +800,7 @@ test "SRGB.applyGammaVec" {
         expected_vec.b[i] = got.b;
         expected_vec.a[i] = got.a;
     }
-    try testing.expectEqualDeep(expected_vec, got_vec);
+    try std.testing.expectEqualDeep(expected_vec, got_vec);
 }
 
 test "SRGB.interpolateEncodeVec" {
@@ -846,8 +844,8 @@ test "SRGB.interpolateEncodeVec" {
 
     const got = SRGB.interpolateVec(red_vec, green_vec, t_vec);
     const got_encoded = SRGB.interpolateEncodeVec(red_vec, green_vec, t_vec);
-    try testing.expectEqualDeep(expected, got);
-    try testing.expectEqualDeep(expected_encoded, got_encoded);
+    try std.testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected_encoded, got_encoded);
 }
 
 test "HSL.fromColorVec" {
@@ -868,7 +866,7 @@ test "HSL.fromColorVec" {
         expected.a[i] = 1;
     }
     const got = HSL.fromColorVec(colors);
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.toSRGBVec" {
@@ -890,7 +888,7 @@ test "HSL.toSRGBVec" {
         expected.a[i] = 1;
     }
     const got = HSL.toRGBVec(src_vec);
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.demultiplyVec, divide by zero" {
@@ -907,7 +905,7 @@ test "HSL.demultiplyVec, divide by zero" {
         .l = @splat(0.0),
         .a = @splat(0.0),
     };
-    try testing.expectEqualDeep(expected, got);
+    try std.testing.expectEqualDeep(expected, got);
 }
 
 test "HSL.interpolateEncodeVec" {
@@ -965,10 +963,10 @@ test "HSL.interpolateEncodeVec" {
     const got_long = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .longer);
     const got_cw = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .increasing);
     const got_ccw = HSL.interpolateEncodeVec(red_vec, blue_vec, t_vec, .decreasing);
-    try testing.expectEqualDeep(expected_short, got_short);
-    try testing.expectEqualDeep(expected_long, got_long);
-    try testing.expectEqualDeep(expected_cw, got_cw);
-    try testing.expectEqualDeep(expected_ccw, got_ccw);
+    try std.testing.expectEqualDeep(expected_short, got_short);
+    try std.testing.expectEqualDeep(expected_long, got_long);
+    try std.testing.expectEqualDeep(expected_cw, got_cw);
+    try std.testing.expectEqualDeep(expected_ccw, got_ccw);
 }
 
 test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeVec" {
@@ -1011,8 +1009,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".linear_rgb, gamma + gamma",
             .method = .{ .linear_rgb = {} },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1046,8 +1044,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".srgb, gamma + gamma",
             .method = .{ .srgb = {} },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1081,8 +1079,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".hsl, shorter, gamma + gamma",
             .method = .{ .hsl = .shorter },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1116,8 +1114,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".hsl, longer, gamma + gamma",
             .method = .{ .hsl = .longer },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1151,8 +1149,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".hsl, increasing, gamma + gamma",
             .method = .{ .hsl = .increasing },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
         .{
@@ -1186,8 +1184,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
         .{
             .name = ".hsl, decreasing, gamma + gamma",
             .method = .{ .hsl = .decreasing },
-            .a = color.SRGB.init(math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
-            .b = color.SRGB.init(0, math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
+            .a = color.SRGB.init(std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 0, 1).asColor(),
+            .b = color.SRGB.init(0, std.math.pow(f32, 0.5, 1.0 / 2.2), 0, 1).asColor(),
             .t = 0.5,
         },
     };
@@ -1217,8 +1215,8 @@ test "InterpolationMethod.interpolateVec, InterpolationMethod.interpolateEncodeV
             }
             const got = interpolateVec(tc.method, a_vec, b_vec, t_vec);
             const got_encoded = interpolateEncodeVec(tc.method, a_vec, b_vec, t_vec);
-            try testing.expectEqualDeep(expected, got);
-            try testing.expectEqualDeep(expected_encoded, got_encoded);
+            try std.testing.expectEqualDeep(expected, got);
+            try std.testing.expectEqualDeep(expected_encoded, got_encoded);
         }
     };
     try runCases(name, cases, TestFn.f);
@@ -1305,7 +1303,7 @@ test "Dither.getRGBAVec" {
                 expected.b[i] = expected_scalar.b;
                 expected.a[i] = expected_scalar.a;
             }
-            try testing.expectEqualDeep(expected, fromDitherVecEncode(&d, tc.x, tc.y, false, 0));
+            try std.testing.expectEqualDeep(expected, fromDitherVecEncode(&d, tc.x, tc.y, false, 0));
         }
     };
     try runCases(name, cases, TestFn.f);

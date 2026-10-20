@@ -2,14 +2,7 @@
 //   Copyright © 2024-2026 Chris Marchesi
 
 const builtin = @import("builtin");
-const Io = @import("std").Io;
-const debug = @import("std").debug;
-const fs = @import("std").fs;
-const fmt = @import("std").fmt;
-const heap = @import("std").heap;
-const mem = @import("std").mem;
-const sha256 = @import("std").crypto.hash.sha2.Sha256;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const z2d = @import("z2d");
 const zbench = @import("zbench");
@@ -107,7 +100,7 @@ const _089_text_shape_context = @import("089_text_shape_context.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
-var debug_allocator: heap.DebugAllocator(.{}) = .init;
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !void {
     const alloc, const is_debug = switch (builtin.mode) {
@@ -124,7 +117,7 @@ pub fn main() !void {
         // other could be more realistic. This keeps the benchmarks from having
         // to link against libc though, given that nothing else in the project
         // needs it currently.
-        .ReleaseFast, .ReleaseSmall => .{ heap.smp_allocator, false },
+        .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
     };
 
     defer if (is_debug) {
@@ -231,21 +224,21 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _088_text_dimensions);
     try addPathBenchmark(&bench, _089_text_shape_context);
 
-    var threaded: Io.Threaded = .init_single_threaded;
+    var threaded: std.Io.Threaded = .init_single_threaded;
     const io = threaded.io();
-    try bench.run(io, Io.File.stdout());
+    try bench.run(io, std.Io.File.stdout());
 }
 
 fn addCompositorBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
     if (options.filter) |filter| {
-        if (filter.len != 0 and !mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
+        if (filter.len != 0 and !std.mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
     }
     try bench.add("(NOAA) " ++ subject.filename, CompositorBenchmark(subject).f, .{});
 }
 
 fn addPathBenchmark(bench: *zbench.Benchmark, subject: anytype) !void {
     if (options.filter) |filter| {
-        if (filter.len != 0 and !mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
+        if (filter.len != 0 and !std.mem.containsAtLeast(u8, subject.filename, 1, filter)) return;
     }
     try bench.add("(NOAA) " ++ subject.filename, PathBenchmark(subject, .none).f, .{});
     try bench.add("(SSAA) " ++ subject.filename, PathBenchmark(subject, .supersample_4x).f, .{});
@@ -257,12 +250,12 @@ fn CompositorBenchmark(
 ) type {
     return struct {
         fn f(
-            alloc: mem.Allocator,
+            alloc: std.mem.Allocator,
         ) void {
-            var threaded: Io.Threaded = .init_single_threaded;
+            var threaded: std.Io.Threaded = .init_single_threaded;
             const io = threaded.io();
             var sfc = subject.render(io, alloc) catch |err| {
-                debug.print("Error: {}\n", .{err});
+                std.debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };
             sfc.deinit(alloc);
@@ -275,11 +268,11 @@ fn PathBenchmark(
     aa_mode: z2d.options.AntiAliasMode,
 ) type {
     return struct {
-        fn f(alloc: mem.Allocator) void {
-            var threaded: Io.Threaded = .init_single_threaded;
+        fn f(alloc: std.mem.Allocator) void {
+            var threaded: std.Io.Threaded = .init_single_threaded;
             const io = threaded.io();
             var sfc = subject.render(io, alloc, aa_mode) catch |err| {
-                debug.print("Error: {}\n", .{err});
+                std.debug.print("Error: {}\n", .{err});
                 @panic("error running benchmark");
             };
             sfc.deinit(alloc);

@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //   Copyright © 2024-2026 Chris Marchesi
 
-const debug = @import("std").debug;
-const math = @import("std").math;
-const mem = @import("std").mem;
-const simd = @import("std").simd;
-const testing = @import("std").testing;
+const std = @import("std");
 
 const colorpkg = @import("color.zig");
 const color_vector = @import("internal/color_vector.zig");
@@ -572,7 +568,7 @@ pub const StrideCompositor = struct {
                     .gradient => |gr| vec_storage_T.fromGradient(gr, j, false, 0),
                     .dither => |d| vec_storage_T.fromDither(d, j, false, 0),
                     .none => none: {
-                        debug.assert(op_idx != 0);
+                        std.debug.assert(op_idx != 0);
                         break :none _dst;
                     },
                 };
@@ -602,7 +598,7 @@ pub const StrideCompositor = struct {
                     .gradient => |gr| vec_storage_T.fromGradient(gr, rem_idx, true, rem_len),
                     .dither => |d| vec_storage_T.fromDither(d, rem_idx, true, rem_len),
                     .none => none: {
-                        debug.assert(op_idx != 0);
+                        std.debug.assert(op_idx != 0);
                         break :none _dst;
                     },
                 };
@@ -716,7 +712,7 @@ const RGBA16Vec = struct {
     }
 
     fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
-        if (limit) debug.assert(limit_len < vector_length);
+        if (limit) std.debug.assert(limit_len < vector_length);
         switch (src) {
             inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_src| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
@@ -752,7 +748,7 @@ const RGBA16Vec = struct {
         comptime limit: bool,
         limit_len: usize,
     ) RGBA16Vec {
-        if (limit) debug.assert(limit_len < vector_length);
+        if (limit) std.debug.assert(limit_len < vector_length);
         var c0_vec: [vector_length]colorpkg.Color = zero_color_vec;
         var c1_vec: [vector_length]colorpkg.Color = zero_color_vec;
         var offsets_vec: [vector_length]f32 = zero_float_vec;
@@ -810,7 +806,7 @@ const RGBA16Vec = struct {
         comptime limit: bool,
         limit_len: usize,
     ) void {
-        if (limit) debug.assert(limit_len < vector_length);
+        if (limit) std.debug.assert(limit_len < vector_length);
         switch (dst) {
             inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_dst| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
@@ -843,9 +839,9 @@ const RGBA16Vec = struct {
     }
 
     fn transposeToMask(T: type, field: []const u8) [vector_length]i32 {
-        debug.assert(@typeInfo(T).@"struct".fields.len == 4);
+        std.debug.assert(@typeInfo(T).@"struct".fields.len == 4);
         inline for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
-            if (mem.eql(u8, f.name, field)) {
+            if (std.mem.eql(u8, f.name, field)) {
                 return genTransposeToShuffleMask(4, i);
             }
         }
@@ -944,9 +940,9 @@ const RGBA16Vec = struct {
     }
 
     fn transposeFromMask(T: type, field: []const u8) [vector_length * 4]i32 {
-        debug.assert(@typeInfo(T).@"struct".fields.len == 4);
+        std.debug.assert(@typeInfo(T).@"struct".fields.len == 4);
         inline for (@typeInfo(T).@"struct".fields, 0..) |f, i| {
-            if (mem.eql(u8, f.name, field)) {
+            if (std.mem.eql(u8, f.name, field)) {
                 return genTransposeFromShuffleMask(4, i);
             }
         }
@@ -1089,7 +1085,7 @@ const RGBAFloat = struct {
             comptime limit: bool,
             limit_len: usize,
         ) Vector {
-            if (limit) debug.assert(limit_len < vector_length);
+            if (limit) std.debug.assert(limit_len < vector_length);
             var c0_vec: [vector_length]colorpkg.Color = zero_color_vec;
             var c1_vec: [vector_length]colorpkg.Color = zero_color_vec;
             var offsets_vec: [vector_length]f32 = zero_float_vec;
@@ -1532,7 +1528,7 @@ const IntegerOps = struct {
     // Utility integer-equivalent multiplication function for scalars, multiplies x
     // by the scalar value y.
     fn mulScalar(x: anytype, y: usize) @TypeOf(x) {
-        var z: @TypeOf(x) = mem.zeroes(@TypeOf(x));
+        var z: @TypeOf(x) = std.mem.zeroes(@TypeOf(x));
         for (0..y) |_| z += x;
         return z;
     }
@@ -2462,15 +2458,15 @@ test "src_over" {
         // RGB
         const fg_rgb = pixel.RGB.fromPixel(fg.asPixel());
         const bg_rgb = pixel.RGB.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = fg_rgb },
             runPixel(.integer, bg_rgb.asPixel(), fg_rgb.asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 43, .g = 70, .b = 109 } },
             runPixel(.integer, bg_rgb.asPixel(), fg.multiply().asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 3, .g = 63, .b = 62 } },
             runPixel(
                 .integer,
@@ -2479,7 +2475,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 4, .g = 67, .b = 66 } },
             runPixel(
                 .integer,
@@ -2488,7 +2484,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 5, .g = 84, .b = 83 } },
             runPixel(
                 .integer,
@@ -2497,7 +2493,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 0, .g = 0, .b = 0 } },
             runPixel(.integer, bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2506,7 +2502,7 @@ test "src_over" {
     {
         // RGBA
         const bg_mul = bg.multiply();
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 54, .g = 10, .b = 63, .a = 255 } },
             runPixel(
                 .integer,
@@ -2515,11 +2511,11 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 43, .g = 64, .b = 102, .a = 249 } },
             runPixel(.integer, bg_mul.asPixel(), fg.multiply().asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 57, .b = 55, .a = 249 } },
             runPixel(
                 .integer,
@@ -2528,7 +2524,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 3, .g = 60, .b = 59, .a = 249 } },
             runPixel(
                 .integer,
@@ -2537,7 +2533,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 4, .g = 76, .b = 74, .a = 247 } },
             runPixel(
                 .integer,
@@ -2546,7 +2542,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
             runPixel(.integer, bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2555,7 +2551,7 @@ test "src_over" {
     {
         // Alpha8
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
             runPixel(
                 .integer,
@@ -2564,11 +2560,11 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
             runPixel(.integer, bg_alpha8.asPixel(), fg.asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
             runPixel(
                 .integer,
@@ -2577,7 +2573,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 249 } },
             runPixel(
                 .integer,
@@ -2586,7 +2582,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 247 } },
             runPixel(
                 .integer,
@@ -2595,7 +2591,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 255 } },
             runPixel(.integer, bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2604,7 +2600,7 @@ test "src_over" {
     {
         // Alpha4
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(
                 .integer,
@@ -2613,11 +2609,11 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(.integer, bg_alpha4.asPixel(), fg.asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(
                 .integer,
@@ -2626,7 +2622,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(
                 .integer,
@@ -2635,7 +2631,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(
                 .integer,
@@ -2644,7 +2640,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 15 } },
             runPixel(.integer, bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2653,7 +2649,7 @@ test "src_over" {
     {
         // Alpha2
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(
                 .integer,
@@ -2662,11 +2658,11 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(.integer, bg_alpha2.asPixel(), fg.asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(
                 .integer,
@@ -2675,7 +2671,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(
                 .integer,
@@ -2684,7 +2680,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(
                 .integer,
@@ -2693,7 +2689,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(.integer, bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2702,7 +2698,7 @@ test "src_over" {
     {
         // Alpha1
         var bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(
                 .integer,
@@ -2711,7 +2707,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(.integer, bg_alpha1.asPixel(), fg.asPixel(), .src_over),
         );
@@ -2719,17 +2715,17 @@ test "src_over" {
         // boundary when scaling down from u8 to u1.
         var fg_127 = fg;
         fg_127.a = 127;
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } }, // Still 1 here due to our bg opacity being 90%
             runPixel(.integer, bg_alpha1.asPixel(), fg_127.asPixel(), .src_over),
         );
 
         bg_alpha1.a = 0; // Turn off bg alpha layer for rest of testing
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(.integer, bg_alpha1.asPixel(), fg_127.asPixel(), .src_over),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -2738,7 +2734,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -2747,7 +2743,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -2756,7 +2752,7 @@ test "src_over" {
                 .src_over,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(.integer, bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .src_over),
         );
@@ -2776,15 +2772,15 @@ test "dst_in" {
         // RGB
         const fg_rgb = pixel.RGB.fromPixel(fg.asPixel());
         const bg_rgb = pixel.RGB.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = bg_rgb },
             runPixel(.integer, bg_rgb.asPixel(), fg_rgb.asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 190, .b = 186 } },
             runPixel(.integer, bg_rgb.asPixel(), fg.multiply().asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 190, .b = 186 } },
             runPixel(
                 .integer,
@@ -2793,7 +2789,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 11, .g = 186, .b = 182 } },
             runPixel(
                 .integer,
@@ -2802,7 +2798,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 10, .g = 169, .b = 166 } },
             runPixel(
                 .integer,
@@ -2811,7 +2807,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgb = .{ .r = 15, .g = 254, .b = 249 } },
             runPixel(.integer, bg_rgb.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
@@ -2820,7 +2816,7 @@ test "dst_in" {
     {
         // RGBA
         const bg_mul = bg.multiply();
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
             runPixel(
                 .integer,
@@ -2829,11 +2825,11 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
             runPixel(.integer, bg_mul.asPixel(), fg.multiply().asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 170, .b = 167, .a = 171 } },
             runPixel(
                 .integer,
@@ -2842,7 +2838,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 9, .g = 167, .b = 163, .a = 167 } },
             runPixel(
                 .integer,
@@ -2851,7 +2847,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 8, .g = 152, .b = 148, .a = 152 } },
             runPixel(
                 .integer,
@@ -2860,7 +2856,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .rgba = .{ .r = 13, .g = 228, .b = 223, .a = 229 } },
             runPixel(.integer, bg_mul.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
@@ -2869,7 +2865,7 @@ test "dst_in" {
     {
         // Alpha8
         const bg_alpha8 = pixel.Alpha8.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
             runPixel(
                 .integer,
@@ -2878,11 +2874,11 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
             runPixel(.integer, bg_alpha8.asPixel(), fg.asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 171 } },
             runPixel(
                 .integer,
@@ -2891,7 +2887,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 167 } },
             runPixel(
                 .integer,
@@ -2900,7 +2896,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 152 } },
             runPixel(
                 .integer,
@@ -2909,7 +2905,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha8 = .{ .a = 229 } },
             runPixel(.integer, bg_alpha8.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
@@ -2918,7 +2914,7 @@ test "dst_in" {
     {
         // Alpha4
         const bg_alpha4 = pixel.Alpha4.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
             runPixel(
                 .integer,
@@ -2927,11 +2923,11 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
             runPixel(.integer, bg_alpha4.asPixel(), fg.asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 11 } },
             runPixel(
                 .integer,
@@ -2940,7 +2936,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 10 } },
             runPixel(
                 .integer,
@@ -2949,7 +2945,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 9 } },
             runPixel(
                 .integer,
@@ -2958,7 +2954,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha4 = .{ .a = 14 } },
             runPixel(.integer, bg_alpha4.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
@@ -2967,7 +2963,7 @@ test "dst_in" {
     {
         // Alpha2
         const bg_alpha2 = pixel.Alpha2.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(
                 .integer,
@@ -2976,11 +2972,11 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
             runPixel(.integer, bg_alpha2.asPixel(), fg.asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
             runPixel(
                 .integer,
@@ -2989,7 +2985,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
             runPixel(
                 .integer,
@@ -2998,7 +2994,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 2 } },
             runPixel(
                 .integer,
@@ -3007,7 +3003,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha2 = .{ .a = 3 } },
             runPixel(.integer, bg_alpha2.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
@@ -3016,7 +3012,7 @@ test "dst_in" {
     {
         // Alpha1
         const bg_alpha1 = pixel.Alpha1.fromPixel(bg.asPixel());
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(
                 .integer,
@@ -3025,7 +3021,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(.integer, bg_alpha1.asPixel(), fg.asPixel(), .dst_in),
         );
@@ -3033,11 +3029,11 @@ test "dst_in" {
         // boundary when scaling down from u8 to u1.
         var fg_127 = fg;
         fg_127.a = 127;
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(.integer, bg_alpha1.asPixel(), fg_127.asPixel(), .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -3046,7 +3042,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -3055,7 +3051,7 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(
                 .integer,
@@ -3064,11 +3060,11 @@ test "dst_in" {
                 .dst_in,
             ),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 1 } },
             runPixel(.integer, bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 1 } }, .dst_in),
         );
-        try testing.expectEqualDeep(
+        try std.testing.expectEqualDeep(
             pixel.Pixel{ .alpha1 = .{ .a = 0 } },
             runPixel(.integer, bg_alpha1.asPixel(), .{ .alpha1 = .{ .a = 0 } }, .dst_in),
         );
@@ -3413,7 +3409,7 @@ test "composite, all operators (integer)" {
         fn f(tc: anytype) TestingError!void {
             const bg = pixel.Pixel.fromColor(tc.bg);
             const fg = pixel.Pixel.fromColor(tc.fg);
-            try testing.expectEqualDeep(tc.expected, runPixel(
+            try std.testing.expectEqualDeep(tc.expected, runPixel(
                 .integer,
                 bg,
                 fg,
@@ -3425,7 +3421,7 @@ test "composite, all operators (integer)" {
                         switch (fg) {
                             inline else => |src| {
                                 const expected: @TypeOf(dst) = .fromPixel(tc.expected);
-                                try testing.expectEqualDeep(expected, runPixelT(
+                                try std.testing.expectEqualDeep(expected, runPixelT(
                                     @TypeOf(dst),
                                     dst,
                                     @TypeOf(src),
@@ -3848,7 +3844,7 @@ test "composite, all operators (float)" {
     };
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
-            try testing.expectEqualDeep(tc.expected, runPixel(
+            try std.testing.expectEqualDeep(tc.expected, runPixel(
                 .float,
                 pixel.Pixel.fromColor(tc.bg),
                 pixel.Pixel.fromColor(tc.fg),
@@ -3860,10 +3856,10 @@ test "composite, all operators (float)" {
 }
 
 test "out-of-bounds compositor testing" {
-    var dst_sfc = try Surface.init(.image_surface_rgb, testing.allocator, 100, 100);
-    defer dst_sfc.deinit(testing.allocator);
-    var src_sfc = try Surface.init(.image_surface_alpha8, testing.allocator, 10, 10);
-    defer src_sfc.deinit(testing.allocator);
+    var dst_sfc = try Surface.init(.image_surface_rgb, std.testing.allocator, 100, 100);
+    defer dst_sfc.deinit(std.testing.allocator);
+    var src_sfc = try Surface.init(.image_surface_alpha8, std.testing.allocator, 10, 10);
+    defer src_sfc.deinit(std.testing.allocator);
 
     for (0..5) |i| {
         const x_offset: i32 = @intCast(i * 50);
@@ -3930,7 +3926,7 @@ test "fromStride" {
                         .a = @splat(expected_scalar.a),
                     } };
                     const got_vector = RGBA16Vec.fromStride(src_stride, 0, false, 0);
-                    try testing.expectEqualDeep(expected_vector, got_vector);
+                    try std.testing.expectEqualDeep(expected_vector, got_vector);
                 },
                 inline .alpha4, .alpha2, .alpha1 => |px, t| {
                     const src_T = @TypeOf(px);
@@ -3955,7 +3951,7 @@ test "fromStride" {
                         .a = @splat(expected_scalar.a),
                     } };
                     const got_vector = RGBA16Vec.fromStride(src_stride, 0, false, 0);
-                    try testing.expectEqualDeep(expected_vector, got_vector);
+                    try std.testing.expectEqualDeep(expected_vector, got_vector);
                 },
             }
         }
@@ -4023,7 +4019,7 @@ test "toStride" {
                         .a = @splat(src_scalar.a),
                     } };
                     src_vector.toStride(got_stride, 0, false, 0);
-                    try testing.expectEqualDeep(expected_stride, got_stride);
+                    try std.testing.expectEqualDeep(expected_stride, got_stride);
                 },
                 inline .alpha4, .alpha2, .alpha1 => |px, t| {
                     const dst_T = @TypeOf(px);
@@ -4058,7 +4054,7 @@ test "toStride" {
                         .a = @splat(src_scalar.a),
                     } };
                     src_vector.toStride(got_stride, 0, false, 0);
-                    try testing.expectEqualDeep(expected_stride, got_stride);
+                    try std.testing.expectEqualDeep(expected_stride, got_stride);
                 },
             }
         }

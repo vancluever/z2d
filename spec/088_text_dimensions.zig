@@ -12,8 +12,7 @@
 //! use lowercase letters that do not go past the average x-height and do not
 //! descend, this is so that we can properly demarcate the various metrics
 //! (bounding box, vertical metrics, etc).
-const Io = @import("std").Io;
-const mem = @import("std").mem;
+const std = @import("std");
 
 const z2d = @import("z2d");
 
@@ -37,7 +36,7 @@ const descender_pattern: z2d.Pattern = .{ .opaque_pattern = .{ .pixel = .fromCol
 const spacing_pattern: z2d.Pattern = .{ .opaque_pattern = .{ .pixel = .fromColor(.{ .rgb = .{ 1, 0, 1 } }) } };
 
 pub fn drawTextWithExtents(
-    alloc: mem.Allocator,
+    alloc: std.mem.Allocator,
     font: *z2d.font.Font,
     draw_sfc: *z2d.Surface,
     text: []const u8,
@@ -197,7 +196,7 @@ pub fn drawTextWithExtents(
     }, .{});
 }
 
-pub fn render(io: Io, alloc: mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
+pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAliasMode) !z2d.Surface {
     _ = io;
     var sfc = try z2d.Surface.init(.image_surface_rgb, alloc, sfc_width, sfc_height);
     var font = font: {
