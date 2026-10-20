@@ -54,6 +54,7 @@ See the following pull requests for additional details:
 * [#195](https://github.com/vancluever/z2d/pull/195)
 * [#201](https://github.com/vancluever/z2d/pull/201)
 * [#202](https://github.com/vancluever/z2d/pull/202)
+* [#204](https://github.com/vancluever/z2d/pull/204)
 
 ADDITIONAL ENHANCEMENTS:
 
