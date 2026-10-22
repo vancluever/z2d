@@ -16,7 +16,8 @@
 //! memory manually and `deinit` should not be called.
 //!
 //! * `serialize`, `loadSerialized`, and `appendSerialized` can also be used to
-//! export and import paths to/from a string value.
+//! export and import paths to/from a string value. There are also versions of
+//! these that can be used with external buffers.
 //!
 //! A `Context` contains a managed `Path`, and you only need to use this
 //! package directly if you are not using it.
@@ -135,20 +136,40 @@ pub fn initBuffer(nodes: []PathNode) Path {
     };
 }
 
-pub const LoadSerializedError = DeserializeSharedError || AppendSerializedHandlerError || FixStateError;
+pub const CountSerializedError = DeserializeSharedError;
+
+/// Counts the number of nodes needed to hold a string representing the result
+/// of a previous `serialize` operation.
+pub fn countSerialized(serialized: []const u8) CountSerializedError!usize {
+    var counter: SerializationCounter = .{};
+    try deserializeInner(
+        error{},
+        countSerializedHandler,
+        &counter,
+        std.mem.Allocator.failing,
+        serialized,
+    );
+    return counter.count;
+}
+
+pub const LoadSerializedError = AppendSerializedError;
 
 /// Loads a new path from a string representing the result of a previous
 /// `serialize` operation.
 pub fn loadSerialized(alloc: std.mem.Allocator, serialized: []const u8) LoadSerializedError!Path {
     var result: Path = .empty;
     errdefer result.deinit(alloc);
-    try deserializeInner(
-        AppendSerializedHandlerError,
-        appendSerializedHandler,
-        &result,
-        alloc,
-        serialized,
-    );
+    try result.appendSerialized(alloc, serialized);
+    return result;
+}
+
+pub const LoadSerializedIntoBufferError = AppendSerializedAssumeCapacityError;
+
+/// Loads a new path from a string representing the result of a previous
+/// `serialize` operation.
+pub fn loadSerializedIntoBuffer(nodes: []PathNode, serialized: []const u8) LoadSerializedIntoBufferError!Path {
+    var result: Path = .initBuffer(nodes);
+    try result.appendSerializedAssumeCapacity(serialized);
     return result;
 }
 
@@ -196,7 +217,7 @@ pub fn appendPath(
     }
 }
 
-pub const AppendSerializedError = DeserializeSharedError || AppendSerializedHandlerError || FixStateError;
+pub const AppendSerializedError = DeserializeSharedError || AppendSerializedHandlerError;
 
 /// "Appends", or replays, a path from a string representing the result of a
 /// previous `serialize` operation. This is a higher-level function that takes
@@ -208,6 +229,22 @@ pub fn appendSerialized(path: *Path, alloc: std.mem.Allocator, serialized: []con
         appendSerializedHandler,
         path,
         alloc,
+        serialized,
+    );
+}
+
+pub const AppendSerializedAssumeCapacityError = DeserializeSharedError || Error;
+/// Like `appendSerialized`, but does not require an allocator. Assumes enough
+/// space remains for all supplied points in the serialization.
+pub fn appendSerializedAssumeCapacity(
+    path: *Path,
+    serialized: []const u8,
+) AppendSerializedAssumeCapacityError!void {
+    try deserializeInner(
+        Error,
+        staticDeserializationHandler,
+        path,
+        std.mem.Allocator.failing,
         serialized,
     );
 }
@@ -698,17 +735,48 @@ fn serializeNode(writer: *std.Io.Writer, node: PathNode, prettify: bool) std.Io.
 }
 
 fn DeserializeHandler(err_T: type) type {
-    return *const fn (path: *Path, alloc: std.mem.Allocator, node: PathNode) err_T!void;
+    return *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, node: PathNode) err_T!void;
 }
 
 const AppendSerializedHandlerError = Error || std.mem.Allocator.Error;
 
-fn appendSerializedHandler(path: *Path, alloc: std.mem.Allocator, node: PathNode) AppendSerializedHandlerError!void {
+fn appendSerializedHandler(
+    ctx: *anyopaque,
+    alloc: std.mem.Allocator,
+    node: PathNode,
+) AppendSerializedHandlerError!void {
+    const path: *Path = @ptrCast(@alignCast(ctx));
     switch (node) {
         .move_to => |n| try path.moveTo(alloc, n.point.x, n.point.y),
         .line_to => |n| try path.lineTo(alloc, n.point.x, n.point.y),
         .curve_to => |n| try path.curveTo(alloc, n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
         .close_path => try path.close(alloc),
+    }
+}
+
+fn staticDeserializationHandler(ctx: *anyopaque, _: std.mem.Allocator, node: PathNode) Error!void {
+    const path: *Path = @ptrCast(@alignCast(ctx));
+    switch (node) {
+        .move_to => |n| path.moveToAssumeCapacity(n.point.x, n.point.y),
+        .line_to => |n| path.lineToAssumeCapacity(n.point.x, n.point.y),
+        .curve_to => |n| try path.curveToAssumeCapacity(n.p1.x, n.p1.y, n.p2.x, n.p2.y, n.p3.x, n.p3.y),
+        .close_path => path.closeAssumeCapacity(),
+    }
+}
+
+const SerializationCounter = struct {
+    count: usize = 0,
+};
+
+fn countSerializedHandler(
+    ctx: *anyopaque,
+    _: std.mem.Allocator,
+    node: PathNode,
+) error{}!void {
+    const counter: *SerializationCounter = @ptrCast(@alignCast(ctx));
+    switch (node) {
+        .move_to, .line_to, .curve_to => counter.count += 1,
+        .close_path => counter.count += 2,
     }
 }
 
@@ -721,7 +789,7 @@ const DeserializeSharedError = error{
 fn deserializeInner(
     handler_err_T: type,
     handler: DeserializeHandler(handler_err_T),
-    path: *Path,
+    ctx: *anyopaque,
     alloc: std.mem.Allocator,
     serialized: []const u8,
 ) !void {
@@ -730,11 +798,11 @@ fn deserializeInner(
         switch (command) {
             'M' => {
                 const point = try readerTakePoint(&reader);
-                try handler(path, alloc, .{ .move_to = .{ .point = point } });
+                try handler(ctx, alloc, .{ .move_to = .{ .point = point } });
             },
             'L' => {
                 const point = try readerTakePoint(&reader);
-                try handler(path, alloc, .{ .line_to = .{ .point = point } });
+                try handler(ctx, alloc, .{ .line_to = .{ .point = point } });
             },
             'C' => {
                 const p1 = try readerTakePoint(&reader);
@@ -742,13 +810,13 @@ fn deserializeInner(
                 const p2 = try readerTakePoint(&reader);
                 try readerTakeDelim(&reader);
                 const p3 = try readerTakePoint(&reader);
-                try handler(path, alloc, .{ .curve_to = .{
+                try handler(ctx, alloc, .{ .curve_to = .{
                     .p1 = p1,
                     .p2 = p2,
                     .p3 = p3,
                 } });
             },
-            'Z' => try handler(path, alloc, .{ .close_path = .{} }),
+            'Z' => try handler(ctx, alloc, .{ .close_path = .{} }),
             '#' => try readerTakeComments(&reader),
             ' ', '\r', '\n' => {},
             else => return error.ExpectedCommand,
@@ -1327,8 +1395,10 @@ test "serialize, deserialize e2e" {
         nodes: []const PathNode,
         prettify: bool = false,
         serialized: []const u8,
+        count: usize = 0,
         test_serialize: bool = true,
         test_deserialize: bool = true,
+        test_count: bool = true,
     }{
         .{
             .name = "triangle",
@@ -1340,6 +1410,7 @@ test "serialize, deserialize e2e" {
                 .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
             },
             .serialized = "M49.5,0L100,100L0,100Z",
+            .count = 5,
         },
         .{
             .name = "curve_to",
@@ -1354,6 +1425,7 @@ test "serialize, deserialize e2e" {
                 .{ .move_to = .{ .point = .{ .x = 19, .y = 249 } } },
             },
             .serialized = "M19,249C89,49,209,49,279,249Z",
+            .count = 4,
         },
         .{
             .name = "zeroed fractions",
@@ -1362,11 +1434,13 @@ test "serialize, deserialize e2e" {
                 .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
             },
             .serialized = "M0.5,0.125L100,100",
+            .count = 2,
         },
         .{
             .name = "empty path",
             .nodes = &.{},
             .serialized = "",
+            .count = 0,
         },
         .{
             .name = "close_path elided",
@@ -1379,6 +1453,7 @@ test "serialize, deserialize e2e" {
             },
             .serialized = "M50,50Z",
             .test_deserialize = false,
+            .count = 3,
         },
         .{
             .name = "triangle, with comments and whitespace",
@@ -1401,6 +1476,7 @@ test "serialize, deserialize e2e" {
             ,
             .test_serialize = false,
             .test_deserialize = true,
+            .count = 5,
         },
         .{
             .name = "prettified",
@@ -1425,6 +1501,7 @@ test "serialize, deserialize e2e" {
             \\Z
             \\
             ,
+            .count = 6,
         },
         .{
             .name = "multi-path",
@@ -1442,6 +1519,7 @@ test "serialize, deserialize e2e" {
                 .{ .move_to = .{ .point = .{ .x = 200, .y = 200 } } },
             },
             .serialized = "M49.5,0L100,100L0,100ZM200,200L250,200L250,250L200,250Z",
+            .count = 11,
         },
         .{
             .name = "multi-path, prettified",
@@ -1471,6 +1549,7 @@ test "serialize, deserialize e2e" {
             \\Z
             \\
             ,
+            .count = 11,
         },
         .{
             .name = "negative value",
@@ -1482,6 +1561,7 @@ test "serialize, deserialize e2e" {
                 .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
             },
             .serialized = "M49.5,0L-100,-100L0,100Z",
+            .count = 5,
         },
     };
     const TestFn = struct {
@@ -1524,6 +1604,15 @@ test "serialize, deserialize e2e" {
                     try std.testing.expectEqualDeep(path.nodes.items, deserialized.nodes.items);
                     try std.testing.expectEqualDeep(path.initial_point, deserialized.initial_point);
                     try std.testing.expectEqualDeep(path.current_point, deserialized.current_point);
+                }
+            }
+            if (tc.test_count) {
+                {
+                    const got_count = countSerialized(tc.serialized) catch |err| {
+                        std.debug.print("unexpected error: {}\n", .{err});
+                        return error.TestUnexpectedError;
+                    };
+                    try std.testing.expectEqualDeep(tc.count, got_count);
                 }
             }
         }
@@ -1598,4 +1687,23 @@ test "close moves current point to initial point" {
     try path.lineTo(alloc, 100, 0);
     try path.close(alloc);
     try std.testing.expectEqualDeep(path.initial_point, path.current_point);
+}
+
+test "loadSerializedIntoBuffer" {
+    const serialized =
+        \\M49.5,0
+        \\  L100,100
+        \\  L0,100
+        \\Z
+    ;
+    const expected: []const PathNode = &.{
+        .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+        .{ .line_to = .{ .point = .{ .x = 100, .y = 100 } } },
+        .{ .line_to = .{ .point = .{ .x = 0, .y = 100 } } },
+        .{ .close_path = .{} },
+        .{ .move_to = .{ .point = .{ .x = 49.5, .y = 0 } } },
+    };
+    var nodes: [try countSerialized(serialized)]PathNode = undefined;
+    const path: Path = try .loadSerializedIntoBuffer(&nodes, serialized);
+    try std.testing.expectEqualDeep(expected, path.nodes.items);
 }
