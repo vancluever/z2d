@@ -59,6 +59,11 @@ See the following pull requests for additional details:
 
 ADDITIONAL ENHANCEMENTS:
 
+* New supported pixel type: high color (16-bit) RGB565 (5 bits for red and
+  blue, and 6 for green) is now supported as an allowed pixel type for all
+  operations. Note that when exporting, the file will be exported as true color
+  still due to PNG lacking a high-color format.
+  ([#208](https://github.com/vancluever/z2d/pull/208))
 * `appendPath` has been added to `Path` and `Context` to allow for the replay
   of path nodes into another path, working off the destination path's
   higher-level attributes such as transformation matrices.
