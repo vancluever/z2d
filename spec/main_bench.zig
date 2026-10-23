@@ -97,6 +97,7 @@ const _086_stroke_dash_close_multiple_join = @import("086_stroke_dash_close_mult
 const _087_text_collection = @import("087_text_collection.zig");
 const _088_text_dimensions = @import("088_text_dimensions.zig");
 const _089_text_shape_context = @import("089_text_shape_context.zig");
+const _090_fill_triangle_rgb565 = @import("090_fill_triangle_rgb565.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -223,6 +224,7 @@ pub fn main() !void {
     try addPathBenchmark(&bench, _087_text_collection);
     try addPathBenchmark(&bench, _088_text_dimensions);
     try addPathBenchmark(&bench, _089_text_shape_context);
+    try addPathBenchmark(&bench, _090_fill_triangle_rgb565);
 
     var threaded: std.Io.Threaded = .init_single_threaded;
     const io = threaded.io();

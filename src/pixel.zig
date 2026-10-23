@@ -31,6 +31,13 @@ const TestingError = @import("internal/util.zig").TestingError;
 /// * `.rgba` is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
 /// * `.rgb` is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
 ///
+/// ### High-color formats
+///
+/// The following formats are high-color formats (16-bit):
+///
+/// * `.rgb565` is 16-bit high-color, with 5 bits for red and blue, and 6 bits
+/// for green. There is no alpha channel.
+///
 /// ### Alpha-only channels
 ///
 /// All alpha channels below 8 bits will be packed into memory when used as the
@@ -45,6 +52,7 @@ pub const Format = enum {
     xrgb,
     rgb,
     rgba,
+    rgb565,
     alpha8,
     alpha4,
     alpha2,
@@ -64,6 +72,7 @@ pub const Stride = union(Format) {
     xrgb: []XRGB,
     rgb: []RGB,
     rgba: []RGBA,
+    rgb565: []RGB565,
     alpha8: []Alpha8,
     alpha4: struct {
         pub const T = Alpha4;
@@ -87,7 +96,7 @@ pub const Stride = union(Format) {
     /// Returns the pixel length of the stride.
     pub fn pxLen(self: Stride) usize {
         return switch (self) {
-            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |s| s.len,
+            inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |s| s.len,
             inline .alpha4, .alpha2, .alpha1 => |s| s.px_len,
         };
     }
@@ -99,6 +108,7 @@ pub const Pixel = union(Format) {
     xrgb: XRGB,
     rgb: RGB,
     rgba: RGBA,
+    rgb565: RGB565,
     alpha8: Alpha8,
     alpha4: Alpha4,
     alpha2: Alpha2,
@@ -128,7 +138,7 @@ pub const Pixel = union(Format) {
     ///    represent grayscale.
     pub fn isOpaque(self: Pixel) bool {
         return switch (self) {
-            inline .xrgb, .rgb => true,
+            inline .xrgb, .rgb, .rgb565 => true,
             inline .argb, .rgba, .alpha8 => |px| px.a == 255,
             .alpha4 => |px| px.a == 15,
             .alpha2 => |px| px.a == 3,
@@ -394,38 +404,27 @@ fn RGBA_T(T: type) type {
 
         fn fromPixel(p: Pixel) T {
             if (p == T.format) return @field(p, @tagName(T.format));
-            return switch (p) {
-                inline .xrgb, .rgb => |q| if (is_rgba) .{
-                    .r = q.r,
-                    .g = q.g,
-                    .b = q.b,
-                    .a = 255,
-                } else .{
+
+            const rgb: RGB = switch (p) {
+                inline .xrgb, .rgb, .argb, .rgba => |q| .{
                     .r = q.r,
                     .g = q.g,
                     .b = q.b,
                 },
-                inline .argb, .rgba => |q| if (is_rgba) .{
-                    .r = q.r,
-                    .g = q.g,
-                    .b = q.b,
-                    .a = q.a,
-                } else .{
-                    .r = q.r,
-                    .g = q.g,
-                    .b = q.b,
-                },
-                inline .alpha8, .alpha4, .alpha2, .alpha1 => if (is_rgba) .{
-                    .r = 0,
-                    .g = 0,
-                    .b = 0,
-                    .a = Alpha8.fromPixel(p).a,
-                } else .{
+                .rgb565 => |q| RGB565.toRGB(q),
+                .alpha8, .alpha4, .alpha2, .alpha1 => .{
                     .r = 0,
                     .g = 0,
                     .b = 0,
                 },
             };
+
+            const alpha: Alpha8 = if (is_rgba) Alpha8.fromPixel(p) else undefined;
+
+            return if (is_rgba)
+                .{ .r = rgb.r, .g = rgb.g, .b = rgb.b, .a = alpha.a }
+            else
+                .{ .r = rgb.r, .g = rgb.g, .b = rgb.b };
         }
 
         fn average(ps: []const T) T {
@@ -511,6 +510,109 @@ fn RGBA_T(T: type) type {
     };
 }
 
+/// Describes a 16-bit RGB format, with 6 bits for the green channel, and 5
+/// bits for the red and blue channels.
+pub const RGB565 = packed struct(u16) {
+    r: u5,
+    g: u6,
+    b: u5,
+
+    /// The format descriptor for this pixel format.
+    pub const format: Format = .rgb565;
+
+    /// Returns a pixel from a clamped 0-1 RGB value.
+    pub fn fromClamped(r: f64, g: f64, b: f64) RGB565 {
+        const rc = std.math.clamp(r, 0, 1);
+        const gc = std.math.clamp(g, 0, 1);
+        const bc = std.math.clamp(b, 0, 1);
+        return .{
+            .r = @intFromFloat(@round(31.0 * rc)),
+            .g = @intFromFloat(@round(63.0 * gc)),
+            .b = @intFromFloat(@round(31.0 * bc)),
+        };
+    }
+
+    /// Returns the pixel translated to RGB565.
+    pub fn fromPixel(p: Pixel) RGB565 {
+        return switch (p) {
+            .rgb565 => |q| q,
+
+            // Just shift down all 8-bit values appropriately.
+            inline .xrgb, .rgb, .argb, .rgba => |q| fromRGB(.{ .r = q.r, .g = q.g, .b = q.b }),
+
+            // All alpha channels just are black, as per how we convert RGB
+            // without alpha.
+            inline .alpha8, .alpha4, .alpha2, .alpha1 => .{
+                .r = 0,
+                .g = 0,
+                .b = 0,
+            },
+        };
+    }
+
+    /// Convenience method to convert from 8-bit RGB to RGB565.
+    pub fn fromRGB(rgb: RGB) RGB565 {
+        return .{
+            .r = @intCast(rgb.r >> 3),
+            .g = @intCast(rgb.g >> 2),
+            .b = @intCast(rgb.b >> 3),
+        };
+    }
+
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is pure black.
+    ///
+    /// This function is limited to 256 entries; any higher than this is
+    /// safety-checked undefined behavior.
+    pub fn average(ps: []const RGB565) RGB565 {
+        std.debug.assert(ps.len <= 256);
+        if (ps.len == 0) return .{ .r = 0, .g = 0, .b = 0 };
+
+        var r: u16 = 0;
+        var g: u16 = 0;
+        var b: u16 = 0;
+
+        for (ps) |p| {
+            r += p.r;
+            g += p.g;
+            b += p.b;
+        }
+
+        return .{
+            .r = @intCast(r / ps.len),
+            .g = @intCast(g / ps.len),
+            .b = @intCast(b / ps.len),
+        };
+    }
+
+    /// Returns this pixel as an interface.
+    pub fn asPixel(self: RGB565) Pixel {
+        return .{ .rgb565 = self };
+    }
+
+    /// Convenience method to convert from RGB565 to 8-bit RGB.
+    pub fn toRGB(self: RGB565) RGB {
+        return .{
+            // RGB565 uses the same shift left/right technique as the
+            // generic alpha function uses, but just laid out
+            // statically we only need to handle two conversions: 5-bit
+            // to 8-bit, and 6-bit to 8-bit. See "shlr" in that
+            // function for more details.
+            .r = @as(u8, self.r) << 3 | @as(u8, self.r) >> 2,
+            .g = @as(u8, self.g) << 2 | @as(u8, self.g) >> 4,
+            .b = @as(u8, self.b) << 3 | @as(u8, self.b) >> 2,
+        };
+    }
+
+    /// Returns `true` if the supplied pixels are equal.
+    pub fn equal(self: RGB565, other: Pixel) bool {
+        return switch (other) {
+            .rgb565 => |o| self.r == o.r and self.g == o.g and self.b == o.b,
+            else => false,
+        };
+    }
+};
+
 /// Describes an 8-bit alpha channel-only format.
 pub const Alpha8 = Alpha(.alpha8);
 
@@ -564,7 +666,7 @@ fn Alpha(comptime fmt: Format) type {
         /// Returns the pixel translated to the alpha format.
         pub fn fromPixel(p: Pixel) Self {
             return switch (p) {
-                .xrgb, .rgb => .{
+                .xrgb, .rgb, .rgb565 => .{
                     // Special case: we assume that RGB pixels are always opaque
                     .a = MaxInt,
                 },
@@ -679,6 +781,7 @@ test "pixel interface, asPixel" {
     const xrgb: XRGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
     const rgb: RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
     const rgba: RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
+    const rgb565: RGB565 = .{ .r = 28, .g = 56, .b = 21 };
     const alpha8: Alpha8 = .{ .a = 0xDD };
     const alpha4: Alpha4 = .{ .a = 0xD };
     const alpha2: Alpha2 = .{ .a = 2 };
@@ -688,6 +791,7 @@ test "pixel interface, asPixel" {
     try std.testing.expectEqual(Pixel{ .xrgb = xrgb }, xrgb.asPixel());
     try std.testing.expectEqual(Pixel{ .rgb = rgb }, rgb.asPixel());
     try std.testing.expectEqual(Pixel{ .rgba = rgba }, rgba.asPixel());
+    try std.testing.expectEqual(Pixel{ .rgb565 = rgb565 }, rgb565.asPixel());
     try std.testing.expectEqual(Pixel{ .alpha8 = alpha8 }, alpha8.asPixel());
     try std.testing.expectEqual(Pixel{ .alpha4 = alpha4 }, alpha4.asPixel());
     try std.testing.expectEqual(Pixel{ .alpha2 = alpha2 }, alpha2.asPixel());
@@ -726,6 +830,14 @@ test "pixel interface, average" {
         .{ .r = 4, .g = 8, .b = 12, .a = 16 },
     };
     const rgba_expected: RGBA = .{ .r = 2, .g = 6, .b = 10, .a = 14 };
+
+    const rgb565 = [_]RGB565{
+        .{ .r = 1, .g = 5, .b = 9 },
+        .{ .r = 2, .g = 6, .b = 10 },
+        .{ .r = 3, .g = 7, .b = 11 },
+        .{ .r = 4, .g = 8, .b = 12 },
+    };
+    const rgb565_expected: RGB565 = .{ .r = 2, .g = 6, .b = 10 };
 
     const alpha8 = [_]Alpha8{
         .{ .a = 13 },
@@ -771,6 +883,7 @@ test "pixel interface, average" {
     try std.testing.expectEqual(xrgb_expected, XRGB.average(&xrgb));
     try std.testing.expectEqual(rgb_expected, RGB.average(&rgb));
     try std.testing.expectEqual(rgba_expected, RGBA.average(&rgba));
+    try std.testing.expectEqual(rgb565_expected, RGB565.average(&rgb565));
     try std.testing.expectEqual(alpha8_expected, Alpha8.average(&alpha8));
     try std.testing.expectEqual(alpha4_expected, Alpha4.average(&alpha4));
     try std.testing.expectEqual(alpha2_expected, Alpha2.average(&alpha2));
@@ -838,6 +951,12 @@ test "ARGB/RGBA, fromClamped" {
     }
 }
 
+test "RGB565, fromClamped" {
+    try std.testing.expectEqual(RGB565{ .r = 9, .g = 38, .b = 28 }, RGB565.fromClamped(0.3, 0.6, 0.9));
+    try std.testing.expectEqual(RGB565{ .r = 0, .g = 0, .b = 0 }, RGB565.fromClamped(-1, -1, -1));
+    try std.testing.expectEqual(RGB565{ .r = 31, .g = 63, .b = 31 }, RGB565.fromClamped(2, 2, 2));
+}
+
 test "fromPixel" {
     const Pair = struct {
         a: Pixel,
@@ -866,6 +985,10 @@ test "fromPixel" {
                 .{
                     .a = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .argb = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
                     .a = .{ .argb = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xDD } },
@@ -905,6 +1028,10 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .xrgb = .{ .r = 231, .g = 227, .b = 173 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
                     .a = .{ .xrgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
                     .b = .{ .alpha8 = .{ .a = 0xDD } },
                 },
@@ -940,6 +1067,10 @@ test "fromPixel" {
                 .{
                     .a = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .rgb = .{ .r = 231, .g = 227, .b = 173 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
                     .a = .{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
@@ -979,6 +1110,10 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .rgba = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
                     .a = .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xDD } },
                     .b = .{ .alpha8 = .{ .a = 0xDD } },
                 },
@@ -992,6 +1127,47 @@ test "fromPixel" {
                 },
                 .{
                     .a = .{ .rgba = .{ .r = 0x00, .g = 0x00, .b = 0x00, .a = 0xFF } },
+                    .b = .{ .alpha1 = .{ .a = 1 } },
+                },
+            },
+        },
+        .{
+            .name = "rgb565",
+            .pairs = &.{
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .argb = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .xrgb = .{ .r = 231, .g = 227, .b = 173 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .rgb = .{ .r = 231, .g = 227, .b = 173 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .rgba = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 0, .g = 0, .b = 0 } },
+                    .b = .{ .alpha8 = .{ .a = 255 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 0, .g = 0, .b = 0 } },
+                    .b = .{ .alpha4 = .{ .a = 15 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 0, .g = 0, .b = 0 } },
+                    .b = .{ .alpha2 = .{ .a = 3 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 0, .g = 0, .b = 0 } },
                     .b = .{ .alpha1 = .{ .a = 1 } },
                 },
             },
@@ -1014,6 +1190,10 @@ test "fromPixel" {
                 .{
                     .a = .{ .alpha8 = .{ .a = 0xDD } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .alpha8 = .{ .a = 0xFF } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
                     .a = .{ .alpha8 = .{ .a = 0xDD } },
@@ -1053,6 +1233,10 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .alpha4 = .{ .a = 0xF } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
                     .a = .{ .alpha4 = .{ .a = 0xD } },
                     .b = .{ .alpha8 = .{ .a = 0xDD } },
                 },
@@ -1090,6 +1274,10 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xA0 } },
                 },
                 .{
+                    .a = .{ .alpha2 = .{ .a = 3 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
                     .a = .{ .alpha2 = .{ .a = 2 } },
                     .b = .{ .alpha8 = .{ .a = 0xA0 } },
                 },
@@ -1125,6 +1313,10 @@ test "fromPixel" {
                 .{
                     .a = .{ .alpha1 = .{ .a = 1 } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xA0 } },
+                },
+                .{
+                    .a = .{ .alpha1 = .{ .a = 1 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
                     .a = .{ .alpha1 = .{ .a = 1 } },
@@ -1265,6 +1457,12 @@ test "equal" {
             .name = "rgba",
             .a = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
             .b = .{ .rgba = .{ .r = 0x11, .g = 0x22, .b = 0x33, .a = 0x44 } },
+            .other = .{ .xrgb = .{ .r = 0x11, .g = 0x22, .b = 0x33 } },
+        },
+        .{
+            .name = "rgb565",
+            .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+            .b = .{ .rgb565 = .{ .r = 21, .g = 46, .b = 28 } },
             .other = .{ .xrgb = .{ .r = 0x11, .g = 0x22, .b = 0x33 } },
         },
         .{
