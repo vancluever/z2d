@@ -31,6 +31,7 @@ pub const SurfaceType = enum {
     image_surface_xrgb,
     image_surface_rgb,
     image_surface_rgba,
+    image_surface_rgb565,
     image_surface_alpha8,
     image_surface_alpha4,
     image_surface_alpha2,
@@ -42,6 +43,7 @@ pub const SurfaceType = enum {
             .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
+            .image_surface_rgb565 => pixel.RGB565,
             .image_surface_alpha8 => pixel.Alpha8,
             .image_surface_alpha4 => pixel.Alpha4,
             .image_surface_alpha2 => pixel.Alpha2,
@@ -55,6 +57,7 @@ pub const SurfaceType = enum {
             .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
+            .image_surface_rgb565 => pixel.RGB565,
             .image_surface_alpha8 => pixel.Alpha8,
             .image_surface_alpha4 => u8,
             .image_surface_alpha2 => u8,
@@ -71,6 +74,7 @@ pub const Surface = union(SurfaceType) {
     image_surface_xrgb: ImageSurface(pixel.XRGB),
     image_surface_rgb: ImageSurface(pixel.RGB),
     image_surface_rgba: ImageSurface(pixel.RGBA),
+    image_surface_rgb565: ImageSurface(pixel.RGB565),
     image_surface_alpha8: ImageSurface(pixel.Alpha8),
     image_surface_alpha4: PackedImageSurface(pixel.Alpha4),
     image_surface_alpha2: PackedImageSurface(pixel.Alpha2),
@@ -481,6 +485,7 @@ pub fn ImageSurface(comptime T: type) type {
                 .xrgb => .{ .image_surface_xrgb = self },
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
+                .rgb565 => .{ .image_surface_rgb565 = self },
                 .alpha8 => .{ .image_surface_alpha8 = self },
                 else => unreachable,
             };
@@ -1719,6 +1724,7 @@ test "compositeStride, simple test w/OOB" {
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
                     for (0..10) |want_y_u| {
                         for (0..10) |want_x_u| {
+                            @setEvalBranchQuota(2000);
                             const want_x: i32 = @intCast(want_x_u);
                             const want_y: i32 = @intCast(want_y_u);
                             var got = sfc_type_enum.toPixelType().fromPixel(

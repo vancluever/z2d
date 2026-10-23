@@ -682,6 +682,15 @@ const RGBA16 = struct {
     }
 
     fn toPixelT(src: RGBA16, comptime T: type) T {
+        if (T == pixel.RGB565) {
+            // Fast-path RGB565 for now. TODO: maybe generalize this.
+            return .fromRGB(.{
+                .r = @intCast(src.r),
+                .g = @intCast(src.g),
+                .b = @intCast(src.b),
+            });
+        }
+
         var dst: T = undefined;
         if (comptime hasField(T, "r")) dst.r = @intCast(src.r);
         if (comptime hasField(T, "g")) dst.g = @intCast(src.g);
@@ -718,7 +727,7 @@ const RGBA16Vec = struct {
                 const end = if (limit) idx + limit_len else idx + vector_length;
                 return .{ .underlying = transposeToVec(_src[idx..end], limit) };
             },
-            inline .alpha4, .alpha2, .alpha1 => |_src| {
+            inline .rgb565, .alpha4, .alpha2, .alpha1 => |_src, t| {
                 var result: pixel_vector.RGBA16 = .{
                     .r = zero_int_vec,
                     .g = zero_int_vec,
@@ -726,13 +735,21 @@ const RGBA16Vec = struct {
                     .a = zero_int_vec,
                 };
                 inline for (0..vector_length) |i| {
-                    const px = pixel.Alpha8.fromPixel(
-                        @TypeOf(_src).T.getFromPacked(_src.buf, _src.px_offset + idx + i).asPixel(),
-                    );
-                    result.r[i] = 0;
-                    result.g[i] = 0;
-                    result.b[i] = 0;
-                    result.a[i] = px.a;
+                    const rgb: pixel.RGB = if (t == .rgb565)
+                        _src[idx + i].toRGB()
+                    else
+                        .{ .r = 0, .g = 0, .b = 0 };
+
+                    const alpha: pixel.Alpha8 = if (t != .rgb565)
+                        pixel.Alpha8.fromPixel(
+                            @TypeOf(_src).T.getFromPacked(_src.buf, _src.px_offset + idx + i).asPixel(),
+                        )
+                    else
+                        .{ .a = 255 };
+                    result.r[i] = rgb.r;
+                    result.g[i] = rgb.g;
+                    result.b[i] = rgb.b;
+                    result.a[i] = alpha.a;
                     if (limit) {
                         if (i + 1 == limit_len) break;
                     }
@@ -812,14 +829,22 @@ const RGBA16Vec = struct {
                 const end = if (limit) idx + limit_len else idx + vector_length;
                 transposeFromVec(_dst[idx..end], self.underlying, limit);
             },
-            inline .alpha4, .alpha2, .alpha1 => |_dst| {
+            inline .rgb565, .alpha4, .alpha2, .alpha1 => |_dst, t| {
                 inline for (0..vector_length) |i| {
-                    const dst_t = @TypeOf(_dst).T;
-                    dst_t.setInPacked(
-                        _dst.buf,
-                        _dst.px_offset + idx + i,
-                        dst_t.fromPixel(.{ .alpha8 = .{ .a = @intCast(self.underlying.a[i]) } }),
-                    );
+                    if (t == .rgb565) {
+                        _dst[idx + i] = .fromRGB(.{
+                            .r = @intCast(self.underlying.r[i]),
+                            .g = @intCast(self.underlying.g[i]),
+                            .b = @intCast(self.underlying.b[i]),
+                        });
+                    } else {
+                        const dst_t = @TypeOf(_dst).T;
+                        dst_t.setInPacked(
+                            _dst.buf,
+                            _dst.px_offset + idx + i,
+                            dst_t.fromPixel(.{ .alpha8 = .{ .a = @intCast(self.underlying.a[i]) } }),
+                        );
+                    }
                     if (limit) {
                         if (i + 1 == limit_len) break;
                     }
@@ -3895,6 +3920,10 @@ test "fromStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
+            .name = "rgb565",
+            .in = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+        },
+        .{
             .name = "alpha8",
             .in = .{ .alpha8 = .{ .a = 0xDD } },
         },
@@ -3914,7 +3943,7 @@ test "fromStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |px, t| {
                     const src_T = @TypeOf(px);
                     var src_stride_raw: [vector_length]src_T = @splat(px);
                     const src_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &src_stride_raw);
@@ -3982,6 +4011,10 @@ test "toStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
+            .name = "rgb565",
+            .in = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+        },
+        .{
             .name = "alpha8",
             .in = .{ .alpha8 = .{ .a = 0xDD } },
         },
@@ -4001,7 +4034,7 @@ test "toStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |px, t| {
                     const dst_T = @TypeOf(px);
                     var expected_stride_raw: [vector_length]dst_T = @splat(px);
                     const expected_stride: pixel.Stride = @unionInit(
