@@ -91,14 +91,14 @@ fn writePNGIHDR(writer: *std.Io.Writer, sfc: surface.Surface) WritePNGIHDRError!
     std.mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
     std.mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
-        .argb, .xrgb, .rgb, .rgba, .alpha8 => 8,
+        .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => 8,
         .alpha4 => 4,
         .alpha2 => 2,
         .alpha1 => 1,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .argb, .rgba => 6,
-        .xrgb, .rgb => 2,
+        .xrgb, .rgb, .rgb565 => 2,
         .alpha8, .alpha4, .alpha2, .alpha1 => 0,
     };
     const compression: u8 = 0;
@@ -224,9 +224,16 @@ fn writePNGIDATStream(
                 }
 
                 switch (stride) {
-                    inline .xrgb, .rgb => |s| {
+                    inline .xrgb, .rgb, .rgb565 => |s, t| {
                         var stride_vec: [vector_length]u32 = @splat(0);
-                        @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
+                        if (t == .rgb565) {
+                            // RGB565 needs to be converted to RGB first since
+                            // PNG is truecolor only
+                            for (0..stride_len) |i| {
+                                const rgb: pixel.RGB = s[x + i].toRGB();
+                                stride_vec[i] = @bitCast(rgb);
+                            }
+                        } else @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
                         stride_vec = encodeRGBAVec(
                             stride_vec,
                             profile,

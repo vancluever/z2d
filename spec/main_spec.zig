@@ -96,6 +96,7 @@ const _086_stroke_dash_close_multiple_join = @import("086_stroke_dash_close_mult
 const _087_text_collection = @import("087_text_collection.zig");
 const _088_text_dimensions = @import("088_text_dimensions.zig");
 const _089_text_shape_context = @import("089_text_shape_context.zig");
+const _090_fill_triangle_rgb565 = @import("090_fill_triangle_rgb565.zig");
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -196,6 +197,7 @@ pub fn main() !void {
     try pathExportRun(io, alloc, _087_text_collection);
     try pathExportRun(io, alloc, _088_text_dimensions);
     try pathExportRun(io, alloc, _089_text_shape_context);
+    try pathExportRun(io, alloc, _090_fill_triangle_rgb565);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -554,6 +556,10 @@ test "088_text_dimensions" {
 
 test "089_text_shape_context" {
     try pathTestRun(std.testing.io, std.testing.allocator, _089_text_shape_context);
+}
+
+test "090_fill_triangle_rgb565" {
+    try pathTestRun(std.testing.io, std.testing.allocator, _090_fill_triangle_rgb565);
 }
 
 //////////////////////////////////////////////////////////////////////////////
