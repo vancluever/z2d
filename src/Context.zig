@@ -520,6 +520,18 @@ pub fn appendSerializedPath(self: *Context, serialized: []const u8) Path.AppendS
     try self.path.appendSerialized(self.alloc, serialized);
 }
 
+/// Loads a copy of the supplied path, replacing the path currently in use. The
+/// supplied path is safe to free or otherwise use after this call.
+///
+/// The current context's transformation matrix is saved to the new path after
+/// updating, however it is not applied to the path when it is loaded in.
+pub fn loadPath(self: *Context, path: *const Path) std.mem.Allocator.Error!void {
+    var new_path = try path.clone(self.alloc);
+    new_path.transformation = self.transformation;
+    self.path.deinit(self.alloc);
+    self.path = new_path;
+}
+
 /// De-serializes a string representing the result of a previous `serializePath`
 /// operation, replacing the path currently in use.
 ///
@@ -994,4 +1006,24 @@ test "deserializePath, errors do not clobber existing path" {
     defer cloned_path.deinit(alloc);
     try std.testing.expectError(error.ExpectedCommand, context.loadSerializedPath("0"));
     try std.testing.expectEqualDeep(cloned_path, context.path);
+}
+
+test "loadPath" {
+    const serialized = "M49.5,0L100,100L0,100";
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+    defer sfc.deinit(alloc);
+    var context = Context.init(io, alloc, &sfc);
+    defer context.deinit();
+    context.scale(2.0, 1.5);
+
+    var path: Path = try .loadSerialized(alloc, serialized);
+    defer path.deinit(alloc);
+
+    try context.loadPath(&path);
+    var expected_path = try path.clone(alloc);
+    defer expected_path.deinit(alloc);
+    expected_path.transformation = context.transformation;
+    try std.testing.expectEqualDeep(expected_path, context.path);
 }

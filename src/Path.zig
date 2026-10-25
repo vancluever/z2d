@@ -182,7 +182,7 @@ pub fn deinit(self: *Path, alloc: std.mem.Allocator) void {
 
 /// Creates a copy of this path using the supplied allocator. Caller owns the
 /// memory.
-pub fn clone(self: *Path, alloc: std.mem.Allocator) std.mem.Allocator.Error!Path {
+pub fn clone(self: *const Path, alloc: std.mem.Allocator) std.mem.Allocator.Error!Path {
     return .{
         .nodes = try self.nodes.clone(alloc),
         .current_point = self.current_point,
