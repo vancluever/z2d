@@ -64,6 +64,10 @@ ADDITIONAL ENHANCEMENTS:
   operations. Note that when exporting, the file will be exported as true color
   still due to PNG lacking a high-color format.
   ([#208](https://github.com/vancluever/z2d/pull/208))
+* `loadPath` has been added to `Context` to allow for the loading of an
+  externally-managed path into the context. This acts like `loadSerialized`,
+  but paths do not need to be serialized first.
+  ([#209](https://github.com/vancluever/z2d/pull/209))
 * `appendPath` has been added to `Path` and `Context` to allow for the replay
   of path nodes into another path, working off the destination path's
   higher-level attributes such as transformation matrices.
