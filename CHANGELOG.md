@@ -38,8 +38,8 @@ through the use of `text.shape` (along with `Context.shapText`) and
 corresponding to their particular domain - `text.shape` returns metrics for the
 rendered text, and `Font.extents` returns metrics for vertical spacing.
 
-Text positioning has also changed as a result of this, being corrected to
-properly use only the ascender in a font versus the em-square.
+Default text positioning (`.top`) has also changed as a result of this, being
+corrected to properly use only the ascender in a font versus the em-square.
 
 See [#196](https://github.com/vancluever/z2d/pull/196) and
 [#197](https:////github.com/vancluever/z2d/pull/197) for additional details.
