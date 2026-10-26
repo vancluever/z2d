@@ -688,7 +688,7 @@ pub const SerializeError = std.Io.Writer.Error || std.mem.Allocator.Error;
 /// Caller owns the memory.
 ///
 /// `prettify` can be set to make the serialization more human-readable.
-pub fn serialize(self: *Path, alloc: std.mem.Allocator, prettify: bool) SerializeError![]const u8 {
+pub fn serialize(self: *const Path, alloc: std.mem.Allocator, prettify: bool) SerializeError![]const u8 {
     var serialized: std.Io.Writer.Allocating = .init(alloc);
     errdefer serialized.deinit();
     var last_: ?PathNode = null;
