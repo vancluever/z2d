@@ -1,5 +1,10 @@
 ## 0.13.0 (Unreleased)
 
+ZIG 0.17.0 REQUIRED
+
+0.13.0 now requires Zig 0.17.0 or higher. For Zig 0.16.0, use 0.12.1 or
+earlier versions within the appropriate range.
+
 FONT COLLECTIONS:
 
 * Font collections (.ttc files) are now supported. While the managed functions
