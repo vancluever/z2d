@@ -6,6 +6,11 @@
     .fingerprint = 0x188c5a41eff938f,
     .minimum_zig_version = "0.17.0",
     .paths = .{
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "COPYING",
+        "LICENSE",
+        "README.md",
         "build.zig",
         "build.zig.zon",
         "src",
