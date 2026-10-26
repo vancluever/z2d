@@ -54,6 +54,9 @@ considered a subset of the SVG path language). Note that the serialization and
 de-serialization API, and the serialization language are currently unstable and
 may change.
 
+`countSerialized` and functions in `StaticPath` also now exist to allow loading
+in serializations into static paths.
+
 See the following pull requests for additional details:
 
 * [#195](https://github.com/vancluever/z2d/pull/195)
