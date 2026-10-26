@@ -241,7 +241,7 @@ pub fn build(b: *std.Build) !void {
         "Update spec (E2E) tests (needs to be run with the \"spec\" target)",
     );
 
-    const z2d_spec = b.addModule("z2d_spec", .{
+    const z2d_spec = b.createModule(.{
         .root_source_file = b.path("spec/main_spec.zig"),
         .target = target,
         .optimize = optimize,
