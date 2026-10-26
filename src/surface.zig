@@ -453,7 +453,7 @@ pub fn ImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels = [_]T{std.mem.zeroes(T)} ** (scale * scale);
+                    var pixels: [scale * scale]T = @splat(std.mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -694,7 +694,7 @@ pub fn PackedImageSurface(comptime T: type) type {
 
             for (0..height) |y| {
                 for (0..width) |x| {
-                    var pixels = [_]T{std.mem.zeroes(T)} ** (scale * scale);
+                    var pixels: [scale * scale]T = @splat(std.mem.zeroes(T));
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
@@ -922,8 +922,8 @@ test "Surface interface" {
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
 
         // Standard tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
@@ -943,8 +943,8 @@ test "Surface interface" {
         }
 
         // initPixel tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
@@ -961,8 +961,8 @@ test "Surface interface" {
         }
 
         // Bring-your-own-buffer tests
-        inline for (@typeInfo(SurfaceType).@"enum".fields) |f| {
-            const surface_type: SurfaceType = @enumFromInt(f.value);
+        inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+            const surface_type: SurfaceType = @enumFromInt(f_value);
             const pixel_type = surface_type.toPixelType();
             const buffer_type = surface_type.toBufferType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
@@ -989,14 +989,15 @@ test "ImageSurface, init, deinit" {
     var sfc = try sfc_T.init(std.testing.allocator, 10, 20, null);
     defer sfc.deinit(std.testing.allocator);
 
+    const expected_buffer: [200]pixel.RGBA = @splat(.{ .r = 0, .g = 0, .b = 0, .a = 0 });
     try std.testing.expectEqual(20, sfc.height);
     try std.testing.expectEqual(10, sfc.width);
     try std.testing.expectEqual(200, sfc.buf.len);
     try std.testing.expectEqual(std.meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
     try std.testing.expectEqualSlices(
         pixel.RGBA,
+        &expected_buffer,
         sfc.buf,
-        &[_]pixel.RGBA{.{ .r = 0, .g = 0, .b = 0, .a = 0 }} ** 200,
     );
 }
 
@@ -1682,20 +1683,21 @@ test "PackedImageSurface.downsample, edge cases" {
 
 test "getStride, OOB" {
     const alloc = std.testing.allocator;
-    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
-        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+    const info = @typeInfo(SurfaceType).@"enum";
+    inline for (info.field_names, info.field_values) |f_name, f_value| {
+        var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
         defer sfc.deinit(alloc);
         inline for (.{ -10, 5, 20 }) |x| {
             inline for (.{ -10, 5, 20 }) |y| {
                 const got = sfc.getStride(x, y, 2);
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
                     std.testing.expectEqual(0, got.pxLen()) catch |err| {
-                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 } else {
                     std.testing.expectEqual(2, got.pxLen()) catch |err| {
-                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, sfc_type.name });
+                        std.debug.print("bad len on x={d}, y={d}, surface type: {s}\n", .{ x, y, f_name });
                         return err;
                     };
                 }
@@ -1706,8 +1708,9 @@ test "getStride, OOB" {
 
 test "compositeStride, simple test w/OOB" {
     const alloc = std.testing.allocator;
-    inline for (@typeInfo(SurfaceType).@"enum".fields) |sfc_type| {
-        var sfc = try Surface.init(@enumFromInt(sfc_type.value), alloc, 10, 10);
+    const info = @typeInfo(SurfaceType).@"enum";
+    inline for (info.field_values) |f_value| {
+        var sfc = try Surface.init(@enumFromInt(f_value), alloc, 10, 10);
         defer sfc.deinit(alloc);
         inline for (.{ -10, 5, 20 }) |x| {
             inline for (.{ -10, 5, 20 }) |y| {
@@ -1720,7 +1723,7 @@ test "compositeStride, simple test w/OOB" {
                     .src,
                     255,
                 );
-                const sfc_type_enum: SurfaceType = @enumFromInt(sfc_type.value);
+                const sfc_type_enum: SurfaceType = @enumFromInt(f_value);
                 if (x < 0 or y < 0 or x >= 10 or y >= 10) {
                     for (0..10) |want_y_u| {
                         for (0..10) |want_x_u| {

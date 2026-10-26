@@ -664,9 +664,10 @@ test "slope difference below epsilon does not produce NaN" {
         defer result.deinit(alloc);
         try std.testing.expectEqual(6, result.edges.items.len);
         for (result.edges.items, 0..) |edge, idx| {
-            inline for (@typeInfo(Polygon.Edge).@"struct".fields) |f| {
-                if (@typeInfo(f.type) == .float) {
-                    if (!std.math.isFinite(@field(edge, f.name))) {
+            const edge_T_info = @typeInfo(Polygon.Edge).@"struct";
+            inline for (edge_T_info.field_names, edge_T_info.field_types) |f_name, f_type| {
+                if (@typeInfo(f_type) == .float) {
+                    if (!std.math.isFinite(@field(edge, f_name))) {
                         std.debug.print("Non-finite value found at index {}, data: {}\n", .{ idx, edge });
                         return error.TestExpectedFinite;
                     }

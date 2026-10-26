@@ -123,7 +123,7 @@ pub const File = struct {
     } || ReaderError;
 
     fn detectFileType(file: *std.Io.Reader) DetectFileTypeError!Type {
-        var header = [_]u8{0} ** 4;
+        var header: [4]u8 = @splat(0);
         try file.readSliceAll(&header);
 
         // Font files
@@ -258,8 +258,8 @@ pub const Font = struct {
         fn init(file: *std.Io.Reader) InitError!Directory {
             var result: Directory = result: {
                 var r: Directory = undefined;
-                inline for (@typeInfo(Directory).@"struct".fields) |f| {
-                    @field(r, f.name) = 0;
+                inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
+                    @field(r, f_name) = 0;
                 }
 
                 break :result r;
@@ -280,8 +280,8 @@ pub const Font = struct {
                 try readerSeek(file, dir_idx * table_dir_entry_len + font_start_offset + table_dir_offset);
                 var entry_tag: [4]u8 = undefined;
                 try file.readSliceAll(&entry_tag);
-                inline for (@typeInfo(Directory).@"struct".fields) |f| {
-                    if (std.mem.eql(u8, &entry_tag, f.name)) {
+                inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
+                    if (std.mem.eql(u8, &entry_tag, f_name)) {
                         const checksum: u32 = try readerInt(file, u32, .big);
                         const offset: u32 = try readerInt(file, u32, .big);
                         const len: u32 = try readerInt(file, u32, .big);
@@ -296,7 +296,7 @@ pub const Font = struct {
                         // the "head" table.
                         var actual_checksum: u32 = 0;
                         try readerSeek(file, offset); // Table offsets are always absolute
-                        const is_head = std.mem.eql(u8, f.name, "head");
+                        const is_head = std.mem.eql(u8, f_name, "head");
                         for (0..((len + 3) / 4)) |j| {
                             if (is_head and j == 2)
                                 _ = try readerInt(file, u32, .big)
@@ -311,23 +311,22 @@ pub const Font = struct {
                             return error.ChecksumMismatch;
                         }
 
-                        @field(result, f.name) = offset;
+                        @field(result, f_name) = offset;
                     }
                 }
             }
 
-            // Check to make sure that we got entries for all required tables.
-            inline for (@typeInfo(Directory).@"struct".fields) |f| {
+            inline for (@typeInfo(Directory).@"struct".field_names) |f_name| {
                 comptime {
-                    if (std.mem.eql(u8, f.name, "kern") or
-                        std.mem.eql(u8, f.name, "GPOS") or
-                        std.mem.eql(u8, f.name, "OS/2"))
+                    if (std.mem.eql(u8, f_name, "kern") or
+                        std.mem.eql(u8, f_name, "GPOS") or
+                        std.mem.eql(u8, f_name, "OS/2"))
                     {
                         continue;
                     }
                 }
 
-                if (@field(result, f.name) == 0) {
+                if (@field(result, f_name) == 0) {
                     return error.MissingRequiredTable;
                 }
             }
