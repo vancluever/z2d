@@ -409,6 +409,25 @@ pub fn getTransformation(self: *Context) Transformation {
     return self.transformation;
 }
 
+pub const MissingFontError = error{
+    /// No font has been loaded into the context.
+    NoFontLoaded,
+};
+
+pub const GetFontExtentsError = MissingFontError || fontpkg.File.LoadFontIndexError;
+
+/// Computes the extents for the loaded font at the size currently set by
+/// `setFontSize`.
+///
+/// Note that the metrics returned by this function are generally used for
+/// spacing, are independent of any rendered text. To get metrics specific to
+/// an actual block of text, use `shapeText`.
+pub fn getFontExtents(self: *Context) GetFontExtentsError!fontpkg.Font.Extents {
+    const font_file = self.font orelse return error.NoFontLoaded;
+    const font = try font_file.file.loadFontIndex(font_file.index);
+    return font.extents(self.font_size);
+}
+
 /// Modifies the current transformation matrix (CTM) by setting it equal to the
 /// supplied matrix.
 pub fn setTransformation(self: *Context, transformation: Transformation) void {
@@ -819,10 +838,7 @@ pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!
     );
 }
 
-const ShapeTextError = error{
-    /// No font has been loaded into the context.
-    NoFontLoaded,
-} || fontpkg.File.LoadFontIndexError || text.ShapeTextError;
+pub const ShapeTextError = MissingFontError || fontpkg.File.LoadFontIndexError || text.ShapeTextError;
 
 /// Returns the path and/or dimensions of the text as it would be drawn with
 /// `showText`, at the co-ordinates specified. See that function for details
@@ -887,66 +903,27 @@ fn wrapDither(self: *Context) Pattern {
 }
 
 test "deinit after allocating path elements" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    errdefer context.deinit();
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
     try context.moveTo(10, 10);
     try context.lineTo(20, 20);
     try std.testing.expectEqual(2, context.path.nodes.items.len);
-    context.deinit();
+    // Leak check will happen naturally on deinit, no additional checks
+    // necessary.
 }
 
-test "setFontToFile, deinit" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    errdefer context.deinit();
-    try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
-    try std.testing.expect(context.font.?.is_fd == true);
-    context.deinit();
-}
+test "setFontToFile/setFontToBuffer, deinitFont" {
+    // This is a deliberately incomplete context with an undefined surface. We
+    // don't draw anything to it, and we don't call deinit on it, so it's fine,
+    // we just want to check leak detection on our font setters.
+    var context: Context = .init(std.testing.io, std.testing.allocator, undefined);
 
-test "setFontToBuffer, deinit" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    errdefer context.deinit();
-    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
-    try std.testing.expect(context.font.?.is_fd == false);
-    context.deinit();
-}
-
-test "setFontToFile, deinitFont" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    // NOTE: No deinit here for the context. We want to test deinitFont
-    // exclusively. Nothing else should leak as a result from this as we are
-    // de-allocating our surface and nothing is being added to the path.
     try context.setFontToFile("./src/internal/test-fonts/Inter-Regular.subset.ttf");
     try std.testing.expect(context.font.?.is_fd == true);
     context.deinitFont();
     try std.testing.expect(context.font == null);
-}
 
-test "setFontToBuffer, deinitFont" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    // NOTE: No deinit here for the context. We want to test deinitFont
-    // exclusively. Nothing else should leak as a result from this as we are
-    // de-allocating our surface and nothing is being added to the path.
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
     try std.testing.expect(context.font.?.is_fd == false);
     context.deinitFont();
@@ -954,12 +931,9 @@ test "setFontToBuffer, deinitFont" {
 }
 
 test "setFontIndex, error cases" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    defer context.deinit();
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
     try std.testing.expectError(error.NoFontSet, context.setFontIndex(0));
     try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
     try std.testing.expectError(error.IndexOutOfRange, context.setFontIndex(1));
@@ -969,20 +943,17 @@ test "setFontIndex, error cases" {
 
 test "serializePath, deserializePath, appendSerializedPath e2e" {
     const expected_serialized = "M49.5,0L100,100L0,100";
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    defer context.deinit();
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
     try context.moveTo(49.5, 0);
     try context.lineTo(100, 100);
     try context.lineTo(0, 100);
     const got_serialized = try context.serializePath(null, false);
-    defer alloc.free(got_serialized);
+    defer context.alloc.free(got_serialized);
     try std.testing.expectEqualSlices(u8, expected_serialized, got_serialized);
     var cloned_path = try context.clonePath(null);
-    defer cloned_path.deinit(alloc);
+    defer cloned_path.deinit(context.alloc);
     context.resetPath();
     try std.testing.expectEqual(0, context.path.nodes.items.len);
     try context.loadSerializedPath(got_serialized);
@@ -993,37 +964,89 @@ test "serializePath, deserializePath, appendSerializedPath e2e" {
 }
 
 test "deserializePath, errors do not clobber existing path" {
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    defer context.deinit();
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
     try context.moveTo(49.5, 0);
     try context.lineTo(100, 100);
     try context.lineTo(0, 100);
     var cloned_path = try context.clonePath(null);
-    defer cloned_path.deinit(alloc);
+    defer cloned_path.deinit(context.alloc);
     try std.testing.expectError(error.ExpectedCommand, context.loadSerializedPath("0"));
     try std.testing.expectEqualDeep(cloned_path, context.path);
 }
 
 test "loadPath" {
     const serialized = "M49.5,0L100,100L0,100";
-    const alloc = std.testing.allocator;
-    const io = std.testing.io;
-    var sfc = try Surface.init(.image_surface_rgb, alloc, 1, 1);
-    defer sfc.deinit(alloc);
-    var context = Context.init(io, alloc, &sfc);
-    defer context.deinit();
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
     context.scale(2.0, 1.5);
 
-    var path: Path = try .loadSerialized(alloc, serialized);
-    defer path.deinit(alloc);
+    var path: Path = try .loadSerialized(test_context.alloc, serialized);
+    defer path.deinit(test_context.alloc);
 
     try context.loadPath(&path);
-    var expected_path = try path.clone(alloc);
-    defer expected_path.deinit(alloc);
+    var expected_path = try path.clone(test_context.alloc);
+    defer expected_path.deinit(test_context.alloc);
     expected_path.transformation = context.transformation;
     try std.testing.expectEqualDeep(expected_path, context.path);
 }
+
+test "getFontExtents" {
+    const font_data = @embedFile("./internal/test-fonts/Inter-Regular.subset.ttf");
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
+
+    const expected: fontpkg.Font.Extents = expected: {
+        const font: fontpkg.Font = try .loadBufferOffset(font_data, 0);
+        break :expected font.extents(context.font_size);
+    };
+
+    try context.setFontToBuffer(@embedFile("./internal/test-fonts/Inter-Regular.subset.ttf"));
+    try std.testing.expectEqualDeep(expected, try context.getFontExtents());
+}
+
+test "font/text extents, no font loaded" {
+    var test_context: TestContext = try .init();
+    defer test_context.deinit();
+    const context = test_context.context();
+
+    try std.testing.expectError(error.NoFontLoaded, context.getFontExtents());
+    try std.testing.expectError(error.NoFontLoaded, context.shapeText("a", 0, 0, null, .all));
+}
+
+/// For testing only.
+const TestContext = struct {
+    io: std.Io,
+    alloc: std.mem.Allocator,
+    sfc: *Surface,
+    ctx: Context,
+
+    fn init() !TestContext {
+        const io = std.testing.io;
+        const alloc = std.testing.allocator;
+        const sfc = try std.testing.allocator.create(Surface);
+        errdefer std.testing.allocator.destroy(sfc);
+        sfc.* = try Surface.init(.image_surface_rgb, alloc, 1, 1);
+        const ctx = Context.init(io, alloc, sfc);
+        return .{
+            .io = io,
+            .alloc = alloc,
+            .sfc = sfc,
+            .ctx = ctx,
+        };
+    }
+
+    fn context(self: *TestContext) *Context {
+        return &self.ctx;
+    }
+
+    fn deinit(self: *TestContext) void {
+        self.ctx.deinit();
+        self.sfc.deinit(self.alloc);
+        self.alloc.destroy(self.sfc);
+        self.* = undefined;
+    }
+};
