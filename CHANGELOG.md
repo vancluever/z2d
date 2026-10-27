@@ -1,3 +1,7 @@
+## 0.13.2-pre (Unreleased)
+
+Bumped version for dev.
+
 ## 0.13.1 (October 26, 2026)
 
 ENHANCEMENTS:
