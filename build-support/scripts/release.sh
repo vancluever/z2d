@@ -94,7 +94,7 @@ message begin "==> Bumping CHANGELOG.md and build.zig.zon to Release v${new_prer
 echo -e "## ${new_prerelease} (Unreleased)\n\nBumped version for dev.\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
 cat <<EOS > build.zig.zon
 // SPDX-License-Identifier: MPL-2.0
-//   Copyright © 2024-2025 Chris Marchesi
+//   Copyright © 2024-2026 Chris Marchesi
 .{
     .name = .z2d,
     .version = "${new_prerelease}",
