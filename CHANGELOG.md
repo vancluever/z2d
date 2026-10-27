@@ -1,6 +1,8 @@
-## 0.13.2-pre (Unreleased)
+## 0.13.2 (Unreleased)
 
-Bumped version for dev.
+This release is being made to correct some issues with our release tooling that
+caused an outdated `build.zig.zon` to be written. No other changes are being
+made.
 
 ## 0.13.1 (October 26, 2026)
 
