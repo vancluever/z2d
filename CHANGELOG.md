@@ -3,7 +3,7 @@
 ENHANCEMENTS:
 
 * `Context.getFontExtents` can now be used to get font-level extents, similar
-  to Font.Extents, but it uses values from the context itself, ensuring one
+  to `Font.Extents`, but it uses values from the context itself, ensuring one
   does not need to work with the font out-of-band.
   ([#212](https://github.com/vancluever/z2d/pull/212))
 
