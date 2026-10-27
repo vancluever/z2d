@@ -1,4 +1,4 @@
-## 0.13.1 (Unreleased)
+## 0.13.1 (October 26, 2026)
 
 ENHANCEMENTS:
 
