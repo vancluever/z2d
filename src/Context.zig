@@ -416,12 +416,12 @@ pub const MissingFontError = error{
 
 pub const GetFontExtentsError = MissingFontError || fontpkg.File.LoadFontIndexError;
 
-/// Computes the extents for the loaded font at the size currently set by
+/// Computes the extents for the loaded font for the size currently set by
 /// `setFontSize`.
 ///
 /// Note that the metrics returned by this function are generally used for
-/// spacing, are independent of any rendered text. To get metrics specific to
-/// an actual block of text, use `shapeText`.
+/// spacing, and are independent of any rendered text. To get metrics specific
+/// to an actual block of text, use `shapeText`.
 pub fn getFontExtents(self: *Context) GetFontExtentsError!fontpkg.Font.Extents {
     const font_file = self.font orelse return error.NoFontLoaded;
     const font = try font_file.file.loadFontIndex(font_file.index);
