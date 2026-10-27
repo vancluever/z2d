@@ -1,4 +1,4 @@
-## 0.13.1-pre (Unreleased)
+## 0.13.1 (Unreleased)
 
 ENHANCEMENTS:
 
