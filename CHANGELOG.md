@@ -37,7 +37,7 @@ origin, but also the font baseline and the full bottom left.
 
 Additionally, text shaping (or in other words, the ability to get a pre-drawn
 path and/or font metrics to assist with positioning text) is now possible,
-through the use of `text.shape` (along with `Context.shapText`) and
+through the use of `text.shape` (along with `Context.shapeText`) and
 `Font.extents`. When fetching metrics, both functions will return metrics
 corresponding to their particular domain - `text.shape` returns metrics for the
 rendered text, and `Font.extents` returns metrics for vertical spacing.
