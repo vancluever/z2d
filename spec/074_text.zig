@@ -22,7 +22,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     // techniques. Will look into these after we get text rendering
     // nailed down half decently, as we are not looking at implementing
     // hinting anytime soon.
-    const font_size: f64 = 27.0;
+    const font_size: z2d.Float = 27.0;
     const spacing = font.extents(font_size).height;
     try z2d.text.show(
         alloc,

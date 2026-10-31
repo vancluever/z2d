@@ -15,6 +15,8 @@
 
 const std = @import("std");
 
+const Float = @import("z2d.zig").Float;
+
 const readerInt = @import("internal/util.zig").readerInt;
 const readerSeek = @import("internal/util.zig").readerSeek;
 
@@ -197,10 +199,10 @@ pub const Font = struct {
     /// manually.
     pub const Extents = struct {
         /// The maximum distance that the font extends above the baseline.
-        ascender: f64,
+        ascender: Float,
 
         /// The maximum distance that the font extends below the baseline.
-        descender: f64,
+        descender: Float,
 
         /// The recommended vertical spacing of the text, generally a result of the
         /// absolute value of the ascender, descender, and line spacing attributes
@@ -209,15 +211,15 @@ pub const Font = struct {
         /// A number of fonts will have zero line gaps. For those that do, the gap
         /// can be found by subtracting the absolute value of the ascender and
         /// descender from this value.
-        height: f64,
+        height: Float,
     };
 
     /// Computes the extents for the font at the specified size in pixels.
-    pub fn extents(font: *const Font, size: f64) Extents {
-        const scale: f64 = size / @as(f64, @floatFromInt(font.meta.units_per_em));
-        const ascender: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.ascender)) * -scale;
-        const descender: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.descender)) * -scale;
-        const line_gap: f64 = @as(f64, @floatFromInt(font.meta.vertical_metrics.line_gap)) * scale;
+    pub fn extents(font: *const Font, size: Float) Extents {
+        const scale: Float = size / @as(Float, @floatFromInt(font.meta.units_per_em));
+        const ascender: Float = @as(Float, @floatFromInt(font.meta.vertical_metrics.ascender)) * -scale;
+        const descender: Float = @as(Float, @floatFromInt(font.meta.vertical_metrics.descender)) * -scale;
+        const line_gap: Float = @as(Float, @floatFromInt(font.meta.vertical_metrics.line_gap)) * scale;
         // NOTE: As per the OpenType spec, the TrueType metric fields
         // possibly have negative line gap values in some legacy platforms,
         // and are treated as zero when they are encountered.

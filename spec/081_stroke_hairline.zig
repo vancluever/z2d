@@ -169,7 +169,7 @@ fn drawDots(context: *z2d.Context) !void {
     }
 }
 
-fn arc(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64) !void {
+fn arc(context: *z2d.Context, x: z2d.Float, y: z2d.Float, rx: z2d.Float, ry: z2d.Float) !void {
     const saved_ctm = context.getTransformation();
     defer context.setTransformation(saved_ctm);
     defer context.resetPath();

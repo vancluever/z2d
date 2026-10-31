@@ -22,6 +22,7 @@ const std = @import("std");
 const nodepkg = @import("../path_nodes.zig");
 const shared = @import("shared.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const InputSet = @import("InputSet.zig");
 const OutputSet = @import("OutputSet.zig");
 const Point = @import("../Point.zig");
@@ -32,7 +33,7 @@ pub const Error = InputSet.FromNodesError || OutputSet.ToNodesError || std.mem.A
 pub fn run(
     alloc: std.mem.Allocator,
     in: []const nodepkg.PathNode,
-    tolerance: f64,
+    tolerance: Float,
 ) Error![]nodepkg.PathNode {
     var input_set = try InputSet.fromNodes(alloc, in, tolerance);
     defer input_set.deinit(alloc);

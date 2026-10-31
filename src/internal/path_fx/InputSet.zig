@@ -10,6 +10,7 @@ const std = @import("std");
 
 const nodepkg = @import("../path_nodes.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const PlotterVTable = @import("../tess/PlotterVTable.zig");
 const PointBuffer = @import("../tess/point_buffer.zig").PointBuffer(1, 2);
 const Point = @import("../Point.zig");
@@ -33,7 +34,7 @@ pub const FromNodesError = InternalError || std.mem.Allocator.Error;
 pub fn fromNodes(
     alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
-    tolerance: f64,
+    tolerance: Float,
 ) FromNodesError!InputSet {
     // NOTE: the state machine has some duplicated logic in comparison to other
     // plotters, namely due to how we specifically flag closed contours, this
@@ -379,7 +380,7 @@ pub const Contour = struct {
             const y4 = out.p1.y;
 
             const Det = struct {
-                fn f(a: f64, b: f64, c: f64, d: f64) f64 {
+                fn f(a: Float, b: Float, c: Float, d: Float) Float {
                     return a * d - b * c;
                 }
             };
@@ -425,8 +426,8 @@ pub const Contour = struct {
         }
 
         const IntersectionForResult = struct {
-            in_t: f64,
-            out_t: f64,
+            in_t: Float,
+            out_t: Float,
             point: Point,
             clockwise: bool,
         };
@@ -444,7 +445,7 @@ pub const Contour = struct {
 
             /// The parametric placement of the intersection along the inbound
             /// segment.
-            t: f64,
+            t: Float,
 
             /// The index of the outbound segment in the contour.
             out_idx: usize,
@@ -455,8 +456,8 @@ pub const Contour = struct {
         /// Slope for the segment, always stored in normalized form. Reduced
         /// functionality of our slope bits used for tessellation/stroking.
         pub const Slope = struct {
-            dx: f64,
-            dy: f64,
+            dx: Float,
+            dy: Float,
 
             /// Asserts that a != b.
             fn init(a: Point, b: Point) Slope {
@@ -494,8 +495,8 @@ pub const Contour = struct {
                 return @as(i2, std.math.sign(a_dy * b_dx - b_dy * a_dx));
             }
 
-            fn snapEpsTo(a: f64, b: f64) f64 {
-                return if (@abs(b - a) > std.math.floatEps(f64)) b else a;
+            fn snapEpsTo(a: Float, b: Float) Float {
+                return if (@abs(b - a) > std.math.floatEps(Float)) b else a;
             }
         };
     };

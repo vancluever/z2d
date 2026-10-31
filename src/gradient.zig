@@ -10,6 +10,7 @@ const pixel = @import("pixel.zig");
 
 const Color = colorpkg.Color;
 const InterpolationMethod = colorpkg.InterpolationMethod;
+const Float = @import("z2d.zig").Float;
 const Pattern = @import("pattern.zig").Pattern;
 const Point = @import("internal/Point.zig");
 const Transformation = @import("Transformation.zig");
@@ -47,10 +48,10 @@ pub const Gradient = union(GradientType) {
         type: union(GradientType) {
             /// Represents a linear gradient going from `(x0, y0)` to `(x1, y1)`.
             linear: struct {
-                x0: f64,
-                y0: f64,
-                x1: f64,
-                y1: f64,
+                x0: Float,
+                y0: Float,
+                x1: Float,
+                y1: Float,
             },
 
             /// Represents a radial gradient represented by two circles,
@@ -64,20 +65,20 @@ pub const Gradient = union(GradientType) {
             /// To represent a basic single-point radial gradient, use the same
             /// co-ordinates for both circles and make `inner_radius` zero.
             radial: struct {
-                inner_x: f64,
-                inner_y: f64,
-                inner_radius: f64,
-                outer_x: f64,
-                outer_y: f64,
-                outer_radius: f64,
+                inner_x: Float,
+                inner_y: Float,
+                inner_radius: Float,
+                outer_x: Float,
+                outer_y: Float,
+                outer_radius: Float,
             },
 
             /// Represents a conic (sweep) gradient, centered at `(x, y)`. The
             /// gradient runs around the center point starting at `angle`.
             conic: struct {
-                x: f64,
-                y: f64,
-                angle: f64,
+                x: Float,
+                y: Float,
+                angle: Float,
             },
         },
 
@@ -274,10 +275,10 @@ pub const Linear = struct {
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
     /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
     pub fn initBuffer(
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
         stops: []Stop,
         method: InterpolationMethod,
     ) Linear {
@@ -343,8 +344,8 @@ pub const Linear = struct {
     /// and is valid to give to `Stop.List.search` (will return a transparent
     /// black color result).
     pub fn getOffset(self: *const Linear, x: i32, y: i32) f32 {
-        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
-        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        var px: Float = @as(Float, @floatFromInt(x)) + 0.5;
+        var py: Float = @as(Float, @floatFromInt(y)) + 0.5;
         if (!self.transformation.equal(Transformation.identity)) {
             self.transformation.userToDevice(&px, &py);
         }
@@ -357,7 +358,7 @@ pub const Linear = struct {
         const start_to_p_dy = py - self.start.y;
         return @floatCast(std.math.clamp(
             dot(
-                f64,
+                Float,
                 2,
                 .{ start_to_end_dx, start_to_end_dy },
                 .{ start_to_p_dx, start_to_p_dy },
@@ -373,19 +374,19 @@ pub const Linear = struct {
 /// radial line.
 pub const Radial = struct {
     inner: Point,
-    inner_radius: f64,
+    inner_radius: Float,
     outer: Point,
-    outer_radius: f64,
+    outer_radius: Float,
     transformation: Transformation = Transformation.identity,
 
     // Pre-calculation fields for finding the t value that can be done ahead of
     // time.
-    cdx: f64,
-    cdy: f64,
-    dr: f64,
-    min_dr: f64,
-    a: f64,
-    inv_a: f64,
+    cdx: Float,
+    cdy: Float,
+    dr: Float,
+    min_dr: Float,
+    a: Float,
+    inv_a: Float,
 
     /// The stops contained within the gradient. Add stops using
     /// `Stop.List.add` or `Stop.List.addAssumeCapacity`.
@@ -395,12 +396,12 @@ pub const Radial = struct {
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
     /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
     pub fn initBuffer(
-        inner_x: f64,
-        inner_y: f64,
-        inner_radius: f64,
-        outer_x: f64,
-        outer_y: f64,
-        outer_radius: f64,
+        inner_x: Float,
+        inner_y: Float,
+        inner_radius: Float,
+        outer_x: Float,
+        outer_y: Float,
+        outer_radius: Float,
         stops: []Stop,
         method: InterpolationMethod,
     ) Radial {
@@ -411,7 +412,7 @@ pub const Radial = struct {
         const cdy = outer_y - inner_y;
         const dr = _outer_radius - _inner_radius;
         const min_dr = -_inner_radius;
-        const a = dot(f64, 3, .{ cdx, cdy, dr }, .{ cdx, cdy, -dr });
+        const a = dot(Float, 3, .{ cdx, cdy, dr }, .{ cdx, cdy, -dr });
         const inv_a = if (a != 0) 1 / a else 0; // inv_a is not used if a == 0
         return .{
             .inner = .{ .x = inner_x, .y = inner_y },
@@ -606,16 +607,16 @@ pub const Radial = struct {
         // least be able to catch it without this).
         if (self.inner_radius == 0 and self.outer_radius == 0) return -1;
 
-        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
-        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        var px: Float = @as(Float, @floatFromInt(x)) + 0.5;
+        var py: Float = @as(Float, @floatFromInt(y)) + 0.5;
         if (!self.transformation.equal(Transformation.identity)) {
             self.transformation.userToDevice(&px, &py);
         }
-        const pdx: f64 = px - self.inner.x;
-        const pdy: f64 = py - self.inner.y;
+        const pdx: Float = px - self.inner.x;
+        const pdy: Float = py - self.inner.y;
 
-        const b = dot(f64, 3, .{ pdx, pdy, self.inner_radius }, .{ self.cdx, self.cdy, self.dr });
-        const c = dot(f64, 3, .{ pdx, pdy, -self.inner_radius }, .{ pdx, pdy, self.inner_radius });
+        const b = dot(Float, 3, .{ pdx, pdy, self.inner_radius }, .{ self.cdx, self.cdy, self.dr });
+        const c = dot(Float, 3, .{ pdx, pdy, -self.inner_radius }, .{ pdx, pdy, self.inner_radius });
 
         if (self.a == 0) {
             if (b == 0) {
@@ -629,7 +630,7 @@ pub const Radial = struct {
             }
             return -1;
         } else {
-            const discr = dot(f64, 2, .{ b, self.a }, .{ b, -c });
+            const discr = dot(Float, 2, .{ b, self.a }, .{ b, -c });
             if (discr >= 0) {
                 const sqrtdiscr = std.math.sqrt(discr);
                 const t0 = (b + sqrtdiscr) * self.inv_a;
@@ -649,7 +650,7 @@ pub const Radial = struct {
 /// defined.
 pub const Conic = struct {
     center: Point,
-    angle: f64,
+    angle: Float,
     transformation: Transformation = Transformation.identity,
 
     /// The stops contained within the gradient. Add stops using
@@ -660,9 +661,9 @@ pub const Conic = struct {
     /// stops. Do not use this with `deinit` or `Stop.List.add` as it will
     /// cause illegal behavior, use `Stop.List.addAssumeCapacity` instead.
     pub fn initBuffer(
-        x: f64,
-        y: f64,
-        angle: f64,
+        x: Float,
+        y: Float,
+        angle: Float,
         stops: []Stop,
         method: InterpolationMethod,
     ) Conic {
@@ -725,8 +726,8 @@ pub const Conic = struct {
     /// ... // (lerp off of search result or perform other operations)
     /// ```
     pub fn getOffset(self: *const Conic, x: i32, y: i32) f32 {
-        var px: f64 = @as(f64, @floatFromInt(x)) + 0.5;
-        var py: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        var px: Float = @as(Float, @floatFromInt(x)) + 0.5;
+        var py: Float = @as(Float, @floatFromInt(y)) + 0.5;
         if (!self.transformation.equal(Transformation.identity)) {
             self.transformation.userToDevice(&px, &py);
         }
@@ -1153,10 +1154,10 @@ test "Linear.initBuffer" {
     const cases = [_]struct {
         name: []const u8,
         expected: Linear,
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
         buffer: []Stop,
         method: InterpolationMethod,
     }{
@@ -1198,10 +1199,10 @@ test "Linear.getOffset" {
     const cases = [_]struct {
         name: []const u8,
         expected: f32,
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
         matrix: Transformation = Transformation.identity,
         x: i32,
         y: i32,
@@ -1371,12 +1372,12 @@ test "Radial.getOffset" {
     const cases = [_]struct {
         name: []const u8,
         expected: f32,
-        inner_x: f64,
-        inner_y: f64,
-        inner_radius: f64,
-        outer_x: f64,
-        outer_y: f64,
-        outer_radius: f64,
+        inner_x: Float,
+        inner_y: Float,
+        inner_radius: Float,
+        outer_x: Float,
+        outer_y: Float,
+        outer_radius: Float,
         interpolation_method: InterpolationMethod,
         matrix: Transformation = Transformation.identity,
         x: i32,
@@ -1493,12 +1494,12 @@ test "Radial.initBuffer" {
     const cases = [_]struct {
         name: []const u8,
         expected: Radial,
-        outer_x: f64,
-        outer_y: f64,
-        outer_radius: f64,
-        inner_x: f64,
-        inner_y: f64,
-        inner_radius: f64,
+        outer_x: Float,
+        outer_y: Float,
+        outer_radius: Float,
+        inner_x: Float,
+        inner_y: Float,
+        inner_radius: Float,
         buffer: []Stop,
         method: InterpolationMethod,
     }{
@@ -1626,9 +1627,9 @@ test "Conic.initBuffer" {
     const cases = [_]struct {
         name: []const u8,
         expected: Conic,
-        x: f64,
-        y: f64,
-        angle: f64,
+        x: Float,
+        y: Float,
+        angle: Float,
         buffer: []Stop,
         method: InterpolationMethod,
     }{
@@ -1700,9 +1701,9 @@ test "Conic.getOffset" {
     const cases = [_]struct {
         name: []const u8,
         expected: f32,
-        center_x: f64,
-        center_y: f64,
-        angle: f64,
+        center_x: Float,
+        center_y: Float,
+        angle: Float,
         matrix: Transformation = Transformation.identity,
         x: i32,
         y: i32,

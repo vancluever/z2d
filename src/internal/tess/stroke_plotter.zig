@@ -7,6 +7,7 @@ const options = @import("../../options.zig");
 const nodepkg = @import("../path_nodes.zig");
 const dashed_plotter = @import("dashed_plotter.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const Transformation = @import("../../Transformation.zig");
 const Point = @import("../Point.zig");
 const Dasher = @import("Dasher.zig");
@@ -24,13 +25,13 @@ pub const Error = InternalError || std.mem.Allocator.Error;
 pub const PlotterOptions = struct {
     cap_mode: options.CapMode,
     ctm: Transformation,
-    dashes: []const f64,
-    dash_offset: f64,
+    dashes: []const Float,
+    dash_offset: Float,
     join_mode: options.JoinMode,
-    miter_limit: f64,
-    scale: f64,
-    thickness: f64,
-    tolerance: f64,
+    miter_limit: Float,
+    scale: Float,
+    thickness: Float,
+    tolerance: Float,
 };
 
 pub fn plot(

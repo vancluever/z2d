@@ -10,6 +10,7 @@ const std = @import("std");
 
 const options = @import("../options.zig");
 
+const Float = @import("../z2d.zig").Float;
 const PathVTable = @import("PathVTable.zig");
 const Transformation = @import("../Transformation.zig");
 
@@ -36,15 +37,15 @@ const max_full_circles = 65536;
 // and
 //      abs (error) =~ 1/2 * e
 
-fn arc_error_normalized(angle: f64) f64 {
-    return 2.0 / 27.0 * std.math.pow(f64, @sin(angle / 4), 6) / std.math.pow(f64, @cos(angle / 4), 2);
+fn arc_error_normalized(angle: Float) Float {
+    return 2.0 / 27.0 * std.math.pow(Float, @sin(angle / 4), 6) / std.math.pow(Float, @cos(angle / 4), 2);
 }
 
-fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
+fn arc_max_angle_for_tolerance_normalized(tolerance: Float) Float {
     // Use table lookup to reduce search time in most cases.
     const table = [_]struct {
-        angle: f64,
-        err: f64,
+        angle: Float,
+        err: Float,
     }{
         .{ .angle = std.math.pi / 1.0, .err = 0.0185185185185185036127 },
         .{ .angle = std.math.pi / 2.0, .err = 0.000272567143730179811158 },
@@ -66,9 +67,9 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
         if (table[i].err < tolerance) return table[i].angle;
     }
 
-    var angle: f64 = undefined;
+    var angle: Float = undefined;
     for (table.len..max_segments) |i| {
-        angle = std.math.pi / @as(f64, @floatFromInt(i));
+        angle = std.math.pi / @as(Float, @floatFromInt(i));
         const err = arc_error_normalized(angle);
         if (err <= tolerance) {
             break;
@@ -78,7 +79,7 @@ fn arc_max_angle_for_tolerance_normalized(tolerance: f64) f64 {
     return angle;
 }
 
-fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: f64) i32 {
+fn arc_segments_needed(angle: Float, radius: Float, ctm: Transformation, tolerance: Float) i32 {
     // the error is amplified by at most the length of the circle.
     const major_axis = transformed_circle_major_axis(ctm, radius);
     const max_angle = arc_max_angle_for_tolerance_normalized(tolerance / major_axis);
@@ -88,7 +89,7 @@ fn arc_segments_needed(angle: f64, radius: f64, ctm: Transformation, tolerance: 
 
 /// determine the length of the major axis of a circle of the given radius
 /// after applying the transformation matrix.
-pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
+pub fn transformed_circle_major_axis(matrix: Transformation, radius: Float) Float {
     // This lengthy explanation was taken from the comments above the
     // implementation of Cairo's _cairo_matrix_transformed_circle_major_axis in
     // cairo-matrix.c. I've preserved it in its entirety just to have it close to
@@ -211,15 +212,15 @@ pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
     //
     // For another derivation of the same result, using Singular Value Decomposition,
     // see doc/tutorial/src/singular.c.
-    const a: f64 = matrix.ax;
-    const b: f64 = matrix.by;
-    const c: f64 = matrix.cx;
-    const d: f64 = matrix.dy;
-    var f: f64 = undefined;
-    var g: f64 = undefined;
-    var h: f64 = undefined;
-    var i: f64 = undefined;
-    var j: f64 = undefined;
+    const a: Float = matrix.ax;
+    const b: Float = matrix.by;
+    const c: Float = matrix.cx;
+    const d: Float = matrix.dy;
+    var f: Float = undefined;
+    var g: Float = undefined;
+    var h: Float = undefined;
+    var i: Float = undefined;
+    var j: Float = undefined;
 
     // Unrolled and abridged _cairo_matrix_has_unity_scale here. Checks if the
     // matrix is only 90 degree rotations or flips.
@@ -231,9 +232,9 @@ pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
         //
         // This is ultimately the minimum value within Cairo's 24.8 fixed-point
         // notation (1/256).
-        const scaling_epsilon: f64 = 0.00390625;
+        const scaling_epsilon: Float = 0.00390625;
         // check that the determinant is near +/-1
-        const det: f64 = matrix.ax * matrix.dy - matrix.by * matrix.cx;
+        const det: Float = matrix.ax * matrix.dy - matrix.by * matrix.cx;
         if (@abs(det * det - 1.0) < scaling_epsilon) {
             // check that one axis is close to zero
             if (@abs(matrix.by) < scaling_epsilon and
@@ -292,11 +293,11 @@ pub fn transformed_circle_major_axis(matrix: Transformation, radius: f64) f64 {
 
 fn arc_segment(
     path_impl: *const PathVTable,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle_A: f64,
-    angle_B: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle_A: Float,
+    angle_B: Float,
 ) PathVTable.Error!void {
     const r_sin_A = radius * @sin(angle_A);
     const r_cos_A = radius * @cos(angle_A);
@@ -322,20 +323,20 @@ const Direction = enum {
 
 /// Checks for NaNs/Infs by squaring the number (will detect overflow in
 /// addition to NaN/Inf propagation).
-fn is_finite(x: f64) bool {
+fn is_finite(x: Float) bool {
     return x * x >= 0.0;
 }
 
 pub fn arc_in_direction(
     path_impl: *const PathVTable,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle_min: f64,
-    angle_max: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle_min: Float,
+    angle_max: Float,
     dir: Direction,
     ctm: Transformation,
-    tolerance_: ?f64,
+    tolerance_: ?Float,
 ) PathVTable.Error!void {
     var amin = angle_min;
     var amax = angle_max;
@@ -345,10 +346,10 @@ pub fn arc_in_direction(
 
     std.debug.assert(amax >= amin);
 
-    if (amax - amin > 2 * std.math.pi * @as(f64, @floatFromInt(max_full_circles))) {
+    if (amax - amin > 2 * std.math.pi * @as(Float, @floatFromInt(max_full_circles))) {
         amax = @mod(amax - amin, 2 * std.math.pi);
         amin = @mod(amin, 2 * std.math.pi);
-        amax += amin + 2 * std.math.pi * @as(f64, @floatFromInt(max_full_circles));
+        amax += amin + 2 * std.math.pi * @as(Float, @floatFromInt(max_full_circles));
     }
 
     // Recurse if drawing arc larger than pi
@@ -363,7 +364,7 @@ pub fn arc_in_direction(
         }
     } else if (amax != amin) {
         var segments = arc_segments_needed(amax - amin, radius, ctm, tolerance);
-        var step = (amax - amin) / @as(f64, @floatFromInt(segments));
+        var step = (amax - amin) / @as(Float, @floatFromInt(segments));
         segments -= 1;
 
         if (dir == .reverse) {

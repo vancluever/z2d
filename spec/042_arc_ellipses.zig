@@ -68,7 +68,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     return sfc;
 }
 
-fn ellipse(context: *z2d.Context, x: f64, y: f64, rx: f64, ry: f64, reset_ctm: bool) !void {
+fn ellipse(context: *z2d.Context, x: z2d.Float, y: z2d.Float, rx: z2d.Float, ry: z2d.Float, reset_ctm: bool) !void {
     const saved_ctm = context.getTransformation();
     context.resetPath();
     context.translate(x + rx / 2, y + ry / 2);

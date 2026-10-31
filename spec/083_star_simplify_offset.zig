@@ -40,7 +40,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     try setPathStar(&context);
     try context.simplifyPath();
     {
-        const offset: f64 = -7.5;
+        const offset: z2d.Float = -7.5;
         const steps = 5;
         for (0..steps) |step| {
             const hue: f32 = 360.0 / steps * @as(f32, @floatFromInt(step));
@@ -63,7 +63,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     context.setLineWidth(8.0);
     try setPathArc(&context);
     {
-        const offset: f64 = 10.5;
+        const offset: z2d.Float = 10.5;
         const steps = 10;
         for (0..steps) |step| {
             const hue: f32 = 360.0 / steps * @as(f32, @floatFromInt(step));

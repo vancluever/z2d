@@ -16,6 +16,7 @@ const Spline = @This();
 const std = @import("std");
 
 const nodepkg = @import("../path_nodes.zig");
+const Float = @import("../../z2d.zig").Float;
 const Point = @import("../Point.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 
@@ -26,7 +27,7 @@ c: Point,
 d: Point,
 
 // Error tolerance
-tolerance: f64,
+tolerance: Float,
 
 // Plotter implementation.
 plotter_impl: *const PlotterVTable,
@@ -52,7 +53,7 @@ pub fn decompose(self: *Spline) PlotterVTable.Error!void {
 }
 
 /// Inner and recursive decomposition into the specified knot set.
-fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: f64) PlotterVTable.Error!void {
+fn decomposeInto(self: *Spline, s1: *Knots, start: Point, tolerance: Float) PlotterVTable.Error!void {
     if (s1.errorSq() < tolerance) {
         if (!s1.a.equal(start)) {
             try self.plotter_impl.lineTo(.{ .point = s1.a });
@@ -79,7 +80,7 @@ const Knots = struct {
     /// Returns an upper bound on the error (squared) that could result from
     /// approximating the spline as a line segment connecting the two
     /// endpoints.
-    fn errorSq(self: Knots) f64 {
+    fn errorSq(self: Knots) Float {
         // Compute the distance between the control points (A -> B, A -> C). We
         // eventually select the larger of these two as our error.
         var b_x_delta = self.b.x - self.a.x;
@@ -90,7 +91,7 @@ const Knots = struct {
         if (self.a.x != self.d.x or self.a.y != self.d.y) {
             const d_x_delta = self.d.x - self.a.x;
             const d_y_delta = self.d.y - self.a.y;
-            const d_dot_sq = dotSq(f64, d_x_delta, d_y_delta);
+            const d_dot_sq = dotSq(Float, d_x_delta, d_y_delta);
 
             const b_d_dot = b_x_delta * d_x_delta + b_y_delta * d_y_delta;
             if (b_d_dot >= d_dot_sq) {
@@ -111,8 +112,8 @@ const Knots = struct {
             }
         }
 
-        const b_err = dotSq(f64, b_x_delta, b_y_delta);
-        const c_err = dotSq(f64, c_x_delta, c_y_delta);
+        const b_err = dotSq(Float, b_x_delta, b_y_delta);
+        const c_err = dotSq(Float, c_x_delta, c_y_delta);
 
         if (b_err > c_err) {
             return b_err;

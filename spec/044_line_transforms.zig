@@ -35,7 +35,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     return sfc;
 }
 
-fn line(context: *z2d.Context, i: f64, reverse: bool, round: bool) !void {
+fn line(context: *z2d.Context, i: z2d.Float, reverse: bool, round: bool) !void {
     defer context.resetPath();
 
     const saved_ctm = context.getTransformation();
@@ -51,7 +51,7 @@ fn line(context: *z2d.Context, i: f64, reverse: bool, round: bool) !void {
     defer context.setLineCapMode(.butt);
 
     const y_offset = yoff: {
-        var y: f64 = 50;
+        var y: z2d.Float = 50;
         if (reverse) y += 100;
         if (round) y += 200;
         break :yoff y;

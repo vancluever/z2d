@@ -6,10 +6,11 @@ const Point = @This();
 
 const std = @import("std");
 
+const Float = @import("../z2d.zig").Float;
 const Transformation = @import("../Transformation.zig");
 
-x: f64,
-y: f64,
+x: Float,
+y: Float,
 
 /// Checks to see if a point is equal to another point.
 pub fn equal(self: Point, other: Point) bool {

@@ -68,7 +68,12 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
 
 /// Adapted from innerStrokePath from Ghostty.
 fn strokePathWorkaround(
-    pathFunc: *const fn (alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
+    pathFunc: *const fn (
+        alloc: std.mem.Allocator,
+        width: z2d.Float,
+        height: z2d.Float,
+        offset: z2d.Float,
+    ) DrawPathError!z2d.Path,
     alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     aa_mode: z2d.options.AntiAliasMode,
@@ -143,8 +148,8 @@ fn strokePathWorkaround(
     ) |*d, s| {
         d.* = @intFromFloat(@round(
             255.0 *
-                (@as(f64, @floatFromInt(s)) / 255.0) *
-                (@as(f64, @floatFromInt(d.*)) / 255.0),
+                (@as(z2d.Float, @floatFromInt(s)) / 255.0) *
+                (@as(z2d.Float, @floatFromInt(d.*)) / 255.0),
         ));
     }
 
@@ -153,7 +158,12 @@ fn strokePathWorkaround(
 }
 
 fn strokePathNormal(
-    pathFunc: *const fn (alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path,
+    pathFunc: *const fn (
+        alloc: std.mem.Allocator,
+        width: z2d.Float,
+        height: z2d.Float,
+        offset: z2d.Float,
+    ) DrawPathError!z2d.Path,
     alloc: std.mem.Allocator,
     dst_sfc: *z2d.Surface,
     aa_mode: z2d.options.AntiAliasMode,
@@ -186,15 +196,20 @@ fn strokePathNormal(
 
 const DrawPathError = z2d.Path.Error || std.mem.Allocator.Error || z2d.Path.OffsetError;
 
-fn drawE0B5(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn drawE0B5(
+    alloc: std.mem.Allocator,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
+) DrawPathError!z2d.Path {
     var result: z2d.Path = .empty;
     defer if (offset != 0) {
         result.deinit(alloc);
     };
 
     // Coefficient for approximating a circular arc.
-    const c: f64 = (std.math.sqrt2 - 1.0) * 4.0 / 3.0;
-    const radius: f64 = @min(width, height / 2);
+    const c: z2d.Float = (std.math.sqrt2 - 1.0) * 4.0 / 3.0;
+    const radius: z2d.Float = @min(width, height / 2);
     try result.moveTo(alloc, 0, 0);
     try result.curveTo(
         alloc,
@@ -219,19 +234,39 @@ fn drawE0B5(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) Draw
     return if (offset != 0) try result.offset(alloc, offset) else result;
 }
 
-fn draw25F8(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25F8(
+    alloc: std.mem.Allocator,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
+) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.tl, alloc, width, height, offset);
 }
 
-fn draw25F9(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25F9(
+    alloc: std.mem.Allocator,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
+) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.tr, alloc, width, height, offset);
 }
 
-fn draw25FA(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+fn draw25FA(
+    alloc: std.mem.Allocator,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
+) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.bl, alloc, width, height, offset);
 }
 
-pub fn draw25FF(alloc: std.mem.Allocator, width: f64, height: f64, offset: f64) DrawPathError!z2d.Path {
+pub fn draw25FF(
+    alloc: std.mem.Allocator,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
+) DrawPathError!z2d.Path {
     return try cornerTriangleOutline(.br, alloc, width, height, offset);
 }
 
@@ -240,9 +275,9 @@ const Corner = enum { tl, tr, bl, br };
 fn cornerTriangleOutline(
     comptime corner: Corner,
     alloc: std.mem.Allocator,
-    width: f64,
-    height: f64,
-    offset: f64,
+    width: z2d.Float,
+    height: z2d.Float,
+    offset: z2d.Float,
 ) DrawPathError!z2d.Path {
     var result: z2d.Path = .empty;
     defer if (offset != 0) {

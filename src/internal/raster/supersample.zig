@@ -4,6 +4,7 @@ const compositor = @import("../../compositor.zig");
 const pixel = @import("../../pixel.zig");
 
 const FillRule = @import("../../options.zig").FillRule;
+const Float = @import("../../z2d.zig").Float;
 const Pattern = @import("../../pattern.zig").Pattern;
 const Surface = @import("../../surface.zig").Surface;
 const SurfaceType = @import("../../surface.zig").SurfaceType;
@@ -17,7 +18,7 @@ pub fn run(
     pattern: *const Pattern,
     polygons: Polygon,
     fill_rule: FillRule,
-    scale: f64,
+    scale: Float,
     operator: compositor.Operator,
     precision: compositor.Precision,
 ) Error!void {

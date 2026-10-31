@@ -49,10 +49,10 @@ fn draw(
     scratch_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,
-    linear_x0: f64,
-    linear_y0: f64,
-    linear_x1: f64,
-    linear_y1: f64,
+    linear_x0: z2d.Float,
+    linear_y0: z2d.Float,
+    linear_x1: z2d.Float,
+    linear_y1: z2d.Float,
 ) void {
     var stop_buffer: [3]z2d.gradient.Stop = undefined;
     var gradient = z2d.Gradient.init(.{

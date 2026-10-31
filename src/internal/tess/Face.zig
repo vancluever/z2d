@@ -25,6 +25,7 @@ const std = @import("std");
 const options = @import("../../options.zig");
 const nodepkg = @import("../path_nodes.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const Transformation = @import("../../Transformation.zig");
 const Point = @import("../Point.zig");
 const Pen = @import("Pen.zig");
@@ -33,10 +34,10 @@ const Slope = @import("Slope.zig");
 
 p0: Point,
 p1: Point,
-width: f64,
+width: Float,
 dev_slope: Slope, // Device-space slope (normalized)
 user_slope: Slope, // User-space slope (normalized)
-half_width: f64, // Half-width of thickness on init
+half_width: Float, // Half-width of thickness on init
 p0_cw: Point,
 p0_ccw: Point,
 p1_cw: Point,
@@ -44,7 +45,7 @@ p1_ccw: Point,
 ctm: Transformation,
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-pub fn init(p0: Point, p1: Point, thickness: f64, ctm: Transformation) Face {
+pub fn init(p0: Point, p1: Point, thickness: Float, ctm: Transformation) Face {
     const dev_slope = dev_slope: {
         var s = Slope.init(p0, p1);
         _ = s.normalize();
@@ -54,15 +55,15 @@ pub fn init(p0: Point, p1: Point, thickness: f64, ctm: Transformation) Face {
 }
 
 /// Computes a face off a single point and (normalized) device slope.
-pub fn initSingle(point: Point, dev_slope: Slope, thickness: f64, ctm: Transformation) Face {
+pub fn initSingle(point: Point, dev_slope: Slope, thickness: Float, ctm: Transformation) Face {
     return _init(point, point, dev_slope, thickness, ctm);
 }
 
 /// Computes a Face from two points in the direction of p0 -> p1.
-fn _init(p0: Point, p1: Point, dev_slope: Slope, thickness: f64, ctm: Transformation) Face {
+fn _init(p0: Point, p1: Point, dev_slope: Slope, thickness: Float, ctm: Transformation) Face {
     const half_width = thickness / 2;
-    var offset_x: f64 = undefined;
-    var offset_y: f64 = undefined;
+    var offset_x: Float = undefined;
+    var offset_y: Float = undefined;
     var user_slope = dev_slope;
     if (!ctm.equal(Transformation.identity)) {
         // If we're transforming we need to transform our offsets for purposes

@@ -12,6 +12,7 @@ const fill_plotter = @import("internal/tess/fill_plotter.zig");
 const polyline_plotter = @import("internal/tess/polyline_plotter.zig");
 const stroke_plotter = @import("internal/tess/stroke_plotter.zig");
 
+const Float = @import("z2d.zig").Float;
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
 const Transformation = @import("Transformation.zig");
@@ -40,7 +41,7 @@ pub const FillOptions = struct {
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
     /// The default tolerance should be sufficient for most cases.
-    tolerance: f64 = options.default_tolerance,
+    tolerance: Float = options.default_tolerance,
 
     /// Can be used to denote the default option set.
     pub const default: FillOptions = .{};
@@ -86,7 +87,7 @@ pub fn fill(
     else
         opts.anti_aliasing_mode;
 
-    const scale: f64 = switch (aa_mode) {
+    const scale: Float = switch (aa_mode) {
         .none => 1,
         .supersample_4x => supersample_scale,
         .default, .multisample_4x => multisample_rasterizer.scale,
@@ -144,11 +145,11 @@ pub const StrokeOptions = struct {
 
     /// The dash array, if dashed lines are desired. See `Context` for a full
     /// explanation of this setting.
-    dashes: []const f64 = &.{},
+    dashes: []const Float = &.{},
 
     /// The dash offset when doing dashed lines. See `Context` for a full
     /// explanation of this setting.
-    dash_offset: f64 = 0,
+    dash_offset: Float = 0,
 
     /// The line cap rule for the stroke operation.
     line_cap_mode: options.CapMode = .butt,
@@ -157,11 +158,11 @@ pub const StrokeOptions = struct {
     line_join_mode: options.JoinMode = .miter,
 
     /// The line width for the stroke operation.
-    line_width: f64 = 2.0,
+    line_width: Float = 2.0,
 
     /// The maximum allowed ratio for miter joins. See `Context` for a full
     /// explanation of this setting.
-    miter_limit: f64 = 10.0,
+    miter_limit: Float = 10.0,
 
     /// The operator to use for compositing.
     operator: compositor.Operator = .src_over,
@@ -172,7 +173,7 @@ pub const StrokeOptions = struct {
     /// The maximum error tolerance used for approximating curves and arcs. A
     /// higher tolerance will give better performance, but "blockier" curves.
     /// The default tolerance should be sufficient for most cases.
-    tolerance: f64 = options.default_tolerance,
+    tolerance: Float = options.default_tolerance,
 
     /// The transformation matrix to use for the stroke operation. Has more
     /// subtle influences on drawing, affecting line width respective to scale,
@@ -256,7 +257,7 @@ pub fn stroke(
         return;
     }
 
-    const scale: f64 = switch (aa_mode) {
+    const scale: Float = switch (aa_mode) {
         .none => 1,
         .supersample_4x => supersample_scale,
         .default, .multisample_4x => multisample_rasterizer.scale,
@@ -277,7 +278,7 @@ pub fn stroke(
     // Not a stop gap more than likely: minimum line width. This is value is
     // sort of arbitrarily chosen as Cairo's minimum 24.8 fixed-point value (so
     // 1/256).
-    const minimum_line_width: f64 = 0.00390625;
+    const minimum_line_width: Float = 0.00390625;
     var polygons = try stroke_plotter.plot(
         alloc,
         nodes,

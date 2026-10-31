@@ -12,6 +12,7 @@ const std = @import("std");
 const nodepkg = @import("../path_nodes.zig");
 
 const Dasher = @import("Dasher.zig");
+const Float = @import("../../z2d.zig").Float;
 const Point = @import("../Point.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 const PointBuffer = @import("point_buffer.zig").PointBuffer(1, 2);
@@ -25,9 +26,9 @@ pub const Error = InternalError || std.mem.Allocator.Error;
 pub fn plot(
     alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
-    tolerance: f64,
-    dashes: []const f64,
-    dash_offset: f64,
+    tolerance: Float,
+    dashes: []const Float,
+    dash_offset: Float,
 ) Error!Contour.List {
     var result: Contour.List = .empty;
     errdefer result.deinit(alloc);

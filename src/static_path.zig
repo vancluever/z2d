@@ -3,6 +3,7 @@
 
 const std = @import("std");
 
+const Float = @import("z2d.zig").Float;
 const Path = @import("Path.zig");
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 
@@ -86,26 +87,26 @@ pub fn StaticPath(comptime len: usize) type {
         }
 
         /// Starts a new path, and moves the current point to it.
-        pub fn moveTo(self: *Self, x: f64, y: f64) void {
+        pub fn moveTo(self: *Self, x: Float, y: Float) void {
             self.wrapped_path.moveToAssumeCapacity(x, y);
         }
 
         /// Begins a new sub-path relative to the current point. Calling this
         /// without a current point triggers safety-checked undefined behavior.
-        pub fn relMoveTo(self: *Self, x: f64, y: f64) void {
+        pub fn relMoveTo(self: *Self, x: Float, y: Float) void {
             self.wrapped_path.relMoveToAssumeCapacity(x, y) catch unreachable;
         }
 
         /// Draws a line from the current point to the specified point and sets
         /// it as the current point. Acts as a `moveTo` instead if there is no
         /// current point.
-        pub fn lineTo(self: *Self, x: f64, y: f64) void {
+        pub fn lineTo(self: *Self, x: Float, y: Float) void {
             self.wrapped_path.lineToAssumeCapacity(x, y);
         }
 
         /// Draws a line relative to the current point. Calling this without a
         /// current point triggers safety-checked undefined behavior.
-        pub fn relLineTo(self: *Self, x: f64, y: f64) void {
+        pub fn relLineTo(self: *Self, x: Float, y: Float) void {
             self.wrapped_path.relLineToAssumeCapacity(x, y) catch unreachable;
         }
 
@@ -113,13 +114,13 @@ pub fn StaticPath(comptime len: usize) type {
         /// the current point. The new current point is set to (`x3`, `y3`).
         /// Calling this without a current point triggers safety-checked
         /// undefined behavior.
-        pub fn curveTo(self: *Self, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
+        pub fn curveTo(self: *Self, x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) void {
             self.wrapped_path.curveToAssumeCapacity(x1, y1, x2, y2, x3, y3) catch unreachable;
         }
 
         /// Draws a cubic bezier relative to the current point. Calling this
         /// without a current point triggers safety-checked undefined behavior.
-        pub fn relCurveTo(self: *Self, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
+        pub fn relCurveTo(self: *Self, x1: Float, y1: Float, x2: Float, y2: Float, x3: Float, y3: Float) void {
             self.wrapped_path.relCurveToAssumeCapacity(x1, y1, x2, y2, x3, y3) catch unreachable;
         }
 

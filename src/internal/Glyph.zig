@@ -11,6 +11,7 @@ const std = @import("std");
 
 const fontpkg = @import("../font.zig");
 
+const Float = @import("../z2d.zig").Float;
 const Font = fontpkg.Font;
 const Path = @import("../Path.zig");
 const Transformation = @import("../Transformation.zig");
@@ -511,7 +512,7 @@ pub const Outline = struct {
         path.transformation = path.transformation.scale(1.0, -1.0);
         // Add a spacing translation depending on our orientation.
         spacing_adjustment: {
-            var ty: f64 = switch (orientation) {
+            var ty: Float = switch (orientation) {
                 .top => @floatFromInt(font.meta.vertical_metrics.ascender),
                 .bottom => @floatFromInt(font.meta.vertical_metrics.descender),
                 .baseline => break :spacing_adjustment, // baseline needs no adjustment
@@ -853,20 +854,20 @@ pub const Outline = struct {
         var x0 = (path.current_point orelse return error.MalformedGlyph).x;
         var y0 = (path.current_point orelse return error.MalformedGlyph).y;
         try path.transformation.deviceToUser(&x0, &y0);
-        const x3: f64 = @floatFromInt(to_x);
-        const y3: f64 = @floatFromInt(to_y);
+        const x3: Float = @floatFromInt(to_x);
+        const y3: Float = @floatFromInt(to_y);
 
-        const x1 = x0 + 2.0 / 3.0 * (@as(f64, @floatFromInt(control_x)) - x0);
-        const y1 = y0 + 2.0 / 3.0 * (@as(f64, @floatFromInt(control_y)) - y0);
-        const x2 = x3 + 2.0 / 3.0 * (@as(f64, @floatFromInt(control_x)) - x3);
-        const y2 = y3 + 2.0 / 3.0 * (@as(f64, @floatFromInt(control_y)) - y3);
+        const x1 = x0 + 2.0 / 3.0 * (@as(Float, @floatFromInt(control_x)) - x0);
+        const y1 = y0 + 2.0 / 3.0 * (@as(Float, @floatFromInt(control_y)) - y0);
+        const x2 = x3 + 2.0 / 3.0 * (@as(Float, @floatFromInt(control_x)) - x3);
+        const y2 = y3 + 2.0 / 3.0 * (@as(Float, @floatFromInt(control_y)) - y3);
 
         try path.curveTo(alloc, x1, y1, x2, y2, x3, y3);
     }
 
-    fn parseF2Dot14(x: u16) f64 {
-        return @as(f64, @floatFromInt(@as(i2, @bitCast(@as(u2, @intCast(x >> 14)))))) +
-            @as(f64, @floatFromInt(x & 0x3FFF)) / 16384.0;
+    fn parseF2Dot14(x: u16) Float {
+        return @as(Float, @floatFromInt(@as(i2, @bitCast(@as(u2, @intCast(x >> 14)))))) +
+            @as(Float, @floatFromInt(x & 0x3FFF)) / 16384.0;
     }
 };
 

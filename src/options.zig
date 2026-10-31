@@ -4,10 +4,12 @@
 //! Documents option enumerations used in various parts of the library, mostly
 //! in `Context`.
 
+const Float = @import("z2d.zig").Float;
+
 const _ = struct {}; // Used to fix autodoc, ignore
 
 /// The default maximum error tolerance used in spline and arc calculations.
-pub const default_tolerance: f64 = 0.1;
+pub const default_tolerance: Float = 0.1;
 
 /// Represents the kinds of fill rules for paths. This will determine how more
 /// complex paths are filled, such as in the situation where multiple sub-paths

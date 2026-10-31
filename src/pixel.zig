@@ -159,7 +159,7 @@ pub const XRGB = packed struct(u32) {
     pub const format: Format = .xrgb;
 
     /// Returns a pixel from a clamped 0-1 value.
-    pub fn fromClamped(r: f64, g: f64, b: f64) XRGB {
+    pub fn fromClamped(r: f32, g: f32, b: f32) XRGB {
         return RGBA_T(@This()).fromClamped(r, g, b, 1);
     }
 
@@ -200,7 +200,7 @@ pub const RGB = packed struct(u32) {
     pub const format: Format = .rgb;
 
     /// Returns a pixel from a clamped 0-1 value.
-    pub fn fromClamped(r: f64, g: f64, b: f64) RGB {
+    pub fn fromClamped(r: f32, g: f32, b: f32) RGB {
         return RGBA_T(@This()).fromClamped(r, g, b, 1);
     }
 
@@ -245,7 +245,7 @@ pub const ARGB = packed struct(u32) {
 
     /// Returns a pixel from a clamped 0-1 value. The helper expects the values
     /// as straight alpha and will pre-multiply the values for you.
-    pub fn fromClamped(r: f64, g: f64, b: f64, a: f64) ARGB {
+    pub fn fromClamped(r: f32, g: f32, b: f32, a: f32) ARGB {
         return RGBA_T(@This()).fromClamped(r, g, b, a);
     }
 
@@ -314,7 +314,7 @@ pub const RGBA = packed struct(u32) {
 
     /// Returns a pixel from a clamped 0-1 value. The helper expects the values
     /// as straight alpha and will pre-multiply the values for you.
-    pub fn fromClamped(r: f64, g: f64, b: f64, a: f64) RGBA {
+    pub fn fromClamped(r: f32, g: f32, b: f32, a: f32) RGBA {
         return RGBA_T(@This()).fromClamped(r, g, b, a);
     }
 
@@ -380,7 +380,7 @@ fn RGBA_T(T: type) type {
     const is_rgba = T.format == .rgba or T.format == .argb;
 
     return struct {
-        fn fromClamped(r: f64, g: f64, b: f64, a: f64) T {
+        fn fromClamped(r: f32, g: f32, b: f32, a: f32) T {
             const rc = std.math.clamp(r, 0, 1);
             const gc = std.math.clamp(g, 0, 1);
             const bc = std.math.clamp(b, 0, 1);
@@ -521,7 +521,7 @@ pub const RGB565 = packed struct(u16) {
     pub const format: Format = .rgb565;
 
     /// Returns a pixel from a clamped 0-1 RGB value.
-    pub fn fromClamped(r: f64, g: f64, b: f64) RGB565 {
+    pub fn fromClamped(r: f32, g: f32, b: f32) RGB565 {
         const rc = std.math.clamp(r, 0, 1);
         const gc = std.math.clamp(g, 0, 1);
         const bc = std.math.clamp(b, 0, 1);

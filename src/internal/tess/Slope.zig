@@ -11,10 +11,11 @@ const Slope = @This();
 
 const std = @import("std");
 
+const Float = @import("../../z2d.zig").Float;
 const Point = @import("../Point.zig");
 
-dx: f64,
-dy: f64,
+dx: Float,
+dy: Float,
 
 /// Initializes a slope vector as b - a.
 pub fn init(a: Point, b: Point) Slope {
@@ -30,7 +31,7 @@ pub fn equal(self: Slope, other: Slope) bool {
 }
 
 /// Returns the calculated slope as dy/dx.
-pub fn calculate(self: Slope) f64 {
+pub fn calculate(self: Slope) Float {
     return self.dy / self.dx;
 }
 
@@ -43,11 +44,11 @@ pub fn calculate(self: Slope) f64 {
 ///   * == 0 when a is the same as b
 ///   * > 0 when a is larger than b
 pub fn compare(a: Slope, b: Slope) i32 {
-    // We snap our b slope to our a slope if the differences are below the f64
-    // epsilon. This ensures downstream calculations that depend on slopes
-    // being non-parallel do not produce undefined behavior or NaNs.
-    const bdy = if (@abs(b.dy - a.dy) > std.math.floatEps(f64)) b.dy else a.dy;
-    const bdx = if (@abs(b.dx - a.dx) > std.math.floatEps(f64)) b.dx else a.dx;
+    // We snap our b slope to our a slope if the differences are below our
+    // floating-point epsilon. This ensures downstream calculations that depend
+    // on slopes being non-parallel do not produce undefined behavior or NaNs.
+    const bdy = if (@abs(b.dy - a.dy) > std.math.floatEps(Float)) b.dy else a.dy;
+    const bdx = if (@abs(b.dx - a.dx) > std.math.floatEps(Float)) b.dx else a.dx;
 
     // Do basic comparison first. Our comparison is done multiplicatively
     // on the vector (saves division, allows for calculation of things like
@@ -66,10 +67,7 @@ pub fn compare(a: Slope, b: Slope) i32 {
     if (bdx == 0 and bdy == 0) return -1;
 
     // Handler logic for vectors that are either equal to pi or differ by
-    // exactly pi. Note our current f64 implementation probably makes these
-    // cases infinitesimally rare, especially the latter case. When/if we
-    // move to fixed point, this will be more likely, and we can optimize
-    // for that.
+    // exactly pi.
     //
     // We check if we need to do comparison by checking for the sign (note
     // in Cairo, this is done using XOR on the sign bit, not too sure if
@@ -146,7 +144,7 @@ pub fn compare(a: Slope, b: Slope) i32 {
 /// see given that it is immediately repeated in code after the comments; while
 /// the code will read as above ("2 <= ml² (1 + in · out)"), the comments will
 /// subtract one from the dot product instead.
-pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f64) bool {
+pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: Float) bool {
     // Normalize our slopes, if not done already.
     //
     // TODO: This can probably be taken out. We never *not* normalize slopes
@@ -176,10 +174,10 @@ pub fn compare_for_miter_limit(in_slope: Slope, out_slope: Slope, miter_limit: f
 /// Take care when using this method with any other comparison methods (e.g.,
 /// equal or compare); normalized slopes are only comparable with other slopes
 /// and vice versa.
-pub fn normalize(self: *Slope) f64 {
-    var result_dx: f64 = undefined;
-    var result_dy: f64 = undefined;
-    var mag: f64 = undefined;
+pub fn normalize(self: *Slope) Float {
+    var result_dx: Float = undefined;
+    var result_dy: Float = undefined;
+    var mag: Float = undefined;
 
     std.debug.assert(self.dx != 0.0 or self.dy != 0.0);
 

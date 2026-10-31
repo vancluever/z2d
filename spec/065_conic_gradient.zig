@@ -23,7 +23,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
                 100 * @as(i32, @intCast(y)),
                 49,
                 49,
-                std.math.pi / 2.0 * @as(f64, @floatFromInt(y * 2 + x)),
+                std.math.pi / 2.0 * @as(z2d.Float, @floatFromInt(y * 2 + x)),
             );
         }
     }
@@ -36,9 +36,9 @@ fn draw(
     dst_sfc: *z2d.Surface,
     sfc_x: i32,
     sfc_y: i32,
-    center_x: f64,
-    center_y: f64,
-    angle: f64,
+    center_x: z2d.Float,
+    center_y: z2d.Float,
+    angle: z2d.Float,
 ) !void {
     var scratch_sfc = try z2d.Surface.init(.image_surface_rgba, alloc, 100, 100);
     defer scratch_sfc.deinit(alloc);

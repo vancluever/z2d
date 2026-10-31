@@ -18,6 +18,7 @@ const std = @import("std");
 const nodepkg = @import("../path_nodes.zig");
 const shared = @import("shared.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const InputSet = @import("InputSet.zig");
 const OutputSet = @import("OutputSet.zig");
 const Point = @import("../Point.zig");
@@ -31,8 +32,8 @@ pub const Error = InputSet.FromNodesError || OutputSet.ToNodesError || std.mem.A
 pub fn run(
     alloc: std.mem.Allocator,
     in: []const nodepkg.PathNode,
-    tolerance: f64,
-    offset: f64,
+    tolerance: Float,
+    offset: Float,
 ) Error![]nodepkg.PathNode {
     var input_set = try InputSet.fromNodes(alloc, in, tolerance);
     defer input_set.deinit(alloc);
@@ -62,7 +63,7 @@ fn runClosed(
     alloc: std.mem.Allocator,
     out: *OutputSet,
     in: *const InputSet.Contour,
-    offset: f64,
+    offset: Float,
 ) std.mem.Allocator.Error!void {
     std.debug.assert(in.closed);
     std.debug.assert(in.segments.items.len >= 3);
@@ -93,7 +94,7 @@ fn runOpen(
     alloc: std.mem.Allocator,
     out: *OutputSet,
     in: *const InputSet.Contour,
-    offset: f64,
+    offset: Float,
 ) std.mem.Allocator.Error!void {
     var result: OutputSet.Contour = .empty;
     errdefer result.deinit(alloc);
@@ -143,7 +144,7 @@ fn runOpen(
 
 /// Perform a projected line-line intersection off of the inner points of the
 /// two consecutive segments, based on the supplied offset and direction.
-fn intersect(in: InputSet.Contour.Segment, out: InputSet.Contour.Segment, offset: f64, clockwise: bool) Point {
+fn intersect(in: InputSet.Contour.Segment, out: InputSet.Contour.Segment, offset: Float, clockwise: bool) Point {
     // We use a parametric derivation to calculate our intersections (note that
     // this is how it's done also in InputSet and Face, but I want to provide a
     // better explanation for both myself and anyone else looking at the code.
@@ -234,7 +235,7 @@ fn intersect(in: InputSet.Contour.Segment, out: InputSet.Contour.Segment, offset
 }
 
 // used for start and end points on open contour.
-fn offsetSingle(point: Point, slope: InputSet.Contour.Segment.Slope, offset: f64, clockwise: bool) Point {
+fn offsetSingle(point: Point, slope: InputSet.Contour.Segment.Slope, offset: Float, clockwise: bool) Point {
     const dx1 = slope.dx;
     const dy1 = slope.dy;
     const xoff1 = -dy1 * offset;
