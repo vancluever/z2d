@@ -34,7 +34,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     return sfc;
 }
 
-fn draw(context: *z2d.Context, cx: f64, cy: f64) !void {
+fn draw(context: *z2d.Context, cx: z2d.Float, cy: z2d.Float) !void {
     context.resetPath();
     context.setIdentity();
     context.translate(cx, cy);

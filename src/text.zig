@@ -19,6 +19,7 @@ const std = @import("std");
 const fontpkg = @import("font.zig");
 const painter = @import("painter.zig");
 
+const Float = @import("z2d.zig").Float;
 const Path = @import("Path.zig");
 const Pattern = @import("pattern.zig").Pattern;
 const Surface = @import("surface.zig").Surface;
@@ -34,7 +35,7 @@ pub const ShowTextOptions = struct {
 
     /// The size of the text in pixels. To translate from points, use
     /// `target_dpi / 72 * point_size`. The default is 16px, or 12pt @ 96 DPI.
-    size: f64 = 16.0,
+    size: Float = 16.0,
 
     /// Defines where the vertical origin is placed when rendering text.
     glyph_orientation: GlyphOrientation = .top,
@@ -56,8 +57,8 @@ pub fn show(
     pattern: *const Pattern,
     font: *Font,
     utf8: []const u8,
-    x: f64,
-    y: f64,
+    x: Float,
+    y: Float,
     opts: ShowTextOptions,
 ) ShowTextError!void {
     var shaped = try shape(alloc, font, utf8, x, y, .{
@@ -96,21 +97,21 @@ pub const ShapeMode = enum {
 /// scaling or other transformations need to be applied to the result manually.
 pub const Extents = struct {
     // The x-offset where the text starts.
-    x_bearing: f64,
+    x_bearing: Float,
 
     // The vertical distance *from the baseline* to the topmost part of
     // where the text starts. This will be negative in most cases unless
     // the text lies completely below the baseline.
-    y_bearing: f64,
+    y_bearing: Float,
 
     // The width of the text as drawn.
-    width: f64,
+    width: Float,
 
     // The height of the text as drawn.
-    height: f64,
+    height: Float,
 
     // The final cumulative advance of the text as drawn.
-    advance: f64,
+    advance: Float,
 };
 
 pub const ShapeTextOptions = struct {
@@ -123,7 +124,7 @@ pub const ShapeTextOptions = struct {
 
     /// The size of the text in pixels. To translate from points, use
     /// `target_dpi / 72 * point_size`. The default is 16px, or 12pt @ 96 DPI.
-    size: f64 = 16.0,
+    size: Float = 16.0,
 
     /// Defines where the vertical origin is placed when tracing paths.
     glyph_orientation: GlyphOrientation = .top,
@@ -204,8 +205,8 @@ pub fn shape(
     alloc: std.mem.Allocator,
     font: *Font,
     utf8: []const u8,
-    x: f64,
-    y: f64,
+    x: Float,
+    y: Float,
     opts: ShapeTextOptions,
 ) ShapeTextError!ShapeTextResult {
     var glyphs: std.AutoHashMapUnmanaged(u21, Glyph) = .empty;
@@ -259,14 +260,14 @@ pub fn shape(
     // along the way.
     //
     // Get our scale
-    const scale = opts.size / @as(f64, @floatFromInt(font.meta.units_per_em));
+    const scale = opts.size / @as(Float, @floatFromInt(font.meta.units_per_em));
 
     // Store an advance. We add on to this after drawing each glyph.
-    var advance: f64 = 0.0;
+    var advance: Float = 0.0;
 
     // Store our raw glyph metrics.
-    var box_x_min_: ?f64 = null;
-    var box_x_max: f64 = undefined;
+    var box_x_min_: ?Float = null;
+    var box_x_max: Float = undefined;
     var box_y_min: i16 = 0;
     var box_y_max: i16 = 0;
 
@@ -318,8 +319,8 @@ pub fn shape(
                 // Phantom point 1 is equal to xMin - lsb, but only if the
                 // lsb_is_at_x_zero flag is false. If it is, we don't need to
                 // adjust, and can just rely on the xMin in the glyph.
-                const pp1: f64 = if (!font.meta.lsb_is_at_x_zero)
-                    @as(f64, @floatFromInt(outline.x_min - current_glyph.lsb)) * scale
+                const pp1: Float = if (!font.meta.lsb_is_at_x_zero)
+                    @as(Float, @floatFromInt(outline.x_min - current_glyph.lsb)) * scale
                 else
                     0.0;
 
@@ -335,11 +336,11 @@ pub fn shape(
         }
 
         // Finally, update the advance, offset by any kerning (if it exists).
-        const kern: f64 = if (next_glyph_) |next_glyph|
+        const kern: Float = if (next_glyph_) |next_glyph|
             @floatFromInt(try Glyph.getKernAdvance(font, current_glyph.index, next_glyph.index))
         else
             0.0;
-        advance += (@as(f64, @floatFromInt(if (current_glyph.advance > 0)
+        advance += (@as(Float, @floatFromInt(if (current_glyph.advance > 0)
             current_glyph.advance
         else
             font.meta.advance_width_max)) + kern) * scale;

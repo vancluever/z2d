@@ -7,6 +7,8 @@ const PathVTable = @This();
 
 const std = @import("std");
 
+const Float = @import("../z2d.zig").Float;
+
 pub const Error = @import("../Path.zig").Error || std.mem.Allocator.Error;
 
 ptr: *anyopaque,
@@ -15,23 +17,23 @@ line_to: *const fn (
     ctx: *anyopaque,
     alloc: std.mem.Allocator,
     err_: *?std.mem.Allocator.Error,
-    x: f64,
-    y: f64,
+    x: Float,
+    y: Float,
 ) void,
 
 curve_to: *const fn (
     ctx: *anyopaque,
     alloc: std.mem.Allocator,
     err_: *?Error,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) void,
 
-pub fn lineTo(self: *const PathVTable, x: f64, y: f64) std.mem.Allocator.Error!void {
+pub fn lineTo(self: *const PathVTable, x: Float, y: Float) std.mem.Allocator.Error!void {
     var err_: ?std.mem.Allocator.Error = null;
     self.line_to(self.ptr, self.alloc, &err_, x, y);
     if (err_) |err| return err;
@@ -39,12 +41,12 @@ pub fn lineTo(self: *const PathVTable, x: f64, y: f64) std.mem.Allocator.Error!v
 
 pub fn curveTo(
     self: *const PathVTable,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) Error!void {
     var err_: ?Error = null;
     self.curve_to(self.ptr, self.alloc, &err_, x1, y1, x2, y2, x3, y3);

@@ -23,12 +23,12 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
 
     // sub-canvas dimensions
     const sub_canvas_width = width / 4;
-    var sub_canvas_height: f64 = height / 3;
+    var sub_canvas_height: z2d.Float = height / 3;
 
     // Down and to the right
     const margin = 30;
-    var x_offset: f64 = 0;
-    var y_offset: f64 = 0;
+    var x_offset: z2d.Float = 0;
+    var y_offset: z2d.Float = 0;
     try context.moveTo(x_offset + margin, y_offset + margin);
     try context.lineTo(x_offset + sub_canvas_width - margin - 1, y_offset + sub_canvas_height - margin - 1);
 

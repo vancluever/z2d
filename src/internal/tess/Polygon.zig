@@ -2,6 +2,7 @@ const Polygon = @This();
 
 const std = @import("std");
 
+const Float = @import("../../z2d.zig").Float;
 const FillRule = @import("../../options.zig").FillRule;
 const InternalError = @import("../InternalError.zig").InternalError;
 const Point = @import("../Point.zig");
@@ -10,10 +11,10 @@ const runCases = @import("../util.zig").runCases;
 const TestingError = @import("../util.zig").TestingError;
 
 pub const Edge = struct {
-    y0: f64,
-    y1: f64,
-    x_start: f64,
-    x_inc: f64,
+    y0: Float,
+    y1: Float,
+    x_start: Float,
+    x_inc: Float,
 
     fn dir(self: *const Edge) i2 {
         if (self.y0 < self.y1) {
@@ -23,7 +24,7 @@ pub const Edge = struct {
         return 1;
     }
 
-    fn top(self: *const Edge) f64 {
+    fn top(self: *const Edge) Float {
         if (self.y0 < self.y1) {
             return self.y0;
         }
@@ -31,7 +32,7 @@ pub const Edge = struct {
         return self.y1;
     }
 
-    fn bottom(self: *const Edge) f64 {
+    fn bottom(self: *const Edge) Float {
         if (self.y0 < self.y1) {
             return self.y1;
         }
@@ -41,11 +42,11 @@ pub const Edge = struct {
 };
 
 edges: std.ArrayListUnmanaged(Edge) = .empty,
-scale: f64 = 1, // NOTE: Only needs to be set if adding edges directly (not from contours)
-extent_top: f64 = 0.0,
-extent_bottom: f64 = 0.0,
-extent_left: f64 = 0.0,
-extent_right: f64 = 0.0,
+scale: Float = 1, // NOTE: Only needs to be set if adding edges directly (not from contours)
+extent_top: Float = 0.0,
+extent_bottom: Float = 0.0,
+extent_left: Float = 0.0,
+extent_right: Float = 0.0,
 
 pub fn deinit(self: *Polygon, alloc: std.mem.Allocator) void {
     self.edges.deinit(alloc);
@@ -133,7 +134,7 @@ pub fn addEdgesFromContour(
 /// Returns true if our polygon list is somewhere within the box starting at
 /// (0,0) with the width box_width and the height box_height. Used to check if
 /// we should actually proceed with drawing.
-pub fn inBox(self: *const Polygon, scale: f64, box_width: i32, box_height: i32) bool {
+pub fn inBox(self: *const Polygon, scale: Float, box_width: i32, box_height: i32) bool {
     if (!std.math.isFinite(self.extent_left) or !std.math.isFinite(self.extent_top) or
         !std.math.isFinite(self.extent_right) or !std.math.isFinite(self.extent_bottom))
     {
@@ -271,7 +272,7 @@ pub const WorkingEdgeSet = struct {
 
         // We take our line measurements at the middle of the line; this helps
         // "break the tie" with lines that fall exactly on point boundaries.
-        const line_y_middle = @as(f64, @floatFromInt(line_y)) + 0.5;
+        const line_y_middle = @as(Float, @floatFromInt(line_y)) + 0.5;
 
         var to: usize = 0;
         for (0..self.polygon.edges.items.len) |from| {
@@ -294,7 +295,7 @@ pub const WorkingEdgeSet = struct {
     }
 
     pub fn inc(self: *WorkingEdgeSet, y: i32) void {
-        const y_mid: f64 = @as(f64, @floatFromInt(y)) + 0.5;
+        const y_mid: Float = @as(Float, @floatFromInt(y)) + 0.5;
         for (self.edges, 0..) |edge, idx| {
             self.x_values[idx] = @intFromFloat(@round(edge.x_start + (edge.x_inc * (y_mid - edge.top()))));
         }
@@ -362,7 +363,7 @@ pub const Contour = struct {
 
     len: usize = 0,
     corners: std.DoublyLinkedList = .{},
-    scale: f64,
+    scale: Float,
 
     pub fn deinit(self: *Contour, alloc: std.mem.Allocator) void {
         var node_ = self.corners.first;
@@ -448,7 +449,7 @@ test "Polygon.inBox" {
     const cases = [_]struct {
         name: []const u8,
         polygon: Polygon,
-        scale: f64,
+        scale: Float,
         box_width: i32,
         box_height: i32,
         expected: bool,

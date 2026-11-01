@@ -111,14 +111,14 @@ pub fn main() !void {
         // if running in these modes.
         .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
 
-        // Incidentally, the SmpAllocator here seems to be a lot slower than
-        // using the C allocator (at the trade-off of tying you to libc).
-        // Benchmark times are much different when using it, but I don't have
-        // it enabled here - depending on what way you look at it, one or the
-        // other could be more realistic. This keeps the benchmarks from having
-        // to link against libc though, given that nothing else in the project
-        // needs it currently.
-        .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+        // If we use libc, use the c_allocator, otherwise use the
+        // smp_allocator. The C allocator still has much better performance
+        // than the C allocator, but of course creates a dependency on libc, so
+        // it's off by default.
+        .ReleaseFast, .ReleaseSmall => .{
+            if (options.link_libc) std.heap.c_allocator else std.heap.smp_allocator,
+            false,
+        },
     };
 
     defer if (is_debug) {

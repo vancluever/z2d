@@ -31,7 +31,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     return sfc;
 }
 
-fn line(context: *z2d.Context, i: f64) !void {
+fn line(context: *z2d.Context, i: z2d.Float) !void {
     defer context.resetPath();
 
     const saved_ctm = context.getTransformation();
@@ -43,8 +43,8 @@ fn line(context: *z2d.Context, i: f64) !void {
     const saved_source = context.getSource();
     defer context.setSourceToPixel(saved_source.opaque_pattern.pixel);
 
-    const x_offset: f64 = 200 * @mod(i, 4.0) + 100 - 50 * @cos(std.math.pi / 6.0 * i);
-    const y_offset: f64 = 200 * @floor(i / 4.0) + 75 - 37.5 * @sin(std.math.pi / 6.0 * i);
+    const x_offset: z2d.Float = 200 * @mod(i, 4.0) + 100 - 50 * @cos(std.math.pi / 6.0 * i);
+    const y_offset: z2d.Float = 200 * @floor(i / 4.0) + 75 - 37.5 * @sin(std.math.pi / 6.0 * i);
 
     context.translate(x_offset, y_offset);
     context.rotate(std.math.pi / 6.0 * i);

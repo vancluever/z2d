@@ -6,13 +6,15 @@ const Dasher = @This();
 
 const std = @import("std");
 
-dashes: []const f64,
-offset: f64,
+const Float = @import("../../z2d.zig").Float;
+
+dashes: []const Float,
+offset: Float,
 idx: usize,
 on: bool,
-remain: f64,
+remain: Float,
 
-pub fn validate(dashes: []const f64) bool {
+pub fn validate(dashes: []const Float) bool {
     var valid = false;
     for (dashes) |d| {
         if (d < 0) {
@@ -25,7 +27,7 @@ pub fn validate(dashes: []const f64) bool {
     return valid;
 }
 
-pub fn init(dashes: []const f64, offset: f64) Dasher {
+pub fn init(dashes: []const Float, offset: Float) Dasher {
     var result: Dasher = .{
         .dashes = dashes,
         .offset = offset,
@@ -58,7 +60,7 @@ pub fn reset(self: *Dasher) void {
     self.applyOffset();
 }
 
-pub fn step(self: *Dasher, len: f64) bool {
+pub fn step(self: *Dasher, len: Float) bool {
     var stepped = false;
     self.remain -= len;
     if (self.remain <= 0) {

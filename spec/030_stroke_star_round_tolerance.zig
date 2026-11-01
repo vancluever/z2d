@@ -37,7 +37,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
 
     context.resetPath();
     context.setTolerance(3);
-    var x_offset: f64 = 300;
+    var x_offset: z2d.Float = 300;
     try context.moveTo(x_offset + sub_canvas_width / 2, 0 + margin); // 1
     try context.lineTo(x_offset + sub_canvas_width - margin * x_scale - 1, height - margin - 1); // 3
     try context.lineTo(x_offset + 0 + margin, 0 + margin * y_scale); // 5

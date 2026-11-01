@@ -43,8 +43,8 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
 
     // Circle
     context.setIdentity();
-    var x_offset: f64 = 50;
-    var y_offset: f64 = 350;
+    var x_offset: z2d.Float = 50;
+    var y_offset: z2d.Float = 350;
     const diameter = 200;
     context.translate(x_offset + diameter / 2, y_offset + diameter / 2);
     context.scale(diameter / 2, diameter / 2);
@@ -69,7 +69,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     context.resetPath();
 
     // Ellipse (no transform on stroke)
-    const ellipse_line_width: f64 = 6;
+    const ellipse_line_width: z2d.Float = 6;
     context.setLineWidth(ellipse_line_width);
     context.setIdentity();
     x_offset = 100;

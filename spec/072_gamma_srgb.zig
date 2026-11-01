@@ -58,7 +58,7 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator) !z2d.Surface {
     return sfc;
 }
 
-fn drawGray(context: *z2d.Context, pos: f64, profile: z2d.color.RGBProfile) !void {
+fn drawGray(context: *z2d.Context, pos: z2d.Float, profile: z2d.color.RGBProfile) !void {
     const px = z2d.Pixel.fromColor(switch (profile) {
         .linear => .{ .rgb = .{ 0.3, 0.3, 0.3 } },
         .srgb => .{ .srgb = .{ 0.3, 0.3, 0.3 } },
@@ -77,7 +77,7 @@ fn drawGray(context: *z2d.Context, pos: f64, profile: z2d.color.RGBProfile) !voi
 
 fn drawGradient(
     context: *z2d.Context,
-    pos: f64,
+    pos: z2d.Float,
     stop_profile: z2d.color.RGBProfile,
     interpolation_method: z2d.color.InterpolationMethod,
 ) !void {
@@ -93,9 +93,9 @@ fn drawGradient(
         .linear => .{ .rgb = .{ 0, 0, 0.80 } },
         .srgb => .{ .srgb = .{ 0, 0, 0.80 } },
     };
-    const offset: f64 = 30;
-    const gradient_width: f64 = width - offset * 2;
-    const gradient_height: f64 = (height - offset * 2) / 4;
+    const offset: z2d.Float = 30;
+    const gradient_width: z2d.Float = width - offset * 2;
+    const gradient_height: z2d.Float = (height - offset * 2) / 4;
     var stops: [3]z2d.gradient.Stop = undefined;
     var gradient = z2d.Gradient.init(.{
         .type = .{ .linear = .{

@@ -13,6 +13,7 @@ const std = @import("std");
 
 const arc = @import("../arc.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const Transformation = @import("../../Transformation.zig");
 const Point = @import("../Point.zig");
 const Face = @import("Face.zig");
@@ -33,8 +34,8 @@ vertices: std.ArrayListUnmanaged(PenVertex),
 /// than tolerance.
 pub fn init(
     alloc: std.mem.Allocator,
-    thickness: f64,
-    tolerance: f64,
+    thickness: Float,
+    tolerance: Float,
     ctm: Transformation,
 ) std.mem.Allocator.Error!Pen {
     // You can find the proof for our calculation here in cairo-pen.c in the
@@ -47,7 +48,7 @@ pub fn init(
     // Where M is the major axis.
     const radius = thickness / 2;
     const num_vertices: i32 = verts: {
-        const major_axis: f64 = arc.transformed_circle_major_axis(ctm, radius);
+        const major_axis: Float = arc.transformed_circle_major_axis(ctm, radius);
         // Note that our minimum number of vertices is always 4. There are
         // also situations where our tolerance may be so high that we'd
         // have a degenerate pen, so we just return 1 in that case.
@@ -91,8 +92,8 @@ pub fn init(
     // off our ctm to get the correct ellipse for the pen.
     const reflect = ctm.determinant() < 0;
     for (0..@max(0, num_vertices)) |i| {
-        const theta: f64 = th: {
-            var t = 2 * std.math.pi * @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(num_vertices));
+        const theta: Float = th: {
+            var t = 2 * std.math.pi * @as(Float, @floatFromInt(i)) / @as(Float, @floatFromInt(num_vertices));
             if (reflect) t = -t;
             break :th t;
         };

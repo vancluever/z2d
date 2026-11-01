@@ -87,6 +87,18 @@
 //! library.
 //!
 //! * `png_exporter` - Provides rudimentary PNG export functionality.
+//!
+//! ## Build-time configuration
+//!
+//! Some values/types can be configured via build-time options. These are:
+//!
+//! * `vector_length` - the length of SIMD operations in z2d.
+//! * `Float` - the geometry floating-point type alias.
+//!
+//! Note that these are fully documented in this file (`src/z2d.zig`). If
+//! autodoc is not displaying full documentation, please check the source for
+//! full details. In autodoc, you can click the "[src]" link at the top of the
+//! page generated for this file.
 
 pub const surface = @import("surface.zig");
 pub const pattern = @import("pattern.zig");
@@ -110,6 +122,9 @@ pub const Gradient = gradient.Gradient;
 pub const Surface = surface.Surface;
 pub const Transformation = @import("Transformation.zig");
 
+// Build options are below.
+const z2d_options = @import("z2d_options");
+
 /// The length of vector operations, based around the amount of 16-bit values
 /// that can fit in an SIMD register. The default is 16, suitable for 256-bit
 /// SIMD systems like AVX2, and systems where the register size is smaller as
@@ -122,6 +137,7 @@ pub const Transformation = @import("Transformation.zig");
 /// ```
 /// const z2d_dep = b.dependency("z2d", .{
 ///     .target = target,
+///     .optimize = optimize,
 ///     .vector_length = 16,
 /// });
 /// ```
@@ -136,11 +152,37 @@ pub const Transformation = @import("Transformation.zig");
 /// For production builds, it's suggested to pick a value that will accommodate
 /// most systems, such as 8 (Apple Silicon/ARM NEON), 16 (AVX2) or 32 (AVX512).
 pub const vector_length: usize = vector_length: {
-    const z2d_options = @import("z2d_options");
     const vl = z2d_options.vector_length;
     if (vl < 4 or vl > 128 or (vl & (vl - 1)) != 0)
         @compileError("vector_length must be 4-128 as a power of 2");
     break :vector_length vl;
+};
+
+/// A type alias to a configurable floating-point type for all geometry-based
+/// floating-point operations. Currently defaults to `.double`.
+///
+/// z2d uses this type for path nodes, text processing, transformations, and
+/// other operations that ultimately result in tessellated geometry. This is
+/// separate from most lower-level graphics and color operations, which always
+/// utilizes 32-bit data type at the maximum (although these subsystems
+/// interact with `Float` during rasterization).
+///
+/// Switching to `.single` will get you faster floating-point operations
+/// (significantly faster on some systems) at the possible cost of accuracy.
+///
+/// To change, add the `.float_precision` option to your build.zig file when
+/// adding the module to your project:
+///
+/// ```
+/// const z2d_dep = b.dependency("z2d", .{
+///     .target = target,
+///     .optimize = optimize,
+///     .float_precision = .single,
+/// });
+/// ```
+pub const Float = switch (z2d_options.float_precision) {
+    .single => f32,
+    .double => f64,
 };
 
 test {

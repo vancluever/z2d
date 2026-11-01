@@ -21,6 +21,7 @@ const painter = @import("painter.zig");
 const text = @import("text.zig");
 
 const Dither = @import("Dither.zig");
+const Float = @import("z2d.zig").Float;
 const Path = @import("Path.zig");
 const Pixel = @import("pixel.zig").Pixel;
 const Pattern = @import("pattern.zig").Pattern;
@@ -44,19 +45,19 @@ font: ?struct {
 } = null,
 
 anti_aliasing_mode: options.AntiAliasMode = .default,
-dashes: []const f64 = &.{},
-dash_offset: f64 = 0,
+dashes: []const Float = &.{},
+dash_offset: Float = 0,
 dither: Dither.Type = .none,
 fill_rule: options.FillRule = .non_zero,
-font_size: f64 = 16.0,
+font_size: Float = 16.0,
 hairline: bool = false,
 line_cap_mode: options.CapMode = .butt,
 line_join_mode: options.JoinMode = .miter,
-line_width: f64 = 2.0,
-miter_limit: f64 = 10.0,
+line_width: Float = 2.0,
+miter_limit: Float = 10.0,
 operator: compositor.Operator = .src_over,
 precision: compositor.Precision = .integer,
-tolerance: f64 = options.default_tolerance,
+tolerance: Float = options.default_tolerance,
 glyph_orientation: options.GlyphOrientation = .top,
 transformation: Transformation = Transformation.identity,
 
@@ -182,18 +183,18 @@ pub fn setLineJoinMode(self: *Context, line_join_mode: options.JoinMode) void {
 }
 
 /// Returns the current line width for the context.
-pub fn getLineWidth(self: *Context) f64 {
+pub fn getLineWidth(self: *Context) Float {
     return self.line_width;
 }
 
 /// Sets the line width for stroking operations, in pixels. This value is taken
 /// at call time of `stroke`, and has no effect during path construction.
-pub fn setLineWidth(self: *Context, line_width: f64) void {
+pub fn setLineWidth(self: *Context, line_width: Float) void {
     self.line_width = line_width;
 }
 
 /// Returns the current dash array for the context.
-pub fn getDashes(self: *Context) []const f64 {
+pub fn getDashes(self: *Context) []const Float {
     return self.dashes;
 }
 
@@ -217,12 +218,12 @@ pub fn getDashes(self: *Context) []const f64 {
 /// If this value contains a negative number, or if all values are zero, or if
 /// the slice is empty (the default), dashing is disabled and this value is
 /// ignored.
-pub fn setDashes(self: *Context, dashes: []const f64) void {
+pub fn setDashes(self: *Context, dashes: []const Float) void {
     self.dashes = dashes;
 }
 
 /// Returns the current dash offset for the context.
-pub fn getDashOffset(self: *Context) f64 {
+pub fn getDashOffset(self: *Context) Float {
     return self.dash_offset;
 }
 
@@ -236,12 +237,12 @@ pub fn getDashOffset(self: *Context) f64 {
 ///
 /// A value of 0 (the default) provides no effect and the pattern runs as
 /// normal.
-pub fn setDashOffset(self: *Context, dash_offset: f64) void {
+pub fn setDashOffset(self: *Context, dash_offset: Float) void {
     self.dash_offset = dash_offset;
 }
 
 /// Returns the current miter limit for the context.
-pub fn getMiterLimit(self: *Context) f64 {
+pub fn getMiterLimit(self: *Context) Float {
     return self.miter_limit;
 }
 
@@ -258,7 +259,7 @@ pub fn getMiterLimit(self: *Context) f64 {
 /// The default limit is 10.0, which sets the cutoff at ~11 degrees. A miter
 /// limit of 2.0 translates to ~60 degrees, and a limit of 1.414 translates to
 /// ~90 degrees.
-pub fn setMiterLimit(self: *Context, miter_limit: f64) void {
+pub fn setMiterLimit(self: *Context, miter_limit: Float) void {
     self.miter_limit = miter_limit;
 }
 
@@ -287,7 +288,7 @@ pub fn setPrecision(self: *Context, precision: compositor.Precision) void {
 }
 
 /// Returns the current error tolerance for the context.
-pub fn getTolerance(self: *Context) f64 {
+pub fn getTolerance(self: *Context) Float {
     return self.tolerance;
 }
 
@@ -301,7 +302,7 @@ pub fn getTolerance(self: *Context) f64 {
 /// caps and joins, which use static vertices for plotting. This can produce
 /// marked artifacts at relatively low tolerance settings, so take care when
 /// changing under these scenarios.
-pub fn setTolerance(self: *Context, tolerance: f64) void {
+pub fn setTolerance(self: *Context, tolerance: Float) void {
     const t = @max(tolerance, 0.001);
     self.tolerance = t;
     self.path.tolerance = t;
@@ -378,7 +379,7 @@ pub fn setFontIndex(self: *Context, index: u32) SetFontIndexError!void {
 }
 
 /// Returns the font size set with `setFont`.
-pub fn getFontSize(self: *Context) f64 {
+pub fn getFontSize(self: *Context) Float {
     return self.font_size;
 }
 
@@ -386,12 +387,12 @@ pub fn getFontSize(self: *Context) f64 {
 ///
 /// To translate from points, use `target_dpi / 72 * point_size`. The default
 /// is 16px, or 12pt @ 96 DPI.
-pub fn setFontSize(self: *Context, size: f64) void {
+pub fn setFontSize(self: *Context, size: Float) void {
     self.font_size = size;
 }
 
 /// Returns the glyph orientation set with `setGlyphOrientation`.
-pub fn getGlyphOrientation(self: *Context) f64 {
+pub fn getGlyphOrientation(self: *Context) Float {
     return self.font_size;
 }
 
@@ -449,43 +450,43 @@ pub fn mul(self: *Context, a: Transformation) void {
 
 /// Modifies the current transformation matrix (CTM) by applying a co-ordinate
 /// offset to the origin.
-pub fn translate(self: *Context, tx: f64, ty: f64) void {
+pub fn translate(self: *Context, tx: Float, ty: Float) void {
     self.setTransformation(self.getTransformation().translate(tx, ty));
 }
 
 /// Modifies the current transformation matrix (CTM) by rotating around the
 /// origin by `angle` (in radians).
-pub fn rotate(self: *Context, angle: f64) void {
+pub fn rotate(self: *Context, angle: Float) void {
     self.setTransformation(self.getTransformation().rotate(angle));
 }
 
 /// Modifies the current transformation matrix (CTM) by scaling by (`sx`,
 /// `sy`). When `sx` and `sy` are not equal, a stretching effect will be
 /// achieved.
-pub fn scale(self: *Context, sx: f64, sy: f64) void {
+pub fn scale(self: *Context, sx: Float, sy: Float) void {
     self.setTransformation(self.getTransformation().scale(sx, sy));
 }
 
 /// Applies the current transformation matrix (CTM) to the supplied `x` and `y`.
-pub fn userToDevice(self: *Context, x: *f64, y: *f64) void {
+pub fn userToDevice(self: *Context, x: *Float, y: *Float) void {
     self.transformation.userToDevice(x, y);
 }
 
 /// Applies the current transformation matrix (CTM) to the supplied `x` and
 /// `y`, but ignores translation.
-pub fn userToDeviceDistance(self: *Context, x: *f64, y: *f64) void {
+pub fn userToDeviceDistance(self: *Context, x: *Float, y: *Float) void {
     self.transformation.userToDeviceDistance(x, y);
 }
 
 /// Applies the inverse of the current transformation matrix (CTM) to the
 /// supplied `x` and `y`.
-pub fn deviceToUser(self: *Context, x: *f64, y: *f64) Transformation.Error!void {
+pub fn deviceToUser(self: *Context, x: *Float, y: *Float) Transformation.Error!void {
     try self.transformation.deviceToUser(x, y);
 }
 
 /// Applies the inverse of the current transformation matrix (CTM) to the
 /// supplied `x` and `y`, but ignores translation.
-pub fn deviceToUserDistance(self: *Context, x: *f64, y: *f64) Transformation.Error!void {
+pub fn deviceToUserDistance(self: *Context, x: *Float, y: *Float) Transformation.Error!void {
     try self.transformation.deviceToUserDistance(x, y);
 }
 
@@ -569,26 +570,26 @@ pub fn loadSerializedPath(self: *Context, serialized: []const u8) Path.LoadSeria
 /// Starts a new path, and moves the current point to it. If a path already has
 /// been started, a new sub-path is started. Note that this does not clear any
 /// existing paths or nodes, use `resetPath` to accomplish this.
-pub fn moveTo(self: *Context, x: f64, y: f64) std.mem.Allocator.Error!void {
+pub fn moveTo(self: *Context, x: Float, y: Float) std.mem.Allocator.Error!void {
     try self.path.moveTo(self.alloc, x, y);
 }
 
 /// Begins a new sub-path relative to the current point. It is an error to call
 /// this without a current point.
-pub fn relMoveTo(self: *Context, x: f64, y: f64) (Path.Error || std.mem.Allocator.Error)!void {
+pub fn relMoveTo(self: *Context, x: Float, y: Float) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relMoveTo(self.alloc, x, y);
 }
 
 /// Draws a line from the current point to the specified point and sets
 /// it as the current point. Acts as a `moveTo` instead if there is no
 /// current point.
-pub fn lineTo(self: *Context, x: f64, y: f64) std.mem.Allocator.Error!void {
+pub fn lineTo(self: *Context, x: Float, y: Float) std.mem.Allocator.Error!void {
     try self.path.lineTo(self.alloc, x, y);
 }
 
 /// Draws a line relative to the current point. It is an error to call this
 /// without a current point.
-pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || std.mem.Allocator.Error)!void {
+pub fn relLineTo(self: *Context, x: Float, y: Float) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relLineTo(self.alloc, x, y);
 }
 
@@ -597,12 +598,12 @@ pub fn relLineTo(self: *Context, x: f64, y: f64) (Path.Error || std.mem.Allocato
 /// to call this without a current point.
 pub fn curveTo(
     self: *Context,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.curveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
@@ -611,12 +612,12 @@ pub fn curveTo(
 /// this without a current point.
 pub fn relCurveTo(
     self: *Context,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.relCurveTo(self.alloc, x1, y1, x2, y2, x3, y3);
 }
@@ -655,11 +656,11 @@ pub fn relCurveTo(
 ///
 pub fn arc(
     self: *Context,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle1: f64,
-    angle2: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle1: Float,
+    angle2: Float,
 ) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.arc(self.alloc, xc, yc, radius, angle1, angle2);
 }
@@ -670,11 +671,11 @@ pub fn arc(
 /// Π until it's less than `angle1`.
 pub fn arcNegative(
     self: *Context,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle1: f64,
-    angle2: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle1: Float,
+    angle2: Float,
 ) (Path.Error || std.mem.Allocator.Error)!void {
     try self.path.arcNegative(self.alloc, xc, yc, radius, angle1, angle2);
 }
@@ -724,7 +725,7 @@ pub fn simplifyPath(self: *Context) Path.SimplifyError!void {
 ///
 /// All single-segment paths are considered clockwise for the purposes of
 /// offsetting.
-pub fn offsetPath(self: *Context, offset: f64) Path.OffsetError!void {
+pub fn offsetPath(self: *Context, offset: Float) Path.OffsetError!void {
     const new_path = try self.path.offset(self.alloc, offset);
     self.path.deinit(self.alloc);
     self.path = new_path;
@@ -811,7 +812,7 @@ const ShowTextError = fontpkg.File.LoadFontIndexError || text.ShowTextError;
 /// setting `setGlyphOrientation`, see that function for more details.
 ///
 /// See the `text` and `font` packages for details on loading in fonts.
-pub fn showText(self: *Context, utf8: []const u8, x: f64, y: f64) ShowTextError!void {
+pub fn showText(self: *Context, utf8: []const u8, x: Float, y: Float) ShowTextError!void {
     const font_file = self.font orelse return;
     var font = try font_file.file.loadFontIndex(font_file.index);
     const wrapped_pattern = self.wrapDither();
@@ -858,8 +859,8 @@ pub const ShapeTextError = MissingFontError || fontpkg.File.LoadFontIndexError |
 pub fn shapeText(
     self: *Context,
     utf8: []const u8,
-    x: f64,
-    y: f64,
+    x: Float,
+    y: Float,
     alloc: ?std.mem.Allocator,
     mode: text.ShapeMode,
 ) ShapeTextError!text.ShapeTextResult {

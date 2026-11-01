@@ -6,6 +6,7 @@ const std = @import("std");
 
 const nodepkg = @import("../path_nodes.zig");
 
+const Float = @import("../../z2d.zig").Float;
 const Point = @import("../Point.zig");
 const PlotterVTable = @import("PlotterVTable.zig");
 const PointBuffer = @import("point_buffer.zig").PointBuffer(1, 3);
@@ -18,8 +19,8 @@ pub const Error = InternalError || std.mem.Allocator.Error;
 pub fn plot(
     alloc: std.mem.Allocator,
     nodes: []const nodepkg.PathNode,
-    scale: f64,
-    tolerance: f64,
+    scale: Float,
+    tolerance: Float,
 ) Error!Polygon {
     var result: Polygon = .{ .scale = scale };
     errdefer result.deinit(alloc);

@@ -69,6 +69,7 @@ const options = @import("options.zig");
 const offsetpkg = @import("internal/path_fx/offset.zig");
 const simplifypkg = @import("internal/path_fx/simplify.zig");
 
+const Float = @import("z2d.zig").Float;
 const PathNode = @import("internal/path_nodes.zig").PathNode;
 const PathVTable = @import("internal/PathVTable.zig");
 const Point = @import("internal/Point.zig");
@@ -103,7 +104,7 @@ current_point: ?Point = null,
 
 /// The tolerance setting used when approximating arcs as splines. For more
 /// detail on this setting, see its counterpart in `Context`.
-tolerance: f64 = options.default_tolerance,
+tolerance: Float = options.default_tolerance,
 
 /// The current transformation matrix (CTM) for this path.
 ///
@@ -250,7 +251,7 @@ pub fn appendSerializedAssumeCapacity(
 }
 
 /// Starts a new path, and moves the current point to it.
-pub fn moveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.Allocator.Error!void {
+pub fn moveTo(self: *Path, alloc: std.mem.Allocator, x: Float, y: Float) std.mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.moveToAssumeCapacity(x, y);
@@ -258,7 +259,7 @@ pub fn moveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.All
 
 /// Like `moveTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
+pub fn moveToAssumeCapacity(self: *Path, x: Float, y: Float) void {
     const point: Point = (Point{
         .x = clampI24(x),
         .y = clampI24(y),
@@ -283,7 +284,7 @@ pub fn moveToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Begins a new sub-path relative to the current point. It is an error to call
 /// this without a current point.
-pub fn relMoveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error || std.mem.Allocator.Error)!void {
+pub fn relMoveTo(self: *Path, alloc: std.mem.Allocator, x: Float, y: Float) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         return self.moveTo(alloc, user_point.x + x, user_point.y + y);
@@ -292,7 +293,7 @@ pub fn relMoveTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error |
 
 /// Like `relMoveTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
+pub fn relMoveToAssumeCapacity(self: *Path, x: Float, y: Float) Error!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         self.moveToAssumeCapacity(user_point.x + x, user_point.y + y);
@@ -301,7 +302,7 @@ pub fn relMoveToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
 
 /// Draws a line from the current point to the specified point and sets it as
 /// the current point. Acts as a `moveTo` instead if there is no current point.
-pub fn lineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.Allocator.Error!void {
+pub fn lineTo(self: *Path, alloc: std.mem.Allocator, x: Float, y: Float) std.mem.Allocator.Error!void {
     const newlen = self.nodes.items.len + 1;
     try self.nodes.ensureTotalCapacity(alloc, newlen);
     self.lineToAssumeCapacity(x, y);
@@ -309,7 +310,7 @@ pub fn lineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) std.mem.All
 
 /// Like `lineTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
+pub fn lineToAssumeCapacity(self: *Path, x: Float, y: Float) void {
     if (self.current_point == null) return self.moveToAssumeCapacity(x, y);
     const point: Point = (Point{
         .x = clampI24(x),
@@ -321,7 +322,7 @@ pub fn lineToAssumeCapacity(self: *Path, x: f64, y: f64) void {
 
 /// Draws a line relative to the current point. It is an error to call this
 /// without a current point.
-pub fn relLineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error || std.mem.Allocator.Error)!void {
+pub fn relLineTo(self: *Path, alloc: std.mem.Allocator, x: Float, y: Float) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         return self.lineTo(alloc, user_point.x + x, user_point.y + y);
@@ -330,7 +331,7 @@ pub fn relLineTo(self: *Path, alloc: std.mem.Allocator, x: f64, y: f64) (Error |
 
 /// Like `relLineTo`, but does not require an allocator. Assumes enough space
 /// exists for the point.
-pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
+pub fn relLineToAssumeCapacity(self: *Path, x: Float, y: Float) Error!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
         self.lineToAssumeCapacity(user_point.x + x, user_point.y + y);
@@ -343,12 +344,12 @@ pub fn relLineToAssumeCapacity(self: *Path, x: f64, y: f64) Error!void {
 pub fn curveTo(
     self: *Path,
     alloc: std.mem.Allocator,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point == null) return error.NoCurrentPoint;
     const newlen = self.nodes.items.len + 1;
@@ -360,12 +361,12 @@ pub fn curveTo(
 /// exists for the point.
 pub fn curveToAssumeCapacity(
     self: *Path,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) Error!void {
     if (self.current_point == null) return error.NoCurrentPoint;
     self._curveToAssumeCapacity(x1, y1, x2, y2, x3, y3);
@@ -373,12 +374,12 @@ pub fn curveToAssumeCapacity(
 
 fn _curveToAssumeCapacity(
     self: *Path,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) void {
     const p1: Point = (Point{
         .x = clampI24(x1),
@@ -401,12 +402,12 @@ fn _curveToAssumeCapacity(
 pub fn relCurveTo(
     self: *Path,
     alloc: std.mem.Allocator,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) (Error || std.mem.Allocator.Error)!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
@@ -426,12 +427,12 @@ pub fn relCurveTo(
 /// exists for the point.
 pub fn relCurveToAssumeCapacity(
     self: *Path,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) Error!void {
     if (self.current_point) |p| {
         const user_point = try p.applyInverseTransform(self.transformation);
@@ -482,11 +483,11 @@ pub fn relCurveToAssumeCapacity(
 pub fn arc(
     self: *Path,
     alloc: std.mem.Allocator,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle1: f64,
-    angle2: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle1: Float,
+    angle2: Float,
 ) (Error || std.mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
     while (effective_angle2 < angle1) effective_angle2 += std.math.pi * 2;
@@ -515,11 +516,11 @@ pub fn arc(
 pub fn arcNegative(
     self: *Path,
     alloc: std.mem.Allocator,
-    xc: f64,
-    yc: f64,
-    radius: f64,
-    angle1: f64,
-    angle2: f64,
+    xc: Float,
+    yc: Float,
+    radius: Float,
+    angle1: Float,
+    angle2: Float,
 ) (Error || std.mem.Allocator.Error)!void {
     var effective_angle2 = angle2;
     while (effective_angle2 > angle1) effective_angle2 -= std.math.pi * 2;
@@ -545,8 +546,8 @@ fn arc_line_to(
     ctx: *anyopaque,
     alloc: std.mem.Allocator,
     err_: *?std.mem.Allocator.Error,
-    x: f64,
-    y: f64,
+    x: Float,
+    y: Float,
 ) void {
     const self: *Path = @ptrCast(@alignCast(ctx));
     // no-op if our current point == destination. This is used to avoid drawing
@@ -565,12 +566,12 @@ fn arc_curve_to(
     ctx: *anyopaque,
     alloc: std.mem.Allocator,
     err_: *?PathVTable.Error,
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
+    x1: Float,
+    y1: Float,
+    x2: Float,
+    y2: Float,
+    x3: Float,
+    y3: Float,
 ) void {
     const self: *Path = @ptrCast(@alignCast(ctx));
     self.curveTo(alloc, x1, y1, x2, y2, x3, y3) catch |err| {
@@ -669,7 +670,7 @@ pub const OffsetError = simplifypkg.Error;
 ///
 /// The returned `Path` is a completely new path that the caller owns - call
 /// `deinit` to release as normal.
-pub fn offset(self: *const Path, alloc: std.mem.Allocator, value: f64) OffsetError!Path {
+pub fn offset(self: *const Path, alloc: std.mem.Allocator, value: Float) OffsetError!Path {
     const result_nodes = try offsetpkg.run(alloc, self.nodes.items, self.tolerance, value);
     var result: Path = .{
         .nodes = .fromOwnedSlice(result_nodes),
@@ -848,7 +849,7 @@ const ReaderParseValueError = error{
     ExpectedValue,
 } || std.Io.Reader.Error || std.fmt.ParseFloatError;
 
-fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!f64 {
+fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!Float {
     var len: usize = 1;
     while (reader.peek(len)) |raw| {
         switch (raw[raw.len - 1]) {
@@ -876,7 +877,7 @@ fn readerParseValue(reader: *std.Io.Reader) ReaderParseValueError!f64 {
     }
 
     const raw = try reader.take(len);
-    return std.fmt.parseFloat(f64, raw);
+    return std.fmt.parseFloat(Float, raw);
 }
 
 const ReaderTakeDelimError = error{
@@ -923,7 +924,7 @@ fn fixState(self: *Path) FixStateError!void {
     }
 }
 
-fn clampI24(x: f64) f64 {
+fn clampI24(x: Float) Float {
     return std.math.clamp(x, std.math.minInt(i24), std.math.maxInt(i24));
 }
 

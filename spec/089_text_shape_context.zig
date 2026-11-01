@@ -35,14 +35,14 @@ pub fn render(io: std.Io, alloc: std.mem.Allocator, aa_mode: z2d.options.AntiAli
     const text_extents = shaped.extents();
 
     // Set translation based on our shaping information, append the path, and fill.
-    const tx: f64 = tx: {
-        var t: f64 = -text_extents.x_bearing; // Shifts text bbox back to x=0 on left
-        t += (@as(f64, @floatFromInt(width)) - text_extents.width) / 2.0; // Center horizontally
+    const tx: z2d.Float = tx: {
+        var t: z2d.Float = -text_extents.x_bearing; // Shifts text bbox back to x=0 on left
+        t += (@as(z2d.Float, @floatFromInt(width)) - text_extents.width) / 2.0; // Center horizontally
         break :tx t;
     };
-    const ty: f64 = ty: {
-        var t: f64 = -text_extents.y_bearing; // Shifts text bbox down to y=0 on top
-        t += (@as(f64, @floatFromInt(height)) - text_extents.height) / 2.0; // Center vertically
+    const ty: z2d.Float = ty: {
+        var t: z2d.Float = -text_extents.y_bearing; // Shifts text bbox down to y=0 on top
+        t += (@as(z2d.Float, @floatFromInt(height)) - text_extents.height) / 2.0; // Center vertically
         break :ty t;
     };
     context.translate(tx, ty);

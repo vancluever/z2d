@@ -3,6 +3,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// The precision-type for geometry-based floating-point operations.
+pub const FloatPrecision = enum { single, double };
+
 /// Returns a step that generates our documentation, with all unnecessary
 /// dependencies filtered out (currently this is just "std").
 ///
@@ -182,7 +185,13 @@ pub fn build(b: *std.Build) !void {
         "vector_length",
         "Length of vector operations (default=16)",
     ) orelse 16;
+    const float_precision = b.option(
+        FloatPrecision,
+        "float_precision",
+        "Precision of geometry-based floating-point operations (default=double)",
+    ) orelse .double;
     z2d_options.addOption(u32, "vector_length", vector_length);
+    z2d_options.addOption(FloatPrecision, "float_precision", float_precision);
 
     /////////////////////////////////////////////////////////////////////////
     // Main module

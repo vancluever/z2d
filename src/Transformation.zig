@@ -19,6 +19,7 @@ const Transformation = @This();
 
 const std = @import("std");
 
+const Float = @import("z2d.zig").Float;
 const Point = @import("internal/Point.zig");
 
 /// Errors associated with matrix transformation operations.
@@ -27,12 +28,12 @@ pub const Error = error{
     InvalidMatrix,
 };
 
-ax: f64,
-by: f64,
-cx: f64,
-dy: f64,
-tx: f64,
-ty: f64,
+ax: Float,
+by: Float,
+cx: Float,
+dy: Float,
+tx: Float,
+ty: Float,
 
 /// Represents the identity matrix; a matrix or point multiplied by this matrix
 /// yields the original.
@@ -59,7 +60,7 @@ pub fn equal(a: Transformation, b: Transformation) bool {
 ///
 /// Note that the determinant of an affine transformation matrix reduces to a
 /// simple ad - bc.
-pub fn determinant(a: Transformation) f64 {
+pub fn determinant(a: Transformation) Float {
     return a.ax * a.dy - a.by * a.cx;
 }
 
@@ -86,7 +87,7 @@ pub fn mul(a: Transformation, b: Transformation) Transformation {
     };
 }
 
-fn mulScalar(a: Transformation, x: f64) Transformation {
+fn mulScalar(a: Transformation, x: Float) Transformation {
     return .{
         .ax = a.ax * x,
         .by = a.by * x,
@@ -160,7 +161,7 @@ pub fn inverse(a: Transformation) Error!Transformation {
 }
 
 /// Apply a co-ordinate offset to the origin.
-pub fn translate(a: Transformation, tx: f64, ty: f64) Transformation {
+pub fn translate(a: Transformation, tx: Float, ty: Float) Transformation {
     var b = identity;
     b.tx = tx;
     b.ty = ty;
@@ -169,7 +170,7 @@ pub fn translate(a: Transformation, tx: f64, ty: f64) Transformation {
 
 /// Scale by (`sx`, `sy`). When `sx` and `sy` are not equal, a stretching
 /// effect will be achieved.
-pub fn scale(a: Transformation, sx: f64, sy: f64) Transformation {
+pub fn scale(a: Transformation, sx: Float, sy: Float) Transformation {
     var b = identity;
     b.ax = sx;
     b.dy = sy;
@@ -177,7 +178,7 @@ pub fn scale(a: Transformation, sx: f64, sy: f64) Transformation {
 }
 
 /// Rotate around the origin by `angle` (in radians).
-pub fn rotate(a: Transformation, angle: f64) Transformation {
+pub fn rotate(a: Transformation, angle: Float) Transformation {
     var b = identity;
     const s = @sin(angle);
     const c = @cos(angle);
@@ -190,7 +191,7 @@ pub fn rotate(a: Transformation, angle: f64) Transformation {
 
 /// Applies the transformation matrix to the supplied `x` and `y`, but ignores
 /// translation.
-pub fn userToDeviceDistance(a: Transformation, x: *f64, y: *f64) void {
+pub fn userToDeviceDistance(a: Transformation, x: *Float, y: *Float) void {
     const in_x = x.*;
     const in_y = y.*;
     x.* = a.ax * in_x + a.by * in_y;
@@ -198,7 +199,7 @@ pub fn userToDeviceDistance(a: Transformation, x: *f64, y: *f64) void {
 }
 
 /// Applies the transformation matrix to the supplied `x` and `y`.
-pub fn userToDevice(a: Transformation, x: *f64, y: *f64) void {
+pub fn userToDevice(a: Transformation, x: *Float, y: *Float) void {
     a.userToDeviceDistance(x, y);
     x.* += a.tx;
     y.* += a.ty;
@@ -206,13 +207,13 @@ pub fn userToDevice(a: Transformation, x: *f64, y: *f64) void {
 
 /// Applies the inverse of the transformation matrix to the supplied `x` and
 /// `y`, but ignores translation.
-pub fn deviceToUserDistance(a: Transformation, x: *f64, y: *f64) Error!void {
+pub fn deviceToUserDistance(a: Transformation, x: *Float, y: *Float) Error!void {
     (try a.inverse()).userToDeviceDistance(x, y);
 }
 
 /// Applies the inverse of the transformation matrix to the supplied `x` and
 /// `y`.
-pub fn deviceToUser(a: Transformation, x: *f64, y: *f64) Error!void {
+pub fn deviceToUser(a: Transformation, x: *Float, y: *Float) Error!void {
     (try a.inverse()).userToDevice(x, y);
 }
 
@@ -372,9 +373,9 @@ test "inverse" {
             .ty = -20.0 / 29.0,
         };
 
-        // FIXME: see roundf64 comments for details on why we need to round
+        // FIXME: see roundFloat comments for details on why we need to round
         // test results.
-        try std.testing.expectEqualDeep(roundf64(expected), roundf64(try (a.inverse())));
+        try std.testing.expectEqualDeep(roundFloat(expected), roundFloat(try (a.inverse())));
     }
 
     {
@@ -425,7 +426,7 @@ test "scale" {
 }
 
 test "rotate" {
-    const angle = @as(f64, std.math.pi) / 2.0;
+    const angle = @as(Float, std.math.pi) / 2.0;
     const s = @sin(angle);
     const c = @cos(angle);
     try std.testing.expectEqualDeep(Transformation{
@@ -443,8 +444,8 @@ test "userToDevice" {
     // translate/rotate/scale tests above as we operate on real co-ordinates.
     {
         // Basic tests
-        const orig_x: f64 = 2;
-        const orig_y: f64 = 3;
+        const orig_x: Float = 2;
+        const orig_y: Float = 3;
 
         // Identity
         var got_x = orig_x;
@@ -468,12 +469,12 @@ test "userToDevice" {
 
     {
         // Rotate
-        var x: f64 = 9;
-        var y: f64 = 0;
-        const want_x: f64 = 0;
-        const want_y: f64 = 9;
+        var x: Float = 9;
+        var y: Float = 0;
+        const want_x: Float = 0;
+        const want_y: Float = 9;
         identity.rotate(std.math.pi / 2.0).userToDevice(&x, &y);
-        // FIXME: see roundf64 comments for details on why we need to round
+        // FIXME: see roundFloat comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
@@ -483,10 +484,10 @@ test "userToDevice" {
 
     {
         // Combined
-        var x: f64 = 9;
-        var y: f64 = 0;
-        const want_x: f64 = -200;
-        const want_y: f64 = 190;
+        var x: Float = 9;
+        var y: Float = 0;
+        const want_x: Float = -200;
+        const want_y: Float = 190;
         identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20).userToDevice(&x, &y);
         try std.testing.expectEqual(want_x, x);
         try std.testing.expectEqual(want_y, y);
@@ -494,10 +495,10 @@ test "userToDevice" {
 }
 
 test "deviceToUser" {
-    const original_x: f64 = 9;
-    const original_y: f64 = 0;
-    const want_x: f64 = -200;
-    const want_y: f64 = 190;
+    const original_x: Float = 9;
+    const original_y: Float = 0;
+    const want_x: Float = -200;
+    const want_y: Float = 190;
     const t = identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20);
     var got_x = original_x;
     var got_y = original_y;
@@ -512,8 +513,8 @@ test "deviceToUser" {
 test "userToDeviceDistance" {
     {
         // Basic tests
-        const orig_x: f64 = 2;
-        const orig_y: f64 = 3;
+        const orig_x: Float = 2;
+        const orig_y: Float = 3;
 
         // Identity
         var got_x = orig_x;
@@ -537,12 +538,12 @@ test "userToDeviceDistance" {
 
     {
         // Rotate
-        var x: f64 = 9;
-        var y: f64 = 0;
-        const want_x: f64 = 0;
-        const want_y: f64 = 9;
+        var x: Float = 9;
+        var y: Float = 0;
+        const want_x: Float = 0;
+        const want_y: Float = 9;
         identity.rotate(std.math.pi / 2.0).userToDeviceDistance(&x, &y);
-        // FIXME: see roundf64 comments for details on why we need to round
+        // FIXME: see roundFloat comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
@@ -552,12 +553,12 @@ test "userToDeviceDistance" {
 
     {
         // Combined
-        var x: f64 = 9;
-        var y: f64 = 2;
-        const want_x: f64 = -20;
-        const want_y: f64 = 90;
+        var x: Float = 9;
+        var y: Float = 2;
+        const want_x: Float = -20;
+        const want_y: Float = 90;
         identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20).userToDeviceDistance(&x, &y);
-        // FIXME: see roundf64 comments for details on why we need to round
+        // FIXME: see roundFloat comments for details on why we need to round
         // test results.
         x = @round(x);
         y = @round(y);
@@ -567,15 +568,15 @@ test "userToDeviceDistance" {
 }
 
 test "deviceToUserDistance" {
-    const original_x: f64 = 9;
-    const original_y: f64 = 2;
-    const want_x: f64 = -20;
-    const want_y: f64 = 90;
+    const original_x: Float = 9;
+    const original_y: Float = 2;
+    const want_x: Float = -20;
+    const want_y: Float = 90;
     const t = identity.rotate(std.math.pi / 2.0).scale(10, 10).translate(10, 20);
     var got_x = original_x;
     var got_y = original_y;
     t.userToDeviceDistance(&got_x, &got_y);
-    // FIXME: see roundf64 comments for details on why we need to round
+    // FIXME: see roundFloat comments for details on why we need to round
     // test results.
     got_x = @round(got_x);
     got_y = @round(got_y);
@@ -588,46 +589,55 @@ test "deviceToUserDistance" {
     try std.testing.expectEqual(original_y, got_y);
 }
 
-/// For testing only. Rounds each element in the matrix to 16 significant
-/// digits.
-fn roundf64(a: Transformation) Transformation {
+/// For testing only. Rounds each element in the matrix to the maximum number
+/// of significant decimal digits allowed by the floating-point type in use.
+fn roundFloat(a: Transformation) Transformation {
     // FIXME: Notes on rounding issues (some apply to exactly this helper, some
     // don't)
     //
     // Some transformations and multiplications seem to be yielding some very
-    // small fractional discrepancies (e.g., to the tune of e-15 or more) on
-    // what you would otherwise expect as whole numbers, or in comparison to
-    // say expected results expressed as fractional expressions in tests (the
-    // latter situation is why the function in which this comment resides
-    // exists). We are rounding some test results to work around this. This
-    // could just be the nature of floating point, but I'd like to do another
-    // pass after the initial implementation push to double-check, after which
-    // we can fix and/or delete this message.
+    // small fractional discrepancies (e.g., usually at the lower end of the
+    // smallest representable fraction) on what you would otherwise expect as
+    // whole numbers, or in comparison to say expected results expressed as
+    // fractional expressions in tests (the latter situation is why the
+    // function in which this comment resides exists). We are rounding some
+    // test results to work around this. This could just be the nature of
+    // floating point, but I'd like to do another pass after the initial
+    // implementation push to double-check, after which we can fix and/or
+    // delete this message.
     //
     //
-    // Applies to this function: inconsistent f64 precision rounding has been
-    // observed in the inverse in some situations; specifically, we express
-    // expected test results as fraction expressions, which is where the
-    // mismatch happens. Funny enough we've gotten *more* precision when
-    // applying the inverse (17 significant digits) than what we get when doing
-    // just straight division using comptime_float -> f64 coercion (16
-    // significant digits). Not too sure why, but for now this exists to just
-    // help work around it.
+    // Applies to this function: inconsistent floating-point precision rounding
+    // has been observed in the inverse in some situations; specifically, we
+    // express expected test results as fraction expressions, which is where
+    // the mismatch happens. Funny enough we've gotten *more* precision when
+    // applying the inverse; an example with f64 would be getting 17
+    // significant digits versus doing just straight division using
+    // comptime_float -> f64 coercion (16 significant digits). Not too sure
+    // why, but for now this exists to just help work around it.
+    //
+    // TODO: We could possibly just replace the tests that utilize this
+    // function with epsilon checks.
     return .{
-        .ax = roundf64_field(a.ax),
-        .by = roundf64_field(a.by),
-        .cx = roundf64_field(a.cx),
-        .dy = roundf64_field(a.dy),
-        .tx = roundf64_field(a.tx),
-        .ty = roundf64_field(a.ty),
+        .ax = roundFloat_field(a.ax),
+        .by = roundFloat_field(a.by),
+        .cx = roundFloat_field(a.cx),
+        .dy = roundFloat_field(a.dy),
+        .tx = roundFloat_field(a.tx),
+        .ty = roundFloat_field(a.ty),
     };
 }
 
-fn roundf64_field(a: f64) f64 {
+fn roundFloat_field(a: Float) Float {
     // https://stackoverflow.com/a/13094362 (CC BY-SA 3.0)
+    const digits = switch (@typeInfo(Float).float.bits) {
+        32 => 7,
+        64 => 16,
+        else => @compileError("unsupported floating-point type"),
+    };
     if (a == 0) {
         return 0;
     }
-    const b = std.math.pow(f64, 10, 16 - @ceil(std.math.log10(@abs(a))));
+    const b = std.math.pow(Float, 10, digits - @ceil(std.math.log10(@abs(a))));
     return @round(a * b) / b;
 }
