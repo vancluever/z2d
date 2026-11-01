@@ -1,6 +1,13 @@
-## 0.13.3-pre (Unreleased)
+## 0.14.0 (Unreleased)
 
-Bumped version for dev.
+CONFIGURABLE FLOATING-POINT
+
+z2d now allows you to configure the floating-point type used in most
+geometry-based operations as a build option, selectable between
+double-precision (the current default) and single-precision. Switching to
+single-precision will give significant performance improvements on a number of
+targets at the cost of accuracy. For more details, see
+([#213](https://github.com/vancluever/z2d/pull/213)).
 
 ## 0.13.2 (October 26, 2026)
 
