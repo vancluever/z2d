@@ -18,6 +18,12 @@ pub fn build(b: *std.Build) void {
     options.addOption(?[]const u8, "filter", filter);
     options.addOption(bool, "link_libc", link_libc);
 
+    const simd = b.option(
+        bool,
+        "simd",
+        "Enables SIMD (vectorized) code where available (default=true)",
+    ) orelse true;
+
     const float_precision = b.option(
         z2d_build.FloatPrecision,
         "float_precision",
@@ -27,6 +33,7 @@ pub fn build(b: *std.Build) void {
     const z2d_dep = b.dependency("z2d", .{
         .target = target,
         .optimize = optimize,
+        .simd = simd,
         .float_precision = float_precision,
     });
     const zbench_dep = b.dependency("zbench", .{

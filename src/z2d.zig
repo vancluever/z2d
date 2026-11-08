@@ -125,6 +125,25 @@ pub const Transformation = @import("Transformation.zig");
 // Build options are below.
 const z2d_options = @import("z2d_options");
 
+/// Whether or not SIMD code paths are enabled. In z2d this mainly is comprised
+/// of the use of `@Vector` types and code optimized for such uses.
+///
+/// By default, SIMD is enabled. Changing this value as a build option can be
+/// done when adding the dependency to your project:
+///
+/// ```
+/// const z2d_dep = b.dependency("z2d", .{
+///     .target = target,
+///     .optimize = optimize,
+///     .simd = true,
+/// });
+/// ```
+///
+/// Disabling SIMD will likely result in significantly slower code where SIMD
+/// is normally available, but on platforms where it is not, doing so should
+/// result in a much smaller binary.
+pub const simd: bool = z2d_options.simd;
+
 /// The length of vector operations, based around the amount of 16-bit values
 /// that can fit in an SIMD register. The default is 16, suitable for 256-bit
 /// SIMD systems like AVX2, and systems where the register size is smaller as
@@ -132,7 +151,7 @@ const z2d_options = @import("z2d_options");
 /// paragraph of the option's documentation).
 ///
 /// Tuning of this value can be done by adding the `.vector_length` option to
-/// your build.zig file when adding the module to your project:
+/// your build.zig file when adding the dependency to your project:
 ///
 /// ```
 /// const z2d_dep = b.dependency("z2d", .{
@@ -151,7 +170,12 @@ const z2d_options = @import("z2d_options");
 /// so if modifying this value, a larger value is likely better than a lower.
 /// For production builds, it's suggested to pick a value that will accommodate
 /// most systems, such as 8 (Apple Silicon/ARM NEON), 16 (AVX2) or 32 (AVX512).
+///
+/// When `simd` is set to `false`, this is set to the minimum value (`4`), and
+/// setting the build option has no effect. Additionally most, if not all, of
+/// the code using this setting will be disabled.
 pub const vector_length: usize = vector_length: {
+    if (!z2d_options.simd) break :vector_length 4;
     const vl = z2d_options.vector_length;
     if (vl < 4 or vl > 128 or (vl & (vl - 1)) != 0)
         @compileError("vector_length must be 4-128 as a power of 2");
@@ -171,7 +195,7 @@ pub const vector_length: usize = vector_length: {
 /// (significantly faster on some systems) at the possible cost of accuracy.
 ///
 /// To change, add the `.float_precision` option to your build.zig file when
-/// adding the module to your project:
+/// adding the dependency to your project:
 ///
 /// ```
 /// const z2d_dep = b.dependency("z2d", .{

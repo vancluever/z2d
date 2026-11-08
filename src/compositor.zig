@@ -18,6 +18,7 @@ const vectorize = @import("internal/util.zig").vectorize;
 const runCases = @import("internal/util.zig").runCases;
 const TestingError = @import("internal/util.zig").TestingError;
 
+const simd_enabled = @import("z2d.zig").simd;
 const vector_length = @import("z2d.zig").vector_length;
 
 /// Exposure of the lower-level dither interface. This is included so that
@@ -534,9 +535,16 @@ pub const StrideCompositor = struct {
     /// are ignored. Supplying a source stride shorter than the destination is
     /// safety-checked undefined behavior.
     pub fn run(dst: pixel.Stride, operations: []const Operation, options: RunOptions) void {
-        switch (options.precision) {
-            .integer => runPrecision(.integer, dst, operations),
-            .float => runPrecision(.float, dst, operations),
+        if (simd_enabled) {
+            switch (options.precision) {
+                .integer => runPrecision(.integer, dst, operations),
+                .float => runPrecision(.float, dst, operations),
+            }
+        } else {
+            switch (options.precision) {
+                .integer => runPrecisionScalar(.integer, dst, operations),
+                .float => runPrecisionScalar(.float, dst, operations),
+            }
         }
     }
 
@@ -615,6 +623,63 @@ pub const StrideCompositor = struct {
             _dst.toStride(dst, rem_idx, true, rem_len);
         }
     }
+
+    fn runPrecisionScalar(
+        comptime precision: Precision,
+        dst: pixel.Stride,
+        operations: []const Operation,
+    ) void {
+        const px_storage_T = switch (precision) {
+            .integer => RGBA16,
+            .float => RGBAFloat,
+        };
+        const len = dst.pxLen();
+        // Early exit if len == 0
+        if (len == 0) {
+            return;
+        }
+
+        for (0..len) |i| {
+            var _dst: px_storage_T = undefined;
+            var _src: px_storage_T = undefined;
+            for (operations, 0..) |op, op_idx| {
+                _src = switch (op.src) {
+                    .pixel => |px| px_storage_T.fromPixel(px),
+                    .stride => |stride| px_storage_T.fromPixel(
+                        getPixelFromStride(stride, i),
+                    ),
+                    .gradient => |gr| px_storage_T.fromPixel(
+                        gr.underlying.getPixel(gr.x + @as(i32, @intCast(i)), gr.y),
+                    ),
+                    .dither => |d| px_storage_T.fromPixel(
+                        d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y),
+                    ),
+                    .none => none: {
+                        std.debug.assert(op_idx != 0);
+                        break :none _dst;
+                    },
+                };
+                _dst = switch (op.dst) {
+                    .pixel => |px| px_storage_T.fromPixel(px),
+                    .stride => |stride| px_storage_T.fromPixel(
+                        getPixelFromStride(stride, i),
+                    ),
+                    .gradient => |gr| px_storage_T.fromPixel(
+                        gr.underlying.getPixel(gr.x + @as(i32, @intCast(i)), gr.y),
+                    ),
+                    .dither => |d| px_storage_T.fromPixel(
+                        d.underlying.getPixel(d.x + @as(i32, @intCast(i)), d.y),
+                    ),
+                    .none => px_storage_T.fromPixel(
+                        getPixelFromStride(dst, i),
+                    ),
+                };
+                _dst = px_storage_T.runOperator(_dst, _src, op.operator);
+            }
+
+            setPixelInStride(dst, i, _dst.toPixel());
+        }
+    }
 };
 
 /// Runs a single compositor operation described by `operator` against the
@@ -654,6 +719,34 @@ pub fn runPixelT(
     return _dst.toPixelT(dst_T);
 }
 
+/// Internal scalar pipeline compositor load helper.
+fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
+    return switch (src) {
+        inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_src| _src[idx].asPixel(),
+        inline .alpha4, .alpha2, .alpha1 => |_src| @TypeOf(_src).T.getFromPacked(
+            _src.buf,
+            _src.px_offset + idx,
+        ).asPixel(),
+    };
+}
+
+/// Internal scalar pipeline compositor store helper.
+fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
+    return switch (dst) {
+        inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_dst| {
+            _dst[idx] = @typeInfo(@TypeOf(_dst)).pointer.child.fromPixel(px);
+        },
+        inline .alpha4, .alpha2, .alpha1 => |_dst| {
+            const dst_t = @TypeOf(_dst).T;
+            dst_t.setInPacked(
+                _dst.buf,
+                _dst.px_offset + idx,
+                dst_t.fromPixel(px),
+            );
+        },
+    };
+}
+
 /// Represents an RGBA value as 16bpc. Note that this is only for intermediary
 /// calculations, no channel should be bigger than an u8 after any particular
 /// compositor step.
@@ -669,6 +762,7 @@ const RGBA16 = struct {
     }
 
     fn fromPixelT(comptime T: type, src: T) RGBA16 {
+        if (T == pixel.RGB565) return fromPixelT(pixel.RGB, src.toRGB());
         return .{
             .r = if (comptime hasField(T, "r")) src.r else 0,
             .g = if (comptime hasField(T, "g")) src.g else 0,

@@ -11,7 +11,16 @@ const pixel = @import("pixel.zig");
 const pixel_vector = @import("internal/pixel_vector.zig");
 const surface = @import("surface.zig");
 
-const vector_length = @import("z2d.zig").vector_length;
+const simd_enabled = @import("z2d.zig").simd;
+
+// We set the minimum vector_length here to 8. This is to ensure that we never
+// encode less than 1 byte's worth of pixels per stride (particularly of
+// concern when dealing with packed types).
+//
+// Note that this value is used for both vectorized and non-vectorized code
+// paths, as it represents the unit of measurement for certain internal buffers
+// as well.
+const vector_length: usize = @max(8, @import("z2d.zig").vector_length);
 
 const native_endian = @import("builtin").cpu.arch.endian();
 
@@ -234,7 +243,7 @@ fn writePNGIDATStream(
                                 stride_vec[i] = @bitCast(rgb);
                             }
                         } else @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
-                        stride_vec = encodeRGBAVec(
+                        stride_vec = encodeRGBA(
                             stride_vec,
                             profile,
                             @typeInfo(@TypeOf(s)).pointer.child == pixel.XRGB,
@@ -251,7 +260,7 @@ fn writePNGIDATStream(
                     inline .argb, .rgba => |s| {
                         var stride_vec: [vector_length]u32 = @splat(0);
                         @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
-                        stride_vec = encodeRGBAVec(
+                        stride_vec = encodeRGBA(
                             stride_vec,
                             profile,
                             @typeInfo(@TypeOf(s)).pointer.child == pixel.ARGB,
@@ -311,6 +320,8 @@ fn u32PixelToBytesLittleVec(value: [vector_length]u32) [vector_length * 4]u8 {
     return @bitCast(if (native_endian == .little) value else @byteSwap(value));
 }
 
+const encodeRGBA = if (simd_enabled) encodeRGBAVec else encodeRGBAScalar;
+
 /// Demultiplies and encodes a vector-length RGBA array using a supplied color
 /// profile.
 fn encodeRGBAVec(
@@ -361,6 +372,53 @@ fn encodeRGBAVec(
             .a = @intCast(rgba_vector.a[i]),
         };
         result[i] = @bitCast(rgba_scalar);
+    }
+
+    return result;
+}
+
+/// Scalar version of `encodeRGBAVec`, encodes on a buffer one-by-one.
+fn encodeRGBAScalar(
+    value: [vector_length]u32,
+    profile: ?color.RGBProfile,
+    comptime in_argb: bool,
+    comptime use_alpha: bool,
+) [vector_length]u32 {
+    var result: [vector_length]u32 = @splat(0);
+    for (0..vector_length) |idx| {
+        var rgba: pixel.RGBA = rgba: {
+            if (in_argb) {
+                // Quick swizzle here for ARGB
+                const argb: pixel.ARGB = @bitCast(value[idx]);
+                break :rgba .{
+                    .r = argb.r,
+                    .g = argb.g,
+                    .b = argb.b,
+                    .a = argb.a,
+                };
+            }
+
+            break :rgba @bitCast(value[idx]);
+        };
+
+        if (!use_alpha) rgba.a = 255; // Hard-set alpha for types without it
+
+        // Our default space is linear. Even in our floating-point color spaces, we
+        // de-multiply first in integer space when using the higher-level decoding
+        // methods, so it's OK to always de-multiply in integer space here.
+        if (use_alpha) rgba = rgba.demultiply();
+
+        // We only have sRGB currently, outside of linear space, so just check to
+        // see if we need to decode and apply the gamma for that. More formats may
+        // come later.
+        if ((profile orelse .linear) == .srgb) {
+            var decoded: color.SRGB = .decodeRGBA(rgba);
+            decoded = decoded.applyGamma();
+            rgba = decoded.encodeRGBA();
+        }
+
+        // Set the value in result
+        result[idx] = @bitCast(rgba);
     }
 
     return result;
