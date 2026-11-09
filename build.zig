@@ -180,16 +180,22 @@ pub fn build(b: *std.Build) !void {
     // All module build options are documented in src/z2d.zig.
     /////////////////////////////////////////////////////////////////////////
     const z2d_options = b.addOptions();
+    const simd = b.option(
+        bool,
+        "simd",
+        "Enables SIMD (vectorized) code where available (default=true)",
+    ) orelse true;
     const vector_length = b.option(
         u32,
         "vector_length",
-        "Length of vector operations (default=16)",
+        "Length of vector operations (default=16, requires simd=true)",
     ) orelse 16;
     const float_precision = b.option(
         FloatPrecision,
         "float_precision",
         "Precision of geometry-based floating-point operations (default=double)",
     ) orelse .double;
+    z2d_options.addOption(bool, "simd", simd);
     z2d_options.addOption(u32, "vector_length", vector_length);
     z2d_options.addOption(FloatPrecision, "float_precision", float_precision);
 
