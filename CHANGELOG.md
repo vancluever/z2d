@@ -9,6 +9,14 @@ single-precision will give significant performance improvements on a number of
 targets at the cost of accuracy. For more details, see
 ([#213](https://github.com/vancluever/z2d/pull/213)).
 
+ADDITIONAL ENHANCEMENTS:
+
+* SIMD can now be disabled by changing the new build-time `simd` option to
+  `false`. This disables the vectorized compositor and PNG export code, and
+  will similarly be used to disable future functionality that particularly uses
+  vectors explicitly. Note that this does not affect auto-vectorization done by
+  the compiler. ([#214](https://github.com/vancluever/z2d/pull/214))
+
 ## 0.13.2 (October 26, 2026)
 
 This release is being made to correct some issues with our release tooling that
