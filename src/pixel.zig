@@ -31,6 +31,16 @@ const TestingError = @import("internal/util.zig").TestingError;
 /// * `.rgba` is 24-bit truecolor as an 8-bit depth RGB, *with* alpha channel.
 /// * `.rgb` is 24-bit truecolor as an 8-bit depth RGB, *without* alpha channel.
 ///
+/// ### 24-bit formats
+///
+/// The following formats are 24-bit truecolor. These essentially operate like
+/// the 32-bit formats, but there is no padding for the missing alpha channel.
+///
+/// Both of these formats are named for their literal little-endian layouts:
+///
+/// * `.rgb888` is 24-bit truecolor as an 8-bit depth RGB (little endian).
+/// * `.bgr888` is 24-bit truecolor as an 8-bit depth BGR (little endian).
+///
 /// ### High-color formats
 ///
 /// The following formats are high-color formats (16-bit):
@@ -52,6 +62,8 @@ pub const Format = enum {
     xrgb,
     rgb,
     rgba,
+    rgb888,
+    bgr888,
     rgb565,
     alpha8,
     alpha4,
@@ -68,35 +80,45 @@ pub const Format = enum {
 /// the `Surface` they came from. Keep this in mind when writing to their
 /// contents.
 pub const Stride = union(Format) {
+    /// A "packed" stride for 24-bit formats, represented as a buffer of
+    /// `[][3]u8`. This provides consistency against the likely larger true
+    /// underlying integer of an individual pixel value (see `RGB888` or
+    /// `BGR888` for more details).
+    fn Packed888(px_T: type) type {
+        return struct {
+            pub const T = px_T;
+            buf: [][3]u8,
+        };
+    }
+
+    /// Represented as a packed `[]u8` buffer, see `Alpha` for help with
+    /// getting pixels out.
+    fn Packed8(px_T: type) type {
+        return struct {
+            pub const T = px_T;
+            buf: []u8,
+            px_offset: usize,
+            px_len: usize,
+        };
+    }
+
     argb: []ARGB,
     xrgb: []XRGB,
     rgb: []RGB,
     rgba: []RGBA,
+    rgb888: Packed888(RGB888),
+    bgr888: Packed888(BGR888),
     rgb565: []RGB565,
     alpha8: []Alpha8,
-    alpha4: struct {
-        pub const T = Alpha4;
-        buf: []u8,
-        px_offset: usize,
-        px_len: usize,
-    },
-    alpha2: struct {
-        pub const T = Alpha2;
-        buf: []u8,
-        px_offset: usize,
-        px_len: usize,
-    },
-    alpha1: struct {
-        pub const T = Alpha1;
-        buf: []u8,
-        px_offset: usize,
-        px_len: usize,
-    },
+    alpha4: Packed8(Alpha4),
+    alpha2: Packed8(Alpha2),
+    alpha1: Packed8(Alpha1),
 
     /// Returns the pixel length of the stride.
     pub fn pxLen(self: Stride) usize {
         return switch (self) {
             inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |s| s.len,
+            inline .rgb888, .bgr888 => |s| s.buf.len,
             inline .alpha4, .alpha2, .alpha1 => |s| s.px_len,
         };
     }
@@ -108,6 +130,8 @@ pub const Pixel = union(Format) {
     xrgb: XRGB,
     rgb: RGB,
     rgba: RGBA,
+    rgb888: RGB888,
+    bgr888: BGR888,
     rgb565: RGB565,
     alpha8: Alpha8,
     alpha4: Alpha4,
@@ -138,7 +162,7 @@ pub const Pixel = union(Format) {
     ///    represent grayscale.
     pub fn isOpaque(self: Pixel) bool {
         return switch (self) {
-            inline .xrgb, .rgb, .rgb565 => true,
+            inline .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => true,
             inline .argb, .rgba, .alpha8 => |px| px.a == 255,
             .alpha4 => |px| px.a == 15,
             .alpha2 => |px| px.a == 3,
@@ -367,13 +391,101 @@ pub const RGBA = packed struct(u32) {
     }
 };
 
+/// Describes a 24-bit RGB format (viewed as RGB little endian).
+///
+/// Note that the true backing integer of an individual pixel is likely to be a
+/// `u32` due to word alignment. As such, it is represented in surfaces and
+/// strides as a `[3]u8`, rather than a slice of the value directly. See
+/// `Stride` for more details.
+pub const RGB888 = packed struct(u24) {
+    b: u8,
+    g: u8,
+    r: u8,
+
+    /// The format descriptor for this pixel format.
+    pub const format: Format = .rgb888;
+
+    /// Returns a pixel from a clamped 0-1 value.
+    pub fn fromClamped(r: f32, g: f32, b: f32) RGB888 {
+        return RGBA_T(@This()).fromClamped(r, g, b, 1);
+    }
+
+    /// Returns the pixel translated to RGB.
+    pub fn fromPixel(p: Pixel) RGB888 {
+        return RGBA_T(@This()).fromPixel(p);
+    }
+
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is pure black.
+    ///
+    /// This function is limited to 256 entries; any higher than this is
+    /// safety-checked undefined behavior.
+    pub fn average(ps: []const RGB888) RGB888 {
+        return RGBA_T(@This()).average(ps);
+    }
+
+    /// Returns this pixel as an interface.
+    pub fn asPixel(self: RGB888) Pixel {
+        return RGBA_T(@This()).asPixel(self);
+    }
+
+    /// Returns `true` if the supplied pixels are equal.
+    pub fn equal(self: RGB888, other: Pixel) bool {
+        return RGBA_T(@This()).equal(self, other);
+    }
+};
+
+/// Describes a 24-bit RGB format (viewed as BGR little endian).
+///
+/// Note that the true backing integer of an individual pixel is likely to be a
+/// `u32` due to word alignment. As such, it is represented in surfaces and
+/// strides as a `[3]u8`, rather than a slice of the value directly. See
+/// `Stride` for more details.
+pub const BGR888 = packed struct(u24) {
+    r: u8,
+    g: u8,
+    b: u8,
+
+    /// The format descriptor for this pixel format.
+    pub const format: Format = .bgr888;
+
+    /// Returns a pixel from a clamped 0-1 value.
+    pub fn fromClamped(r: f32, g: f32, b: f32) BGR888 {
+        return RGBA_T(@This()).fromClamped(r, g, b, 1);
+    }
+
+    /// Returns the pixel translated to RGB.
+    pub fn fromPixel(p: Pixel) BGR888 {
+        return RGBA_T(@This()).fromPixel(p);
+    }
+
+    /// Returns an average of the pixels in the supplied slice. The average of
+    /// a zero-length slice is pure black.
+    ///
+    /// This function is limited to 256 entries; any higher than this is
+    /// safety-checked undefined behavior.
+    pub fn average(ps: []const BGR888) BGR888 {
+        return RGBA_T(@This()).average(ps);
+    }
+
+    /// Returns this pixel as an interface.
+    pub fn asPixel(self: BGR888) Pixel {
+        return RGBA_T(@This()).asPixel(self);
+    }
+
+    /// Returns `true` if the supplied pixels are equal.
+    pub fn equal(self: BGR888, other: Pixel) bool {
+        return RGBA_T(@This()).equal(self, other);
+    }
+};
+
 /// Utility namespace for common RGB(A) functionality. `T` must be one of the
 /// RGB(A) formats.
 ///
 /// Refer to the upstream types for documentation on each individual function.
 fn RGBA_T(T: type) type {
     switch (T) {
-        XRGB, RGB, ARGB, RGBA => {},
+        XRGB, RGB, ARGB, RGBA, BGR888, RGB888 => {},
         else => @compileError("invalid type for RGBA_T utility functions"),
     }
 
@@ -406,7 +518,7 @@ fn RGBA_T(T: type) type {
             if (p == T.format) return @field(p, @tagName(T.format));
 
             const rgb: RGB = switch (p) {
-                inline .xrgb, .rgb, .argb, .rgba => |q| .{
+                inline .xrgb, .rgb, .argb, .rgba, .rgb888, .bgr888 => |q| .{
                     .r = q.r,
                     .g = q.g,
                     .b = q.b,
@@ -538,7 +650,7 @@ pub const RGB565 = packed struct(u16) {
             .rgb565 => |q| q,
 
             // Just shift down all 8-bit values appropriately.
-            inline .xrgb, .rgb, .argb, .rgba => |q| fromRGB(.{ .r = q.r, .g = q.g, .b = q.b }),
+            inline .xrgb, .rgb, .argb, .rgba, .rgb888, .bgr888 => |q| fromRGB(.{ .r = q.r, .g = q.g, .b = q.b }),
 
             // All alpha channels just are black, as per how we convert RGB
             // without alpha.
@@ -666,7 +778,7 @@ fn Alpha(comptime fmt: Format) type {
         /// Returns the pixel translated to the alpha format.
         pub fn fromPixel(p: Pixel) Self {
             return switch (p) {
-                .xrgb, .rgb, .rgb565 => .{
+                .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => .{
                     // Special case: we assume that RGB pixels are always opaque
                     .a = MaxInt,
                 },
@@ -831,6 +943,22 @@ test "pixel interface, average" {
     };
     const rgba_expected: RGBA = .{ .r = 2, .g = 6, .b = 10, .a = 14 };
 
+    const rgb888 = [_]RGB888{
+        .{ .r = 1, .g = 5, .b = 9 },
+        .{ .r = 2, .g = 6, .b = 10 },
+        .{ .r = 3, .g = 7, .b = 11 },
+        .{ .r = 4, .g = 8, .b = 12 },
+    };
+    const rgb888_expected: RGB888 = .{ .r = 2, .g = 6, .b = 10 };
+
+    const bgr888 = [_]BGR888{
+        .{ .r = 1, .g = 5, .b = 9 },
+        .{ .r = 2, .g = 6, .b = 10 },
+        .{ .r = 3, .g = 7, .b = 11 },
+        .{ .r = 4, .g = 8, .b = 12 },
+    };
+    const bgr888_expected: BGR888 = .{ .r = 2, .g = 6, .b = 10 };
+
     const rgb565 = [_]RGB565{
         .{ .r = 1, .g = 5, .b = 9 },
         .{ .r = 2, .g = 6, .b = 10 },
@@ -883,6 +1011,8 @@ test "pixel interface, average" {
     try std.testing.expectEqual(xrgb_expected, XRGB.average(&xrgb));
     try std.testing.expectEqual(rgb_expected, RGB.average(&rgb));
     try std.testing.expectEqual(rgba_expected, RGBA.average(&rgba));
+    try std.testing.expectEqual(rgb888_expected, RGB888.average(&rgb888));
+    try std.testing.expectEqual(bgr888_expected, BGR888.average(&bgr888));
     try std.testing.expectEqual(rgb565_expected, RGB565.average(&rgb565));
     try std.testing.expectEqual(alpha8_expected, Alpha8.average(&alpha8));
     try std.testing.expectEqual(alpha4_expected, Alpha4.average(&alpha4));
@@ -918,8 +1048,8 @@ test "ARGB/RGBA, multiply/demultiply" {
     }
 }
 
-test "XRGB/RGB, fromClamped" {
-    inline for (.{ XRGB, RGB }) |T| {
+test "XRGB/RGB/RGB888/BGR888, fromClamped" {
+    inline for (.{ XRGB, RGB, RGB888, BGR888 }) |T| {
         try std.testing.expectEqual(T{ .r = 77, .g = 153, .b = 230 }, T.fromClamped(0.3, 0.6, 0.9));
         try std.testing.expectEqual(T{ .r = 0, .g = 0, .b = 0 }, T.fromClamped(-1, -1, -1));
         try std.testing.expectEqual(T{ .r = 255, .g = 255, .b = 255 }, T.fromClamped(2, 2, 2));
@@ -987,6 +1117,14 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
                     .a = .{ .argb = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
                     .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
@@ -1026,6 +1164,14 @@ test "fromPixel" {
                 .{
                     .a = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
                 },
                 .{
                     .a = .{ .xrgb = .{ .r = 231, .g = 227, .b = 173 } },
@@ -1069,6 +1215,14 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
                     .a = .{ .rgb = .{ .r = 231, .g = 227, .b = 173 } },
                     .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
@@ -1110,6 +1264,14 @@ test "fromPixel" {
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
                 },
                 .{
+                    .a = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
                     .a = .{ .rgba = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
                     .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
@@ -1132,6 +1294,104 @@ test "fromPixel" {
             },
         },
         .{
+            .name = "rgb888",
+            .pairs = &.{
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 231, .g = 227, .b = 173 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha8 = .{ .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha4 = .{ .a = 0xD } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha2 = .{ .a = 3 } },
+                },
+                .{
+                    .a = .{ .rgb888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha1 = .{ .a = 1 } },
+                },
+            },
+        },
+        .{
+            .name = "bgr888",
+            .pairs = &.{
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 231, .g = 227, .b = 173 } },
+                    .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha8 = .{ .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha4 = .{ .a = 0xD } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha2 = .{ .a = 3 } },
+                },
+                .{
+                    .a = .{ .bgr888 = .{ .r = 0x00, .g = 0x00, .b = 0x00 } },
+                    .b = .{ .alpha1 = .{ .a = 1 } },
+                },
+            },
+        },
+        .{
             .name = "rgb565",
             .pairs = &.{
                 .{
@@ -1149,6 +1409,14 @@ test "fromPixel" {
                 .{
                     .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                     .b = .{ .rgba = .{ .r = 231, .g = 227, .b = 173, .a = 255 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .rgb888 = .{ .r = 231, .g = 227, .b = 173 } },
+                },
+                .{
+                    .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
+                    .b = .{ .bgr888 = .{ .r = 231, .g = 227, .b = 173 } },
                 },
                 .{
                     .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
@@ -1193,6 +1461,14 @@ test "fromPixel" {
                 },
                 .{
                     .a = .{ .alpha8 = .{ .a = 0xFF } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha8 = .{ .a = 0xFF } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha8 = .{ .a = 0xFF } },
                     .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
@@ -1231,6 +1507,14 @@ test "fromPixel" {
                 .{
                     .a = .{ .alpha4 = .{ .a = 0xD } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                },
+                .{
+                    .a = .{ .alpha4 = .{ .a = 0xF } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha4 = .{ .a = 0xF } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
                 },
                 .{
                     .a = .{ .alpha4 = .{ .a = 0xF } },
@@ -1275,6 +1559,14 @@ test "fromPixel" {
                 },
                 .{
                     .a = .{ .alpha2 = .{ .a = 3 } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha2 = .{ .a = 3 } },
+                    .b = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha2 = .{ .a = 3 } },
                     .b = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
                 },
                 .{
@@ -1313,6 +1605,14 @@ test "fromPixel" {
                 .{
                     .a = .{ .alpha1 = .{ .a = 1 } },
                     .b = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xA0 } },
+                },
+                .{
+                    .a = .{ .alpha1 = .{ .a = 1 } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                },
+                .{
+                    .a = .{ .alpha1 = .{ .a = 1 } },
+                    .b = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
                 },
                 .{
                     .a = .{ .alpha1 = .{ .a = 1 } },
@@ -1460,6 +1760,18 @@ test "equal" {
             .other = .{ .xrgb = .{ .r = 0x11, .g = 0x22, .b = 0x33 } },
         },
         .{
+            .name = "rgb888",
+            .a = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+            .b = .{ .rgb888 = .{ .r = 0x11, .g = 0x22, .b = 0x33 } },
+            .other = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
+            .name = "bgr888",
+            .a = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+            .b = .{ .bgr888 = .{ .r = 0x11, .g = 0x22, .b = 0x33 } },
+            .other = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+        },
+        .{
             .name = "rgb565",
             .a = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
             .b = .{ .rgb565 = .{ .r = 21, .g = 46, .b = 28 } },
@@ -1500,7 +1812,7 @@ test "equal" {
     try runCases(name, cases, TestFn.f);
 }
 
-test "Endianness for 32-bit pixels" {
+test "Pixel endianness" {
     // Note that this can be a bit tricky to visualize (at least for me),
     // because some endianness diagrams (read: the one on Wikipedia, heh) will
     // use an integer of { 0x0A, 0x0B, 0x0C, 0x0D } (so 0A0B0C0D) and map it,
@@ -1523,43 +1835,75 @@ test "Endianness for 32-bit pixels" {
     // describes the whole integer in the sense that the blue channel is the
     // least significant byte.
 
-    const name = "Endianness for 32-bit pixels";
-    const cases = [_]struct {
-        name: []const u8,
-        px: Pixel,
-        expected: [4]u8,
-    }{
-        .{
-            .name = "argb",
-            .px = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
-            .expected = .{ 0xCC, 0xBB, 0xAA, 0xDD },
-        },
-        .{
-            .name = "xrgb",
-            .px = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
-            .expected = .{ 0xCC, 0xBB, 0xAA, 0x00 },
-        },
-        .{
-            .name = "rgb",
-            .px = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
-            .expected = .{ 0xAA, 0xBB, 0xCC, 0x00 },
-        },
-        .{
-            .name = "rgba",
-            .px = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
-            .expected = .{ 0xAA, 0xBB, 0xCC, 0xDD },
-        },
-    };
-    const TestFn = struct {
-        fn f(tc: anytype) TestingError!void {
-            const got: [4]u8 = switch (tc.px) {
-                inline .argb, .xrgb, .rgb, .rgba => |p| @bitCast(p),
-                else => unreachable,
-            };
-            try std.testing.expectEqualSlices(u8, &tc.expected, &@as([4]u8, got));
-        }
-    };
-    try runCases(name, cases, TestFn.f);
+    {
+        const name = "Endianness for 32-bit pixels";
+        const cases = [_]struct {
+            name: []const u8,
+            px: Pixel,
+            expected: [4]u8,
+        }{
+            .{
+                .name = "argb",
+                .px = .{ .argb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                .expected = .{ 0xCC, 0xBB, 0xAA, 0xDD },
+            },
+            .{
+                .name = "xrgb",
+                .px = .{ .xrgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                .expected = .{ 0xCC, 0xBB, 0xAA, 0x00 },
+            },
+            .{
+                .name = "rgb",
+                .px = .{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                .expected = .{ 0xAA, 0xBB, 0xCC, 0x00 },
+            },
+            .{
+                .name = "rgba",
+                .px = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
+                .expected = .{ 0xAA, 0xBB, 0xCC, 0xDD },
+            },
+        };
+        const TestFn = struct {
+            fn f(tc: anytype) TestingError!void {
+                const got: [4]u8 = switch (tc.px) {
+                    inline .argb, .xrgb, .rgb, .rgba => |p| @bitCast(p),
+                    else => unreachable,
+                };
+                try std.testing.expectEqualSlices(u8, &tc.expected, &@as([4]u8, got));
+            }
+        };
+        try runCases(name, cases, TestFn.f);
+    }
+
+    {
+        const name = "Endianness for 24-bit pixels";
+        const cases = [_]struct {
+            name: []const u8,
+            px: Pixel,
+            expected: [3]u8,
+        }{
+            .{
+                .name = "rgb888",
+                .px = .{ .rgb888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                .expected = .{ 0xCC, 0xBB, 0xAA },
+            },
+            .{
+                .name = "bgr888",
+                .px = .{ .bgr888 = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } },
+                .expected = .{ 0xAA, 0xBB, 0xCC },
+            },
+        };
+        const TestFn = struct {
+            fn f(tc: anytype) TestingError!void {
+                const got: [3]u8 = switch (tc.px) {
+                    inline .rgb888, .bgr888 => |p| @bitCast(p),
+                    else => unreachable,
+                };
+                try std.testing.expectEqualSlices(u8, &tc.expected, &@as([3]u8, got));
+            }
+        };
+        try runCases(name, cases, TestFn.f);
+    }
 }
 
 test "Pixel.fromColor" {

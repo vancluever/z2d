@@ -723,6 +723,7 @@ pub fn runPixelT(
 fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
     return switch (src) {
         inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_src| _src[idx].asPixel(),
+        inline .rgb888, .bgr888 => |_src| @as(@TypeOf(_src).T, @bitCast(_src.buf[idx])).asPixel(),
         inline .alpha4, .alpha2, .alpha1 => |_src| @TypeOf(_src).T.getFromPacked(
             _src.buf,
             _src.px_offset + idx,
@@ -735,6 +736,9 @@ fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
     return switch (dst) {
         inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_dst| {
             _dst[idx] = @typeInfo(@TypeOf(_dst)).pointer.child.fromPixel(px);
+        },
+        inline .rgb888, .bgr888 => |_dst| {
+            _dst.buf[idx] = @bitCast(@TypeOf(_dst).T.fromPixel(px));
         },
         inline .alpha4, .alpha2, .alpha1 => |_dst| {
             const dst_t = @TypeOf(_dst).T;
@@ -817,9 +821,20 @@ const RGBA16Vec = struct {
     fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
         if (limit) std.debug.assert(limit_len < vector_length);
         switch (src) {
-            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_src| {
+            inline .argb,
+            .xrgb,
+            .rgb,
+            .rgba,
+            .rgb888,
+            .bgr888,
+            .alpha8,
+            => |_src, format| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                return .{ .underlying = transposeToVec(_src[idx..end], limit) };
+                const src_buf = switch (format) {
+                    .rgb888, .bgr888 => _src.buf,
+                    else => _src,
+                };
+                return .{ .underlying = transposeToVec(format, src_buf[idx..end], limit) };
             },
             inline .rgb565, .alpha4, .alpha2, .alpha1 => |_src, t| {
                 var result: pixel_vector.RGBA16 = .{
@@ -919,9 +934,20 @@ const RGBA16Vec = struct {
     ) void {
         if (limit) std.debug.assert(limit_len < vector_length);
         switch (dst) {
-            inline .argb, .xrgb, .rgb, .rgba, .alpha8 => |_dst| {
+            inline .argb,
+            .xrgb,
+            .rgb,
+            .rgba,
+            .rgb888,
+            .bgr888,
+            .alpha8,
+            => |_dst, format| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                transposeFromVec(_dst[idx..end], self.underlying, limit);
+                const dst_buf = switch (format) {
+                    .rgb888, .bgr888 => _dst.buf,
+                    else => _dst,
+                };
+                transposeFromVec(format, dst_buf[idx..end], self.underlying, limit);
             },
             inline .rgb565, .alpha4, .alpha2, .alpha1 => |_dst, t| {
                 inline for (0..vector_length) |i| {
@@ -958,10 +984,11 @@ const RGBA16Vec = struct {
     }
 
     fn transposeToMask(T: type, field: []const u8) [vector_length]i32 {
-        std.debug.assert(@typeInfo(T).@"struct".field_names.len == 4);
+        const len = @typeInfo(T).@"struct".field_names.len;
+        comptime std.debug.assert(len == 4 or len == 3);
         inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
             if (std.mem.eql(u8, f_name, field)) {
-                return genTransposeToShuffleMask(4, i);
+                return genTransposeToShuffleMask(len, i);
             }
         }
 
@@ -973,18 +1000,31 @@ const RGBA16Vec = struct {
     /// whether or not the supplied area of memory is smaller than the vector
     /// size. There is a guard to prevent memory areas larger than the vector
     /// size when limiting.
-    fn transposeToVec(src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
+    fn transposeToVec(comptime format: pixel.Format, src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
         // Get some details about our source.
-        const src_t = @typeInfo(@TypeOf(src)).pointer.child;
+        const src_t = switch (format) {
+            .rgb888 => pixel.RGB888,
+            .bgr888 => pixel.BGR888,
+            else => @typeInfo(@TypeOf(src)).pointer.child,
+        };
         const has_color = switch (src_t) {
-            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA => true,
+            pixel.ARGB,
+            pixel.XRGB,
+            pixel.RGB,
+            pixel.RGBA,
+            pixel.RGB888,
+            pixel.BGR888,
+            => true,
             else => false,
         };
         const has_alpha = switch (src_t) {
             pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
             else => false,
         };
-        const src_scale = @sizeOf(src_t);
+        const src_scale = switch (format) {
+            .rgb888, .bgr888 => 3,
+            else => @sizeOf(src_t),
+        };
 
         // This is the byte size of our raw u8 vector that we load the memory
         // area into.
@@ -1058,11 +1098,12 @@ const RGBA16Vec = struct {
         return result;
     }
 
-    fn transposeFromMask(T: type, field: []const u8) [vector_length * 4]i32 {
-        std.debug.assert(@typeInfo(T).@"struct".field_names.len == 4);
+    fn transposeFromMask(T: type, field: []const u8) [vector_length * @typeInfo(T).@"struct".field_names.len]i32 {
+        const len = @typeInfo(T).@"struct".field_names.len;
+        comptime std.debug.assert(len == 4 or len == 3);
         inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
             if (std.mem.eql(u8, f_name, field)) {
-                return genTransposeFromShuffleMask(4, i);
+                return genTransposeFromShuffleMask(len, i);
             }
         }
 
@@ -1074,18 +1115,36 @@ const RGBA16Vec = struct {
     ///
     /// This is essentially the reverse of transposeToVec; for more details,
     /// see that function.
-    fn transposeFromVec(dst: anytype, src: pixel_vector.RGBA16, comptime limit: bool) void {
+    fn transposeFromVec(
+        comptime format: pixel.Format,
+        dst: anytype,
+        src: pixel_vector.RGBA16,
+        comptime limit: bool,
+    ) void {
         // Get some info about our destination.
-        const dst_t = @typeInfo(@TypeOf(dst)).pointer.child;
+        const dst_t = switch (format) {
+            .rgb888 => pixel.RGB888,
+            .bgr888 => pixel.BGR888,
+            else => @typeInfo(@TypeOf(dst)).pointer.child,
+        };
         const has_color = switch (dst_t) {
-            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA => true,
+            pixel.ARGB,
+            pixel.XRGB,
+            pixel.RGB,
+            pixel.RGBA,
+            pixel.RGB888,
+            pixel.BGR888,
+            => true,
             else => false,
         };
         const has_alpha = switch (dst_t) {
             pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
             else => false,
         };
-        const dst_scale = @sizeOf(dst_t);
+        const dst_scale = switch (format) {
+            .rgb888, .bgr888 => 3,
+            else => @sizeOf(dst_t),
+        };
 
         // Raw vector size
         const byte_len = vector_length * dst_scale;
@@ -1111,7 +1170,7 @@ const RGBA16Vec = struct {
                 @as([vector_length]u8, @as(@Vector(vector_length, u8), @intCast(src.a)))[0..dst_len],
             );
         } else {
-            // RGB and RGBA
+            // RGB types (needs shuffling)
             //
             // Our temporary vector we shuffle back into
             var src_vec: @Vector(byte_len, u8) = @splat(0);
@@ -4014,6 +4073,14 @@ test "fromStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
+            .name = "rgb888",
+            .in = .{ .rgb888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+        },
+        .{
+            .name = "bgr888",
+            .in = .{ .bgr888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+        },
+        .{
             .name = "rgb565",
             .in = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
         },
@@ -4037,10 +4104,16 @@ test "fromStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => |px, t| {
                     const src_T = @TypeOf(px);
-                    var src_stride_raw: [vector_length]src_T = @splat(px);
-                    const src_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &src_stride_raw);
+                    var src_stride_raw = switch (t) {
+                        .rgb888, .bgr888 => @as([vector_length][3]u8, @splat(@as([3]u8, @bitCast(px)))),
+                        else => @as([vector_length]src_T, @splat(px)),
+                    };
+                    const src_stride: pixel.Stride = switch (t) {
+                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &src_stride_raw }),
+                        else => @unionInit(pixel.Stride, @tagName(t), &src_stride_raw),
+                    };
                     const expected_scalar = pixel.RGBA.fromPixel(tc.in);
                     const expected_vector: RGBA16Vec = .{ .underlying = .{
                         .r = @splat(expected_scalar.r),
@@ -4105,6 +4178,14 @@ test "toStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
+            .name = "rgb888",
+            .in = .{ .rgb888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+        },
+        .{
+            .name = "bgr888",
+            .in = .{ .bgr888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+        },
+        .{
             .name = "rgb565",
             .in = .{ .rgb565 = .{ .r = 28, .g = 56, .b = 21 } },
         },
@@ -4128,16 +4209,24 @@ test "toStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => |px, t| {
                     const dst_T = @TypeOf(px);
-                    var expected_stride_raw: [vector_length]dst_T = @splat(px);
-                    const expected_stride: pixel.Stride = @unionInit(
-                        pixel.Stride,
-                        @tagName(t),
-                        &expected_stride_raw,
-                    );
-                    var got_stride_raw: [vector_length]dst_T = undefined;
-                    const got_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &got_stride_raw);
+                    var expected_stride_raw = switch (t) {
+                        .rgb888, .bgr888 => @as([vector_length][3]u8, @splat(@as([3]u8, @bitCast(px)))),
+                        else => @as([vector_length]dst_T, @splat(px)),
+                    };
+                    const expected_stride: pixel.Stride = switch (t) {
+                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &expected_stride_raw }),
+                        else => @unionInit(pixel.Stride, @tagName(t), &expected_stride_raw),
+                    };
+                    var got_stride_raw: switch (t) {
+                        .rgb888, .bgr888 => [vector_length][3]u8,
+                        else => [vector_length]dst_T,
+                    } = undefined;
+                    const got_stride: pixel.Stride = switch (t) {
+                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &got_stride_raw }),
+                        else => @unionInit(pixel.Stride, @tagName(t), &got_stride_raw),
+                    };
                     const src_scalar = pixel.RGBA.fromPixel(tc.in);
                     const src_vector: RGBA16Vec = .{ .underlying = .{
                         .r = @splat(src_scalar.r),
@@ -4187,4 +4276,102 @@ test "toStride" {
         }
     };
     try runCases(name, cases, TestFn.f);
+}
+
+test "8-bit compositor conformance" {
+    // This test checks all of our different pixel types of various
+    // arrangements/endianness to make sure they all composite correctly. The
+    // ground truth type for each group should be first, and should be either:
+    // RGBA for surfaces with alpha, and RGB for surfaces with no alpha.
+    const Context = @import("Context.zig");
+    const SurfaceType = @import("surface.zig").SurfaceType;
+
+    const hash_bytes_int_T = @Int(.unsigned, std.crypto.hash.sha2.Sha256.digest_length * 8);
+    const alloc = std.testing.allocator;
+    const io = std.testing.io;
+    const width = 300;
+    const height = 300;
+    const margin = 10;
+
+    // Two groups, one for ARGB/RGBA, and one for XRGB/RGB.
+    const TestFn = struct {
+        fn run(sfc_type: SurfaceType, idx: usize) !void {
+            const Expected = struct {
+                var base_sfc_type: ?SurfaceType = undefined;
+                var hash: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+            };
+            if (idx == 0) {
+                Expected.base_sfc_type = null;
+                Expected.hash = null;
+            }
+
+            var sfc = try Surface.init(sfc_type, alloc, width, height);
+            defer sfc.deinit(alloc);
+            var context = Context.init(io, alloc, &sfc);
+            defer context.deinit();
+
+            // Set up a gradient, this gives us a good color test for the whole of the
+            // image.
+            var stop_buffer: [3]gradient.Stop = undefined;
+            var gr = gradient.Gradient.init(.{
+                .type = .{ .linear = .{
+                    .x0 = margin,
+                    .y0 = height / 2,
+                    .x1 = width - margin,
+                    .y1 = height / 2,
+                } },
+                .stops = &stop_buffer,
+            });
+            gr.addStopAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+            gr.addStopAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+            gr.addStopAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
+            context.setSource(gr.asPattern());
+
+            try context.moveTo(0 + margin, 0 + margin);
+            try context.lineTo(width - margin - 1, 0 + margin);
+            try context.lineTo(width / 2 - 1, height - margin - 1);
+            try context.closePath();
+            try context.fill();
+
+            if (Expected.hash) |expected_hash| {
+                var dst_sfc: Surface = try .init(Expected.base_sfc_type.?, alloc, width, height);
+                defer dst_sfc.deinit(alloc);
+                dst_sfc.composite(&sfc, .src_over, 0, 0, .{});
+                var actual_hash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+                switch (dst_sfc) {
+                    inline else => |s| std.crypto.hash.sha2.Sha256.hash(@ptrCast(s.buf), &actual_hash, .{}),
+                }
+                if (!std.mem.eql(u8, &expected_hash, &actual_hash)) {
+                    std.debug.print(
+                        "output mismatch: {s} vs {s}\n",
+                        .{
+                            std.fmt.hex(std.mem.bytesToValue(hash_bytes_int_T, &expected_hash)),
+                            std.fmt.hex(std.mem.bytesToValue(hash_bytes_int_T, &actual_hash)),
+                        },
+                    );
+                    return error.OutputDoesNotMatch;
+                }
+            } else {
+                std.debug.assert(idx == 0);
+                Expected.base_sfc_type = sfc_type;
+                Expected.hash = undefined;
+                Expected.hash.? = @splat(0);
+                switch (sfc) {
+                    inline else => |s| std.crypto.hash.sha2.Sha256.hash(@ptrCast(s.buf), &Expected.hash.?, .{}),
+                }
+            }
+        }
+    };
+
+    inline for (.{ .image_surface_rgba, .image_surface_argb }, 0..) |sfc_type, idx| {
+        try TestFn.run(sfc_type, idx);
+    }
+    inline for (.{
+        .image_surface_rgb,
+        .image_surface_xrgb,
+        .image_surface_rgb888,
+        .image_surface_bgr888,
+    }, 0..) |sfc_type, idx| {
+        try TestFn.run(sfc_type, idx);
+    }
 }

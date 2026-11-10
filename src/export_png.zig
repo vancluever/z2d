@@ -100,14 +100,14 @@ fn writePNGIHDR(writer: *std.Io.Writer, sfc: surface.Surface) WritePNGIHDRError!
     std.mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
     std.mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
-        .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => 8,
+        .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => 8,
         .alpha4 => 4,
         .alpha2 => 2,
         .alpha1 => 1,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .argb, .rgba => 6,
-        .xrgb, .rgb, .rgb565 => 2,
+        .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => 2,
         .alpha8, .alpha4, .alpha2, .alpha1 => 0,
     };
     const compression: u8 = 0;
@@ -233,20 +233,34 @@ fn writePNGIDATStream(
                 }
 
                 switch (stride) {
-                    inline .xrgb, .rgb, .rgb565 => |s, t| {
+                    inline .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => |s, t| {
                         var stride_vec: [vector_length]u32 = @splat(0);
-                        if (t == .rgb565) {
-                            // RGB565 needs to be converted to RGB first since
-                            // PNG is truecolor only
-                            for (0..stride_len) |i| {
-                                const rgb: pixel.RGB = s[x + i].toRGB();
-                                stride_vec[i] = @bitCast(rgb);
-                            }
-                        } else @memcpy(stride_vec[0..stride_len], @as([]u32, @ptrCast(s[x .. x + stride_len])));
+                        switch (t) {
+                            inline .rgb888, .bgr888 => {
+                                // Unpack our 24-bit RGB element by element
+                                for (0..stride_len) |i| {
+                                    var dst: [4]u8 = @splat(0);
+                                    dst[0..3].* = s.buf[x + i];
+                                    stride_vec[i] = @bitCast(dst);
+                                }
+                            },
+                            .rgb565 => {
+                                // RGB565 needs to be converted to RGB first since
+                                // PNG is truecolor only
+                                for (0..stride_len) |i| {
+                                    const rgb: pixel.RGB = s[x + i].toRGB();
+                                    stride_vec[i] = @bitCast(rgb);
+                                }
+                            },
+                            else => @memcpy(
+                                stride_vec[0..stride_len],
+                                @as([]u32, @ptrCast(s[x .. x + stride_len])),
+                            ),
+                        }
                         stride_vec = encodeRGBA(
                             stride_vec,
                             profile,
-                            @typeInfo(@TypeOf(s)).pointer.child == pixel.XRGB,
+                            t == .xrgb or t == .rgb888,
                             false,
                         );
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
@@ -476,24 +490,45 @@ fn writePNGChunkCRC(chunk_type: [4]u8, data: []const u8) u32 {
 
 test "RGB/ARGB formats all export to same image" {
     const Context = @import("Context.zig");
+    const gradient_pkg = @import("gradient.zig");
+
     const hash_bytes_int_T = @Int(.unsigned, std.crypto.hash.sha2.Sha256.digest_length * 8);
     const alloc = std.testing.allocator;
     const io = std.testing.io;
     const width = 300;
     const height = 300;
+    const margin = 10;
 
     // Two groups, one for ARGB/RGBA, and one for XRGB/RGB.
     const TestFn = struct {
-        fn run(sfc_type: surface.SurfaceType) !void {
-            var expected_hash_: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = null;
+        fn run(sfc_type: surface.SurfaceType, idx: usize) !void {
+            const ExpectedHash = struct {
+                var value: ?[std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+            };
+            if (idx == 0) ExpectedHash.value = null;
 
             var sfc = try surface.Surface.init(sfc_type, alloc, width, height);
             defer sfc.deinit(alloc);
             var context = Context.init(io, alloc, &sfc);
             defer context.deinit();
-            context.setSourceToPixel(.{ .rgb = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC } });
-            context.setAntiAliasingMode(.default);
-            const margin = 10;
+
+            // Set up a gradient, this gives us a good color test for the whole of the
+            // image.
+            var stop_buffer: [3]gradient_pkg.Stop = undefined;
+            var gradient = gradient_pkg.Gradient.init(.{
+                .type = .{ .linear = .{
+                    .x0 = margin,
+                    .y0 = height / 2,
+                    .x1 = width - margin,
+                    .y1 = height / 2,
+                } },
+                .stops = &stop_buffer,
+            });
+            gradient.addStopAssumeCapacity(0, .{ .rgb = .{ 1, 0, 0 } });
+            gradient.addStopAssumeCapacity(0.5, .{ .rgb = .{ 0, 1, 0 } });
+            gradient.addStopAssumeCapacity(1, .{ .rgb = .{ 0, 0, 1 } });
+            context.setSource(gradient.asPattern());
+
             try context.moveTo(0 + margin, 0 + margin);
             try context.lineTo(width - margin - 1, 0 + margin);
             try context.lineTo(width / 2 - 1, height - margin - 1);
@@ -516,7 +551,7 @@ test "RGB/ARGB formats all export to same image" {
 
             const actual_data = try std.Io.Dir.cwd().readFileAlloc(io, target_path, alloc, .limited(10240000));
             defer alloc.free(actual_data);
-            if (expected_hash_) |expected_hash| {
+            if (ExpectedHash.value) |expected_hash| {
                 var actual_hash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
                 std.crypto.hash.sha2.Sha256.hash(actual_data, &actual_hash, .{});
                 if (!std.mem.eql(u8, &expected_hash, &actual_hash)) {
@@ -530,17 +565,23 @@ test "RGB/ARGB formats all export to same image" {
                     return error.OutputDoesNotMatch;
                 }
             } else {
-                expected_hash_ = undefined;
-                expected_hash_.? = @splat(0);
-                std.crypto.hash.sha2.Sha256.hash(actual_data, &expected_hash_.?, .{});
+                std.debug.assert(idx == 0);
+                ExpectedHash.value = undefined;
+                ExpectedHash.value.? = @splat(0);
+                std.crypto.hash.sha2.Sha256.hash(actual_data, &ExpectedHash.value.?, .{});
             }
         }
     };
 
-    inline for (.{ .image_surface_argb, .image_surface_rgba }) |sfc_type| {
-        try TestFn.run(sfc_type);
+    inline for (.{ .image_surface_argb, .image_surface_rgba }, 0..) |sfc_type, idx| {
+        try TestFn.run(sfc_type, idx);
     }
-    inline for (.{ .image_surface_xrgb, .image_surface_rgb }) |sfc_type| {
-        try TestFn.run(sfc_type);
+    inline for (.{
+        .image_surface_xrgb,
+        .image_surface_rgb,
+        .image_surface_rgb888,
+        .image_surface_bgr888,
+    }, 0..) |sfc_type, idx| {
+        try TestFn.run(sfc_type, idx);
     }
 }

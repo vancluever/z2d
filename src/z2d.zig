@@ -92,7 +92,8 @@
 //!
 //! Some values/types can be configured via build-time options. These are:
 //!
-//! * `vector_length` - the length of SIMD operations in z2d.
+//! * `simd` - determines whether or explicit SIMD operations are used.
+//! * `vector_length` - the length of SIMD operations.
 //! * `Float` - the geometry floating-point type alias.
 //!
 //! Note that these are fully documented in this file (`src/z2d.zig`). If
