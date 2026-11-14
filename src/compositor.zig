@@ -722,24 +722,17 @@ pub fn runPixelT(
 /// Internal scalar pipeline compositor load helper.
 fn getPixelFromStride(src: pixel.Stride, idx: usize) pixel.Pixel {
     return switch (src) {
-        inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_src| _src[idx].asPixel(),
-        inline .rgb888, .bgr888 => |_src| @as(@TypeOf(_src).T, @bitCast(_src.buf[idx])).asPixel(),
         inline .alpha4, .alpha2, .alpha1 => |_src| @TypeOf(_src).T.getFromPacked(
             _src.buf,
             _src.px_offset + idx,
         ).asPixel(),
+        inline else => |_src| _src[idx].asPixel(),
     };
 }
 
 /// Internal scalar pipeline compositor store helper.
 fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
     return switch (dst) {
-        inline .argb, .xrgb, .rgb, .rgba, .rgb565, .alpha8 => |_dst| {
-            _dst[idx] = @typeInfo(@TypeOf(_dst)).pointer.child.fromPixel(px);
-        },
-        inline .rgb888, .bgr888 => |_dst| {
-            _dst.buf[idx] = @bitCast(@TypeOf(_dst).T.fromPixel(px));
-        },
         inline .alpha4, .alpha2, .alpha1 => |_dst| {
             const dst_t = @TypeOf(_dst).T;
             dst_t.setInPacked(
@@ -747,6 +740,9 @@ fn setPixelInStride(dst: pixel.Stride, idx: usize, px: pixel.Pixel) void {
                 _dst.px_offset + idx,
                 dst_t.fromPixel(px),
             );
+        },
+        inline else => |_dst| {
+            _dst[idx] = @typeInfo(@TypeOf(_dst)).pointer.child.fromPixel(px);
         },
     };
 }
@@ -766,12 +762,14 @@ const RGBA16 = struct {
     }
 
     fn fromPixelT(comptime T: type, src: T) RGBA16 {
-        if (T == pixel.RGB565) return fromPixelT(pixel.RGB, src.toRGB());
-        return .{
-            .r = if (comptime hasField(T, "r")) src.r else 0,
-            .g = if (comptime hasField(T, "g")) src.g else 0,
-            .b = if (comptime hasField(T, "b")) src.b else 0,
-            .a = if (comptime hasField(T, "a")) pixel.Alpha8.scaleIntoIntAlpha(src.a) else 255,
+        return switch (T) {
+            inline pixel.RGB565, pixel.RGB24, pixel.BGR24 => fromPixelT(pixel.RGB, src.toRGB()),
+            else => .{
+                .r = if (comptime hasField(T, "r")) src.r else 0,
+                .g = if (comptime hasField(T, "g")) src.g else 0,
+                .b = if (comptime hasField(T, "b")) src.b else 0,
+                .a = if (comptime hasField(T, "a")) pixel.Alpha8.scaleIntoIntAlpha(src.a) else 255,
+            },
         };
     }
 
@@ -780,24 +778,24 @@ const RGBA16 = struct {
     }
 
     fn toPixelT(src: RGBA16, comptime T: type) T {
-        if (T == pixel.RGB565) {
-            // Fast-path RGB565 for now. TODO: maybe generalize this.
-            return .fromRGB(.{
+        return switch (T) {
+            inline pixel.RGB565, pixel.RGB24, pixel.BGR24 => .fromRGB(.{
                 .r = @intCast(src.r),
                 .g = @intCast(src.g),
                 .b = @intCast(src.b),
-            });
-        }
-
-        var dst: T = undefined;
-        if (comptime hasField(T, "r")) dst.r = @intCast(src.r);
-        if (comptime hasField(T, "g")) dst.g = @intCast(src.g);
-        if (comptime hasField(T, "b")) dst.b = @intCast(src.b);
-        if (comptime hasField(T, "a")) dst.a = switch (T) {
-            pixel.Alpha4, pixel.Alpha2, pixel.Alpha1 => T.scaleIntoIntAlpha(@as(u8, @intCast(src.a))),
-            else => @intCast(src.a),
+            }),
+            else => px: {
+                var dst: T = undefined;
+                if (comptime hasField(T, "r")) dst.r = @intCast(src.r);
+                if (comptime hasField(T, "g")) dst.g = @intCast(src.g);
+                if (comptime hasField(T, "b")) dst.b = @intCast(src.b);
+                if (comptime hasField(T, "a")) dst.a = switch (T) {
+                    pixel.Alpha4, pixel.Alpha2, pixel.Alpha1 => T.scaleIntoIntAlpha(@as(u8, @intCast(src.a))),
+                    else => @intCast(src.a),
+                };
+                break :px dst;
+            },
         };
-        return dst;
     }
 
     fn runOperator(dst: RGBA16, src: RGBA16, op: Operator) RGBA16 {
@@ -821,20 +819,9 @@ const RGBA16Vec = struct {
     fn fromStride(src: pixel.Stride, idx: usize, comptime limit: bool, limit_len: usize) RGBA16Vec {
         if (limit) std.debug.assert(limit_len < vector_length);
         switch (src) {
-            inline .argb,
-            .xrgb,
-            .rgb,
-            .rgba,
-            .rgb888,
-            .bgr888,
-            .alpha8,
-            => |_src, format| {
+            inline .argb, .xrgb, .rgb, .rgba, .rgb24, .bgr24, .alpha8 => |_src| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                const src_buf = switch (format) {
-                    .rgb888, .bgr888 => _src.buf,
-                    else => _src,
-                };
-                return .{ .underlying = transposeToVec(format, src_buf[idx..end], limit) };
+                return .{ .underlying = transposeToVec(_src[idx..end], limit) };
             },
             inline .rgb565, .alpha4, .alpha2, .alpha1 => |_src, t| {
                 var result: pixel_vector.RGBA16 = .{
@@ -934,20 +921,9 @@ const RGBA16Vec = struct {
     ) void {
         if (limit) std.debug.assert(limit_len < vector_length);
         switch (dst) {
-            inline .argb,
-            .xrgb,
-            .rgb,
-            .rgba,
-            .rgb888,
-            .bgr888,
-            .alpha8,
-            => |_dst, format| {
+            inline .argb, .xrgb, .rgb, .rgba, .rgb24, .bgr24, .alpha8 => |_dst| {
                 const end = if (limit) idx + limit_len else idx + vector_length;
-                const dst_buf = switch (format) {
-                    .rgb888, .bgr888 => _dst.buf,
-                    else => _dst,
-                };
-                transposeFromVec(format, dst_buf[idx..end], self.underlying, limit);
+                transposeFromVec(_dst[idx..end], self.underlying, limit);
             },
             inline .rgb565, .alpha4, .alpha2, .alpha1 => |_dst, t| {
                 inline for (0..vector_length) |i| {
@@ -985,14 +961,24 @@ const RGBA16Vec = struct {
 
     fn transposeToMask(T: type, field: []const u8) [vector_length]i32 {
         const len = @typeInfo(T).@"struct".field_names.len;
-        comptime std.debug.assert(len == 4 or len == 3);
-        inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
-            if (std.mem.eql(u8, f_name, field)) {
-                return genTransposeToShuffleMask(len, i);
-            }
-        }
+        switch (len) {
+            4 => {
+                // Packed RGB truecolor struct, we expect the field names directly.
+                inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
+                    if (std.mem.eql(u8, f_name, field)) {
+                        return genTransposeToShuffleMask(4, i);
+                    }
+                }
 
-        @compileError("could not find field: " ++ field);
+                @compileError("could not find field: " ++ field);
+            },
+            1 => {
+                // Array-based pixel. We store the field names as an ordered
+                // enum.
+                return genTransposeToShuffleMask(@sizeOf(T), @backingInt(@field(T.Fields, field)));
+            },
+            else => @compileError("invalid len for transposeToMask: " ++ len),
+        }
     }
 
     /// Transposes a contiguous area of 32-bit RGBA (or RGB with dummied alpha
@@ -1000,31 +986,18 @@ const RGBA16Vec = struct {
     /// whether or not the supplied area of memory is smaller than the vector
     /// size. There is a guard to prevent memory areas larger than the vector
     /// size when limiting.
-    fn transposeToVec(comptime format: pixel.Format, src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
+    fn transposeToVec(src: anytype, comptime limit: bool) pixel_vector.RGBA16 {
         // Get some details about our source.
-        const src_t = switch (format) {
-            .rgb888 => pixel.RGB888,
-            .bgr888 => pixel.BGR888,
-            else => @typeInfo(@TypeOf(src)).pointer.child,
-        };
+        const src_t = @typeInfo(@TypeOf(src)).pointer.child;
         const has_color = switch (src_t) {
-            pixel.ARGB,
-            pixel.XRGB,
-            pixel.RGB,
-            pixel.RGBA,
-            pixel.RGB888,
-            pixel.BGR888,
-            => true,
+            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA, pixel.RGB24, pixel.BGR24 => true,
             else => false,
         };
         const has_alpha = switch (src_t) {
             pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
             else => false,
         };
-        const src_scale = switch (format) {
-            .rgb888, .bgr888 => 3,
-            else => @sizeOf(src_t),
-        };
+        const src_scale = @sizeOf(src_t);
 
         // This is the byte size of our raw u8 vector that we load the memory
         // area into.
@@ -1098,16 +1071,26 @@ const RGBA16Vec = struct {
         return result;
     }
 
-    fn transposeFromMask(T: type, field: []const u8) [vector_length * @typeInfo(T).@"struct".field_names.len]i32 {
+    fn transposeFromMask(T: type, field: []const u8) [vector_length * @sizeOf(T)]i32 {
         const len = @typeInfo(T).@"struct".field_names.len;
-        comptime std.debug.assert(len == 4 or len == 3);
-        inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
-            if (std.mem.eql(u8, f_name, field)) {
-                return genTransposeFromShuffleMask(len, i);
-            }
-        }
+        switch (len) {
+            4 => {
+                // Packed RGB truecolor struct, we expect the field names directly.
+                inline for (@typeInfo(T).@"struct".field_names, 0..) |f_name, i| {
+                    if (std.mem.eql(u8, f_name, field)) {
+                        return genTransposeFromShuffleMask(4, i);
+                    }
+                }
 
-        @compileError("could not find field: " ++ field);
+                @compileError("could not find field: " ++ field);
+            },
+            1 => {
+                // Array-based pixel. We store the field names as an ordered
+                // enum.
+                return genTransposeFromShuffleMask(@sizeOf(T), @backingInt(@field(T.Fields, field)));
+            },
+            else => @compileError("invalid len for transposeToMask: " ++ len),
+        }
     }
 
     /// Transposes our 16-bit RGBA vector into a contiguous area of 32-bit RGBA
@@ -1116,35 +1099,21 @@ const RGBA16Vec = struct {
     /// This is essentially the reverse of transposeToVec; for more details,
     /// see that function.
     fn transposeFromVec(
-        comptime format: pixel.Format,
         dst: anytype,
         src: pixel_vector.RGBA16,
         comptime limit: bool,
     ) void {
         // Get some info about our destination.
-        const dst_t = switch (format) {
-            .rgb888 => pixel.RGB888,
-            .bgr888 => pixel.BGR888,
-            else => @typeInfo(@TypeOf(dst)).pointer.child,
-        };
+        const dst_t = @typeInfo(@TypeOf(dst)).pointer.child;
         const has_color = switch (dst_t) {
-            pixel.ARGB,
-            pixel.XRGB,
-            pixel.RGB,
-            pixel.RGBA,
-            pixel.RGB888,
-            pixel.BGR888,
-            => true,
+            pixel.ARGB, pixel.XRGB, pixel.RGB, pixel.RGBA, pixel.RGB24, pixel.BGR24 => true,
             else => false,
         };
         const has_alpha = switch (dst_t) {
             pixel.ARGB, pixel.RGBA, pixel.Alpha8 => true,
             else => false,
         };
-        const dst_scale = switch (format) {
-            .rgb888, .bgr888 => 3,
-            else => @sizeOf(dst_t),
-        };
+        const dst_scale = @sizeOf(dst_t);
 
         // Raw vector size
         const byte_len = vector_length * dst_scale;
@@ -4073,12 +4042,12 @@ test "fromStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
-            .name = "rgb888",
-            .in = .{ .rgb888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+            .name = "rgb24",
+            .in = .{ .rgb24 = .{ .value = .{ 0xBB, 0xCC, 0xDD } } },
         },
         .{
-            .name = "bgr888",
-            .in = .{ .bgr888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+            .name = "bgr24",
+            .in = .{ .bgr24 = .{ .value = .{ 0xDD, 0xCC, 0xBB } } },
         },
         .{
             .name = "rgb565",
@@ -4104,16 +4073,10 @@ test "fromStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb24, .bgr24, .rgb565, .alpha8 => |px, t| {
                     const src_T = @TypeOf(px);
-                    var src_stride_raw = switch (t) {
-                        .rgb888, .bgr888 => @as([vector_length][3]u8, @splat(@as([3]u8, @bitCast(px)))),
-                        else => @as([vector_length]src_T, @splat(px)),
-                    };
-                    const src_stride: pixel.Stride = switch (t) {
-                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &src_stride_raw }),
-                        else => @unionInit(pixel.Stride, @tagName(t), &src_stride_raw),
-                    };
+                    var src_stride_raw: [vector_length]src_T = @splat(px);
+                    const src_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &src_stride_raw);
                     const expected_scalar = pixel.RGBA.fromPixel(tc.in);
                     const expected_vector: RGBA16Vec = .{ .underlying = .{
                         .r = @splat(expected_scalar.r),
@@ -4178,12 +4141,12 @@ test "toStride" {
             .in = .{ .rgba = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD } },
         },
         .{
-            .name = "rgb888",
-            .in = .{ .rgb888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+            .name = "rgb24",
+            .in = .{ .rgb24 = .{ .value = .{ 0xBB, 0xCC, 0xDD } } },
         },
         .{
-            .name = "bgr888",
-            .in = .{ .bgr888 = .{ .r = 0xBB, .g = 0xCC, .b = 0xDD } },
+            .name = "bgr24",
+            .in = .{ .bgr24 = .{ .value = .{ 0xDD, 0xCC, 0xBB } } },
         },
         .{
             .name = "rgb565",
@@ -4209,24 +4172,16 @@ test "toStride" {
     const TestFn = struct {
         fn f(tc: anytype) TestingError!void {
             switch (tc.in) {
-                inline .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => |px, t| {
+                inline .argb, .xrgb, .rgb, .rgba, .rgb24, .bgr24, .rgb565, .alpha8 => |px, t| {
                     const dst_T = @TypeOf(px);
-                    var expected_stride_raw = switch (t) {
-                        .rgb888, .bgr888 => @as([vector_length][3]u8, @splat(@as([3]u8, @bitCast(px)))),
-                        else => @as([vector_length]dst_T, @splat(px)),
-                    };
-                    const expected_stride: pixel.Stride = switch (t) {
-                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &expected_stride_raw }),
-                        else => @unionInit(pixel.Stride, @tagName(t), &expected_stride_raw),
-                    };
-                    var got_stride_raw: switch (t) {
-                        .rgb888, .bgr888 => [vector_length][3]u8,
-                        else => [vector_length]dst_T,
-                    } = undefined;
-                    const got_stride: pixel.Stride = switch (t) {
-                        .rgb888, .bgr888 => @unionInit(pixel.Stride, @tagName(t), .{ .buf = &got_stride_raw }),
-                        else => @unionInit(pixel.Stride, @tagName(t), &got_stride_raw),
-                    };
+                    var expected_stride_raw: [vector_length]dst_T = @splat(px);
+                    const expected_stride: pixel.Stride = @unionInit(
+                        pixel.Stride,
+                        @tagName(t),
+                        &expected_stride_raw,
+                    );
+                    var got_stride_raw: [vector_length]dst_T = undefined;
+                    const got_stride: pixel.Stride = @unionInit(pixel.Stride, @tagName(t), &got_stride_raw);
                     const src_scalar = pixel.RGBA.fromPixel(tc.in);
                     const src_vector: RGBA16Vec = .{ .underlying = .{
                         .r = @splat(src_scalar.r),
@@ -4369,8 +4324,8 @@ test "8-bit compositor conformance" {
     inline for (.{
         .image_surface_rgb,
         .image_surface_xrgb,
-        .image_surface_rgb888,
-        .image_surface_bgr888,
+        .image_surface_rgb24,
+        .image_surface_bgr24,
     }, 0..) |sfc_type, idx| {
         try TestFn.run(sfc_type, idx);
     }
