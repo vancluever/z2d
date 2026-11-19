@@ -11,10 +11,11 @@ targets at the cost of accuracy. For more details, see
 
 ADDITIONAL ENHANCEMENTS:
 
-* New supported pixel types: 24-bit RGB888 and BGR888 (when viewed as little
-  endian). Note that these differ from the existing 32-bit surfaces where the
-  alpha bit is just padded out.
-  ([#215](https://github.com/vancluever/z2d/pull/215))
+* New supported pixel types: 24-bit array-based RGB24 and BGR24 (guaranteed
+  memory order regardless of endianness). Note that these differ from the
+  existing 32-bit surfaces where the alpha bit is just padded out.
+  ([#215](https://github.com/vancluever/z2d/pull/215),
+  [#216](https://github.com/vancluever/z2d/pull/216))
 * SIMD can now be disabled by changing the new build-time `simd` option to
   `false`. This disables the vectorized compositor and PNG export code, and
   will similarly be used to disable future functionality that particularly uses
