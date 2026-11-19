@@ -34,8 +34,8 @@ pub const SurfaceType = enum {
     image_surface_xrgb,
     image_surface_rgb,
     image_surface_rgba,
-    image_surface_rgb888,
-    image_surface_bgr888,
+    image_surface_rgb24,
+    image_surface_bgr24,
     image_surface_rgb565,
     image_surface_alpha8,
     image_surface_alpha4,
@@ -48,8 +48,8 @@ pub const SurfaceType = enum {
             .image_surface_xrgb => pixel.XRGB,
             .image_surface_rgb => pixel.RGB,
             .image_surface_rgba => pixel.RGBA,
-            .image_surface_rgb888 => pixel.RGB888,
-            .image_surface_bgr888 => pixel.BGR888,
+            .image_surface_rgb24 => pixel.RGB24,
+            .image_surface_bgr24 => pixel.BGR24,
             .image_surface_rgb565 => pixel.RGB565,
             .image_surface_alpha8 => pixel.Alpha8,
             .image_surface_alpha4 => pixel.Alpha4,
@@ -60,13 +60,7 @@ pub const SurfaceType = enum {
 
     fn toBufferType(self: SurfaceType) type {
         return switch (self) {
-            .image_surface_rgb888,
-            .image_surface_bgr888,
-            => [3]u8,
-            .image_surface_alpha4,
-            .image_surface_alpha2,
-            .image_surface_alpha1,
-            => u8,
+            .image_surface_alpha4, .image_surface_alpha2, .image_surface_alpha1 => u8,
             else => toPixelType(self),
         };
     }
@@ -80,8 +74,8 @@ pub const Surface = union(SurfaceType) {
     image_surface_xrgb: ImageSurface(pixel.XRGB),
     image_surface_rgb: ImageSurface(pixel.RGB),
     image_surface_rgba: ImageSurface(pixel.RGBA),
-    image_surface_rgb888: ImageSurface(pixel.RGB888),
-    image_surface_bgr888: ImageSurface(pixel.BGR888),
+    image_surface_rgb24: ImageSurface(pixel.RGB24),
+    image_surface_bgr24: ImageSurface(pixel.BGR24),
     image_surface_rgb565: ImageSurface(pixel.RGB565),
     image_surface_alpha8: ImageSurface(pixel.Alpha8),
     image_surface_alpha4: PackedImageSurface(pixel.Alpha4),
@@ -365,28 +359,6 @@ pub const Surface = union(SurfaceType) {
 /// lifetime of the surface.
 pub fn ImageSurface(comptime T: type) type {
     return struct {
-        const BufferType = switch (T) {
-            pixel.RGB888, pixel.BGR888 => [3]u8,
-            else => T,
-        };
-
-        fn pxToBuf(px: T) BufferType {
-            return @bitCast(px);
-        }
-
-        fn bufToPx(elem: BufferType) T {
-            return @bitCast(elem);
-        }
-
-        fn strideInit(buf: anytype) pixel.Stride {
-            return switch (T) {
-                pixel.RGB888,
-                pixel.BGR888,
-                => @unionInit(pixel.Stride, @tagName(T.format), .{ .buf = buf }),
-                else => @unionInit(pixel.Stride, @tagName(T.format), buf),
-            };
-        }
-
         /// The width of the surface.
         width: i32,
 
@@ -399,7 +371,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// The buffer is initialized to `width` * `height` on initialization,
         /// de-allocated on `deinit`, and is invalid to use after the latter is
         /// called.
-        buf: []BufferType,
+        buf: []T,
 
         /// The format for the surface.
         pub const format: pixel.Format = T.format;
@@ -419,7 +391,7 @@ pub fn ImageSurface(comptime T: type) type {
 
             const h_usize: usize = @max(0, height);
             const w_usize: usize = @max(0, width);
-            const buf = try alloc.alloc(BufferType, h_usize * w_usize);
+            const buf = try alloc.alloc(T, h_usize * w_usize);
             return initBuffer(buf, width, height, initial_px_);
         }
 
@@ -427,7 +399,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// this over `init`, do not use any method that takes an allocator as it
         /// will be an illegal operation.
         pub fn initBuffer(
-            buf: []BufferType,
+            buf: []T,
             width: i32,
             height: i32,
             initial_px_: ?T,
@@ -436,9 +408,9 @@ pub fn ImageSurface(comptime T: type) type {
             if (height < 1) @panic("invalid height");
 
             if (initial_px_) |initial_px| {
-                @memset(buf, pxToBuf(initial_px));
+                @memset(buf, initial_px);
             } else {
-                @memset(buf, std.mem.zeroes(BufferType));
+                @memset(buf, std.mem.zeroes(T));
             }
 
             return .{
@@ -487,10 +459,10 @@ pub fn ImageSurface(comptime T: type) type {
                     for (0..scale) |i| {
                         for (0..scale) |j| {
                             const idx = (y * scale + i) * width_orig_u + (x * scale + j);
-                            pixels[i * scale + j] = bufToPx(self.buf[idx]);
+                            pixels[i * scale + j] = self.buf[idx];
                         }
                     }
-                    self.buf[y * width + x] = pxToBuf(T.average(&pixels));
+                    self.buf[y * width + x] = T.average(&pixels);
                 }
             }
             self.height = @intCast(height);
@@ -515,8 +487,8 @@ pub fn ImageSurface(comptime T: type) type {
                 .xrgb => .{ .image_surface_xrgb = self },
                 .rgba => .{ .image_surface_rgba = self },
                 .rgb => .{ .image_surface_rgb = self },
-                .rgb888 => .{ .image_surface_rgb888 = self },
-                .bgr888 => .{ .image_surface_bgr888 = self },
+                .rgb24 => .{ .image_surface_rgb24 = self },
+                .bgr24 => .{ .image_surface_bgr24 = self },
                 .rgb565 => .{ .image_surface_rgb565 = self },
                 .alpha8 => .{ .image_surface_alpha8 = self },
                 else => unreachable,
@@ -527,7 +499,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return bufToPx(self.buf[@max(0, @as(isize, self.width) * y + x)]).asPixel();
+            return self.buf[@max(0, @as(isize, self.width) * y + x)].asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -540,22 +512,22 @@ pub fn ImageSurface(comptime T: type) type {
         /// safety-checked undefined behavior.
         pub fn getStride(self: *const ImageSurface(T), x: i32, y: i32, len: usize) pixel.Stride {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
-                return strideInit(&.{});
+                return @unionInit(pixel.Stride, @tagName(T.format), &.{});
             }
             const start: usize = @max(0, @as(isize, self.width) * y + x);
-            return strideInit(self.buf[start .. start + len]);
+            return @unionInit(pixel.Stride, @tagName(T.format), self.buf[start .. start + len]);
         }
 
         /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
         /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf[@max(0, @as(isize, self.width) * y + x)] = pxToBuf(T.fromPixel(px));
+            self.buf[@max(0, @as(isize, self.width) * y + x)] = T.fromPixel(px);
         }
 
         /// Replaces the surface with the supplied pixel.
         pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) void {
-            @memset(self.buf, pxToBuf(T.fromPixel(px)));
+            @memset(self.buf, T.fromPixel(px));
         }
 
         /// Copies a single pixel to the range starting at `(x, y)` and
@@ -572,7 +544,7 @@ pub fn ImageSurface(comptime T: type) type {
             const y_usize: usize = @max(0, y);
             const x_usize: usize = @max(0, x);
             const start = w_usize * y_usize + x_usize;
-            @memset(self.buf[start .. start + len], pxToBuf(T.fromPixel(px)));
+            @memset(self.buf[start .. start + len], T.fromPixel(px));
         }
 
         /// Composites a single pixel using the specified operation, with an
@@ -608,7 +580,7 @@ pub fn ImageSurface(comptime T: type) type {
             }
 
             for (start..start + len) |idx| {
-                self.buf[idx] = pxToBuf(compositor.runPixelT(T, bufToPx(self.buf[idx]), pixel.RGBA, src, operator));
+                self.buf[idx] = compositor.runPixelT(T, self.buf[idx], pixel.RGBA, src, operator);
             }
         }
     };
@@ -1773,8 +1745,8 @@ test "compositeStride, simple test w/OOB" {
                                 got,
                             ) catch |err| {
                                 std.debug.print(
-                                    "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
-                                    .{ x, y, want_x, want_y },
+                                    "sfc_type: {t}, x: {d} y: {d}, want_x: {d} want_y: {d}\n",
+                                    .{ sfc_type_enum, x, y, want_x, want_y },
                                 );
                                 return err;
                             };
@@ -1799,8 +1771,8 @@ test "compositeStride, simple test w/OOB" {
                                 got,
                             ) catch |err| {
                                 std.debug.print(
-                                    "x: {d} y: {d}, want_x: {d} want_y: {d}\n",
-                                    .{ x, y, want_x, want_y },
+                                    "sfc_type: {t}, x: {d} y: {d}, want_x: {d} want_y: {d}\n",
+                                    .{ sfc_type_enum, x, y, want_x, want_y },
                                 );
                                 return err;
                             };

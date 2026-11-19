@@ -3,6 +3,7 @@
 
 //! Rudimentary PNG export functionality.
 
+const builtin = @import("builtin");
 const std = @import("std");
 
 const color = @import("color.zig");
@@ -100,14 +101,14 @@ fn writePNGIHDR(writer: *std.Io.Writer, sfc: surface.Surface) WritePNGIHDRError!
     std.mem.writeInt(u32, &width, @max(0, sfc.getWidth()), .big);
     std.mem.writeInt(u32, &height, @max(0, sfc.getHeight()), .big);
     const depth: u8 = switch (sfc.getFormat()) {
-        .argb, .xrgb, .rgb, .rgba, .rgb888, .bgr888, .rgb565, .alpha8 => 8,
+        .argb, .xrgb, .rgb, .rgba, .rgb24, .bgr24, .rgb565, .alpha8 => 8,
         .alpha4 => 4,
         .alpha2 => 2,
         .alpha1 => 1,
     };
     const color_type: u8 = switch (sfc.getFormat()) {
         .argb, .rgba => 6,
-        .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => 2,
+        .xrgb, .rgb, .rgb24, .bgr24, .rgb565 => 2,
         .alpha8, .alpha4, .alpha2, .alpha1 => 0,
     };
     const compression: u8 = 0;
@@ -233,15 +234,14 @@ fn writePNGIDATStream(
                 }
 
                 switch (stride) {
-                    inline .xrgb, .rgb, .rgb888, .bgr888, .rgb565 => |s, t| {
+                    inline .xrgb, .rgb, .rgb24, .bgr24, .rgb565 => |s, t| {
                         var stride_vec: [vector_length]u32 = @splat(0);
                         switch (t) {
-                            inline .rgb888, .bgr888 => {
+                            inline .rgb24, .bgr24 => {
                                 // Unpack our 24-bit RGB element by element
                                 for (0..stride_len) |i| {
-                                    var dst: [4]u8 = @splat(0);
-                                    dst[0..3].* = s.buf[x + i];
-                                    stride_vec[i] = @bitCast(dst);
+                                    const value_u24: u24 = @bitCast(s[x + i].value);
+                                    stride_vec[i] = @intCast(value_u24);
                                 }
                             },
                             .rgb565 => {
@@ -260,7 +260,7 @@ fn writePNGIDATStream(
                         stride_vec = encodeRGBA(
                             stride_vec,
                             profile,
-                            t == .xrgb or t == .rgb888,
+                            t == .xrgb or (t == .bgr24 and std.lang.Endian.native == .little),
                             false,
                         );
                         const stride_bytes = u32PixelToBytesLittleVec(stride_vec);
@@ -579,8 +579,8 @@ test "RGB/ARGB formats all export to same image" {
     inline for (.{
         .image_surface_xrgb,
         .image_surface_rgb,
-        .image_surface_rgb888,
-        .image_surface_bgr888,
+        .image_surface_rgb24,
+        .image_surface_bgr24,
     }, 0..) |sfc_type, idx| {
         try TestFn.run(sfc_type, idx);
     }
