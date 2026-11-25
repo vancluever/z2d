@@ -152,7 +152,7 @@ fn coverStep(b: *std.Build, artifacts: []const *std.Build.Step.Compile) !*std.Bu
         const next_coverage_command = b.addSystemCommand(&.{
             "sh",
             "-c",
-            "kcov --include-pattern=z2d \"$1\" \"$2\" &>/dev/null",
+            "kcov --include-pattern=z2d \"$1\" \"$2\"",
             "--",
         });
         next_coverage_command.addDirectoryArg(output_dir);
