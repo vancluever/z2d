@@ -832,6 +832,14 @@ comptime {
     std.debug.assert(@bitSizeOf(Alpha4) == 4);
     std.debug.assert(@bitSizeOf(Alpha2) == 2);
     std.debug.assert(@bitSizeOf(Alpha1) == 1);
+
+    // All alpha types have an alignment of 1. Types that have a bit size lower
+    // than 8 (1 byte) are stored in packed-bit surfaces, so alignment should
+    // still be a full byte.
+    std.debug.assert(@alignOf(Alpha8) == 1);
+    std.debug.assert(@alignOf(Alpha4) == 1);
+    std.debug.assert(@alignOf(Alpha2) == 1);
+    std.debug.assert(@alignOf(Alpha1) == 1);
 }
 
 /// Returns a generated alpha-channel pixel type.

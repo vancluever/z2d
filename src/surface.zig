@@ -5,17 +5,52 @@
 //! Normally, you would use a `Context` (or the unmanaged `painter` package) to
 //! render to surfaces, but they can be manipulated directly when needed.
 //!
-//! The buffer for each surface can be accessed directly through its union type
-//! field (e.g., `sfc.image_surface_rgba.buf`) and `@bitCast` to get raw access
-//! to its pixel data in the format specified (see the `pixel` module). Note
-//! that in the case of 24-bit pixel types, an individual pixel is represented
-//! as `[3]u8`. This ensures the correct layout despite larger underlying
-//! types. `@bitCast`ing still works in this instance to get the pixels.
+//! ## Higher-level pixel access
 //!
-//! For packed-buffer surfaces (those backed by `PackedImageSurface` with pixel
-//! widths smaller than 8 bits), there are some considerations for interpreting
-//! the raw `[]u8` that the buffer is stored as. See the type function for more
-//! details.
+//! There are a number of ways to work with pixels on a surface:
+//!
+//! * `Surface.getPixel` and `Surface.putPixel` can be used to used to get and
+//! set individual pixels on a surface.
+//!
+//! * `Surface.getStride` can be used to get a *stride*, which in z2d, refers
+//! to a row, or a segment of a row, of pixel data, correctly cast to the
+//! proper pixel type, which can be manipulated directly. See `pixel.Stride`
+//! for more details.
+//!
+//! There are a number of other ways to work with surfaces on a higher-level,
+//! see `Surface` for more details.
+//!
+//! ## Direct pixel access
+//!
+//! The buffer for each surface can be accessed directly through its union type
+//! field (e.g., `sfc.image_surface_rgba.buf`).
+//!
+//! How the buffer is interpreted depends on the surface type:
+//!
+//! ## Standard image surfaces (`ImageSurface`)
+//!
+//! `ImageSurface` is the surface type used for pixel types of one or more
+//! bytes in size. This buffer is a standard left-to-right, top-to-bottom
+//! arrangement of pixels. Each row may have a possible padding of bytes at the
+//! end to optimize for memory alignment (usually when the underlying pixel
+//! type is less than 4 bytes), and this total length of the row in bytes is
+//! referred to as a surface's *pitch*.
+//!
+//! The pitch of an `ImageSurface` can be fetched by calling `Surface.getPitch`.
+//!
+//! When you need the pitch for a surface ahead of its creation (e.g., for
+//! manual buffer creation or assertion), you can use `Surface.pitchForWidth` to get
+//! it.
+//!
+//! ## Packed-bit image surfaces (`PackedImageSurface`)
+//!
+//! `PackedImageSurface` is the surface type used for pixel types with a size
+//! of less than a byte (e.g., 4, 2, or 1-bit alpha types). Pixels are stored
+//! in the buffer (e.g.,`sfc.image_surface_alpha1.buf`) in 8-bit quantities in
+//! little-endian fashion, on a per-pixel basis within each byte.
+//!
+//! See the type function for a more detailed example.
+//!
 
 const std = @import("std");
 
@@ -57,18 +92,13 @@ pub const SurfaceType = enum {
             .image_surface_alpha1 => pixel.Alpha1,
         };
     }
-
-    fn toBufferType(self: SurfaceType) type {
-        return switch (self) {
-            .image_surface_alpha4, .image_surface_alpha2, .image_surface_alpha1 => u8,
-            else => toPixelType(self),
-        };
-    }
 };
 
 /// Represents an interface as a union of the pixel formats. Any methods that
 /// require an allocator must use the same allocator for the life of the
 /// surface.
+///
+/// See the [top-level package documentation](#z2d.surface) for more details.
 pub const Surface = union(SurfaceType) {
     image_surface_argb: ImageSurface(pixel.ARGB),
     image_surface_xrgb: ImageSurface(pixel.XRGB),
@@ -90,6 +120,28 @@ pub const Surface = union(SurfaceType) {
         /// An invalid width was passed to surface initialization.
         InvalidWidth,
     };
+
+    const InvalidSurfaceTypeError = error{
+        /// The operation is invalid for the supplied surface type.
+        InvalidSurfaceType,
+    };
+
+    pub const PitchForWidthError = InvalidSurfaceTypeError;
+
+    /// Returns the pitch size (in bytes) for a width on a standard image
+    /// surface.
+    ///
+    /// This function should not be used for packed-bit surfaces and will
+    /// return an error when done so.
+    pub fn pitchForWidth(surface_type: SurfaceType, width: i32) PitchForWidthError!i32 {
+        return switch (surface_type) {
+            .image_surface_alpha4,
+            .image_surface_alpha2,
+            .image_surface_alpha1,
+            => error.InvalidSurfaceType,
+            inline else => |t| ImageSurface(t.toPixelType()).pitchForWidth(width),
+        };
+    }
 
     /// Initializes a surface of the specific `surface_type`. The surface
     /// buffer is initialized with the zero value for the pixel type (typically
@@ -157,10 +209,16 @@ pub const Surface = union(SurfaceType) {
     /// black) if it is `null`. If you use this over `init` or `initPixel`, do
     /// not use any method that takes an allocator as it will be an illegal
     /// operation.
+    ///
+    /// For surfaces with a pixel size of 1 byte or higher, the buffer must be
+    /// sized with an appropriate pitch (row width in bytes), which is equal to
+    /// the width, times the byte size of the pixel type, rounded up to the
+    /// next multiple of four. Use `pitchForWidth` to calculate the pitch for
+    /// proper buffer sizing ahead of time.
     pub fn initBuffer(
         comptime surface_type: SurfaceType,
         initial_px_: ?surface_type.toPixelType(),
-        buf: []surface_type.toBufferType(),
+        buf: []align(@alignOf(surface_type.toPixelType())) u8,
         width: i32,
         height: i32,
     ) Surface {
@@ -255,6 +313,22 @@ pub const Surface = union(SurfaceType) {
         };
     }
 
+    pub const GetPitchError = InvalidSurfaceTypeError;
+
+    /// Gets the pitch (in bytes) for standard image surfaces.
+    ///
+    /// This function should not be used on packed-bit surfaces and will
+    /// return an error when done so.
+    pub fn getPitch(self: Surface) GetPitchError!i32 {
+        return switch (self) {
+            .image_surface_alpha4,
+            .image_surface_alpha2,
+            .image_surface_alpha1,
+            => error.InvalidSurfaceType,
+            inline else => |s| s.pitch,
+        };
+    }
+
     /// Gets the pixel format of the surface.
     pub fn getFormat(self: Surface) pixel.Format {
         return switch (self) {
@@ -275,9 +349,7 @@ pub const Surface = union(SurfaceType) {
     ///
     /// Out-of-range start co-ordinates return an empty stride.
     ///
-    /// `len` is unbounded and will wrap if going past the x-boundary of the
-    /// surface. Going past the actual length of the buffer is safety-checked
-    /// undefined behavior.
+    /// `len` is always limited to the width of the surface.
     pub fn getStride(self: Surface, x: i32, y: i32, len: usize) pixel.Stride {
         return switch (self) {
             inline else => |s| s.getStride(x, y, len),
@@ -304,9 +376,7 @@ pub const Surface = union(SurfaceType) {
     ///
     /// Out-of-range start co-ordinates cause a no-op.
     ///
-    /// `len` is unbounded and will wrap if going past the x-boundary of the
-    /// surface. Going past the actual length of the buffer is safety-checked
-    /// undefined behavior.
+    /// `len` is always limited to the width of the surface.
     pub fn paintStride(self: *Surface, x: i32, y: i32, len: usize, px: pixel.Pixel) void {
         return switch (self.*) {
             inline else => |*s| s.paintStride(x, y, len, px),
@@ -318,9 +388,7 @@ pub const Surface = union(SurfaceType) {
     ///
     /// Out-of-range start co-ordinates cause a no-op.
     ///
-    /// `len` is unbounded and will wrap if going past the x-boundary of the
-    /// surface. Going past the actual length of the buffer is safety-checked
-    /// undefined behavior.
+    /// `len` is always limited to the width of the surface.
     pub fn clearStride(self: *Surface, x: i32, y: i32, len: usize) void {
         return self.paintStride(x, y, len, .{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } });
     }
@@ -331,9 +399,7 @@ pub const Surface = union(SurfaceType) {
     ///
     /// Out-of-range start co-ordinates cause a no-op.
     ///
-    /// `len` is unbounded and will wrap if going past the x-boundary of
-    /// the surface. Going past the actual length of the buffer is
-    /// safety-checked undefined behavior.
+    /// `len` is always limited to the width of the surface.
     ///
     /// This function currently only works with integer operators.
     pub fn compositeStride(
@@ -359,22 +425,42 @@ pub const Surface = union(SurfaceType) {
 /// lifetime of the surface.
 pub fn ImageSurface(comptime T: type) type {
     return struct {
-        /// The width of the surface.
+        /// The default byte alignment for pixels. This influences surface
+        /// pitch; the pitch will always be a multiple of this value in bytes.
+        const pitch_alignment = @sizeOf(u32);
+
+        /// The width of the surface, in pixels.
         width: i32,
 
-        /// The height of the surface.
+        /// The height of the surface, in pixels.
         height: i32,
+
+        /// The pitch size of the surface, in bytes.
+        pitch: i32,
 
         /// The underlying buffer. Check the top-level package documentation
         /// for details on how to interpret the buffer.
         ///
-        /// The buffer is initialized to `width` * `height` on initialization,
+        /// The buffer is initialized to `width` * `pitch` on initialization,
         /// de-allocated on `deinit`, and is invalid to use after the latter is
         /// called.
-        buf: []T,
+        buf: []align(@alignOf(T)) u8,
 
         /// The format for the surface.
         pub const format: pixel.Format = T.format;
+
+        /// Returns the pitch size (in bytes) for a width and the size of the
+        /// pixel.
+        ///
+        /// Used when creating surfaces of a default pitch size.
+        pub fn pitchForWidth(width: i32) i32 {
+            std.debug.assert(width > 0);
+            const bits = switch (T.format) {
+                .rgb24, .bgr24 => 24, // Array-backed, so needs manual setting
+                else => @bitSizeOf(T),
+            };
+            return @intCast((@divTrunc(bits * @as(isize, width) + 7, 8) + pitch_alignment - 1) & -pitch_alignment);
+        }
 
         /// Initializes a surface. `deinit` should be called when finished with
         /// the surface, which invalidates it, after which it should not be
@@ -389,35 +475,48 @@ pub fn ImageSurface(comptime T: type) type {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
-            const h_usize: usize = @max(0, height);
-            const w_usize: usize = @max(0, width);
-            const buf = try alloc.alloc(T, h_usize * w_usize);
+            const buf = try alloc.alignedAlloc(u8, .of(T), sizeForBuffer(width, height));
             return initBuffer(buf, width, height, initial_px_);
         }
 
         /// Initializes a surface with externally allocated memory. If you use
-        /// this over `init`, do not use any method that takes an allocator as it
-        /// will be an illegal operation.
+        /// this over `init`, do not use any method that takes an allocator as
+        /// it will be an illegal operation.
+        ///
+        /// The buffer must be sized with an appropriate pitch (row width in
+        /// bytes), which is equal to the width, times the byte size of the
+        /// pixel type, rounded up to the next multiple of four. Use
+        /// `pitchForWidth` to calculate the pitch for proper buffer sizing
+        /// ahead of time.
         pub fn initBuffer(
-            buf: []T,
+            buf: []align(@alignOf(T)) u8,
             width: i32,
             height: i32,
             initial_px_: ?T,
         ) ImageSurface(T) {
             if (width < 1) @panic("invalid width");
             if (height < 1) @panic("invalid height");
-
-            if (initial_px_) |initial_px| {
-                @memset(buf, initial_px);
-            } else {
-                @memset(buf, std.mem.zeroes(T));
+            if (buf.len < sizeForBuffer(width, height)) {
+                std.debug.panic(
+                    "buffer too small for dimensions of surface (required: {d})",
+                    .{sizeForBuffer(width, height)},
+                );
             }
 
-            return .{
+            var sfc: ImageSurface(T) = .{
                 .width = width,
                 .height = height,
+                .pitch = pitchForWidth(width),
                 .buf = buf,
             };
+
+            if (initial_px_) |initial_px| {
+                sfc.paintPixel(initial_px.asPixel());
+            } else {
+                @memset(sfc.buf, 0);
+            }
+
+            return sfc;
         }
 
         /// De-allocates the surface buffer. The surface is invalid for use after
@@ -449,34 +548,43 @@ pub fn ImageSurface(comptime T: type) type {
             if (self.width < supersample_scale or self.height < supersample_scale) return;
 
             const scale = supersample_scale;
-            const height: usize = @max(0, @divFloor(self.height, scale));
             const width: usize = @max(0, @divFloor(self.width, scale));
-            const width_orig_u: usize = @max(0, self.width);
+            const height: usize = @max(0, @divFloor(self.height, scale));
 
-            for (0..height) |y| {
-                for (0..width) |x| {
+            // Create a surface for the new dimensions using the same buffer.
+            // This is fine since there's no mutable state in the surface, just
+            // the dimensions that are needed to calculate locations, etc.
+            const new_sfc: ImageSurface(T) = .{
+                .width = @intCast(width),
+                .height = @intCast(height),
+                .pitch = pitchForWidth(@intCast(width)),
+                .buf = self.buf,
+            };
+
+            for (0..height) |y_u| {
+                const y: i32 = @intCast(y_u);
+                for (0..width) |x_u| {
+                    const x: i32 = @intCast(x_u);
                     var pixels: [scale * scale]T = @splat(std.mem.zeroes(T));
                     for (0..scale) |i| {
+                        const sample_row_buf = self.pixelPtrAt(x * scale, y * scale + @as(i32, @intCast(i)));
                         for (0..scale) |j| {
-                            const idx = (y * scale + i) * width_orig_u + (x * scale + j);
-                            pixels[i * scale + j] = self.buf[idx];
+                            pixels[i * scale + j] = sample_row_buf[j];
                         }
                     }
-                    self.buf[y * width + x] = T.average(&pixels);
+                    new_sfc.pixelPtrAt(x, y)[0] = T.average(&pixels);
                 }
             }
-            self.height = @intCast(height);
-            self.width = @intCast(width);
+            self.* = new_sfc;
         }
 
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
         pub fn resizeBuffer(self: *ImageSurface(T), alloc: std.mem.Allocator) void {
-            const height: usize = @max(0, self.height);
-            const width: usize = @max(0, self.width);
-            if (self.buf.len == height * width) return;
-            if (alloc.resize(self.buf, height * width)) {
-                self.buf = self.buf.ptr[0 .. height * width];
+            const new_len = sizeForBuffer(self.width, self.height);
+            if (self.buf.len == new_len) return;
+            if (alloc.resize(self.buf, new_len)) {
+                self.buf = self.buf.ptr[0..new_len];
             }
         }
 
@@ -499,7 +607,7 @@ pub fn ImageSurface(comptime T: type) type {
         /// if the co-ordinates are out of range.
         pub fn getPixel(self: *const ImageSurface(T), x: i32, y: i32) ?pixel.Pixel {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return null;
-            return self.buf[@max(0, @as(isize, self.width) * y + x)].asPixel();
+            return self.pixelPtrAt(x, y)[0].asPixel();
         }
 
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
@@ -507,27 +615,32 @@ pub fn ImageSurface(comptime T: type) type {
         ///
         /// Out-of-range start co-ordinates return an empty stride.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer is
-        /// safety-checked undefined behavior.
+        /// `len` is always limited to the width of the surface.
         pub fn getStride(self: *const ImageSurface(T), x: i32, y: i32, len: usize) pixel.Stride {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return @unionInit(pixel.Stride, @tagName(T.format), &.{});
             }
-            const start: usize = @max(0, @as(isize, self.width) * y + x);
-            return @unionInit(pixel.Stride, @tagName(T.format), self.buf[start .. start + len]);
+            return @unionInit(
+                pixel.Stride,
+                @tagName(T.format),
+                self.pixelPtrAt(x, y)[0..self.limitLen(len, x)],
+            );
         }
 
         /// Puts a single pixel at the `x` and `y` co-ordinates. No-ops if the
         /// pixel is out of range.
         pub fn putPixel(self: *ImageSurface(T), x: i32, y: i32, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            self.buf[@max(0, @as(isize, self.width) * y + x)] = T.fromPixel(px);
+            self.pixelPtrAt(x, y)[0] = T.fromPixel(px);
         }
 
         /// Replaces the surface with the supplied pixel.
         pub fn paintPixel(self: *ImageSurface(T), px: pixel.Pixel) void {
-            @memset(self.buf, T.fromPixel(px));
+            for (0..@max(0, self.height)) |y_u| {
+                const y: i32 = @intCast(y_u);
+                const width: usize = @max(0, self.width);
+                self.paintStride(0, y, width, px);
+            }
         }
 
         /// Copies a single pixel to the range starting at `(x, y)` and
@@ -535,16 +648,13 @@ pub fn ImageSurface(comptime T: type) type {
         ///
         /// Out-of-range start co-ordinates cause a no-op.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer is
-        /// safety-checked undefined behavior.
+        /// `len` is always limited to the width of the surface.
         pub fn paintStride(self: *ImageSurface(T), x: i32, y: i32, len: usize, px: pixel.Pixel) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            const w_usize: usize = @max(0, self.width);
-            const y_usize: usize = @max(0, y);
-            const x_usize: usize = @max(0, x);
-            const start = w_usize * y_usize + x_usize;
-            @memset(self.buf[start .. start + len], T.fromPixel(px));
+            @memset(
+                self.pixelPtrAt(x, y)[0..self.limitLen(len, x)],
+                T.fromPixel(px),
+            );
         }
 
         /// Composites a single pixel using the specified operation, with an
@@ -553,9 +663,7 @@ pub fn ImageSurface(comptime T: type) type {
         ///
         /// Out-of-range start co-ordinates cause a no-op.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer is
-        /// safety-checked undefined behavior.
+        /// `len` is always limited to the width of the surface.
         ///
         /// This function currently only works with integer operators.
         pub fn compositeStride(
@@ -568,20 +676,45 @@ pub fn ImageSurface(comptime T: type) type {
             opacity: u8,
         ) void {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) return;
-            const w_usize: usize = @max(0, self.width);
-            const y_usize: usize = @max(0, y);
-            const x_usize: usize = @max(0, x);
-            const start = w_usize * y_usize + x_usize;
-
             // We use RGBA as our base intermediary pixel for the source.
             var src: pixel.RGBA = .fromPixel(px);
             if (opacity < 255) {
                 src = compositor.runPixelT(pixel.RGBA, src, pixel.Alpha8, .{ .a = opacity }, .dst_in);
             }
 
-            for (start..start + len) |idx| {
-                self.buf[idx] = compositor.runPixelT(T, self.buf[idx], pixel.RGBA, src, operator);
+            const px_buf = self.pixelPtrAt(x, y);
+            for (0..self.limitLen(len, x)) |idx| {
+                px_buf[idx] = compositor.runPixelT(T, px_buf[idx], pixel.RGBA, src, operator);
             }
+        }
+
+        /// Returns the size of the buffer required to hold the surface, in bytes.
+        fn sizeForBuffer(width: i32, height: i32) usize {
+            return @max(0, @as(isize, pitchForWidth(width)) * height);
+        }
+
+        /// Lower-level helper method for calculating the pixel at `(x, y)` as
+        /// a many-item pointer.
+        ///
+        /// No safety guarantees are made here; they should always be made by
+        /// the caller.
+        fn pixelPtrAt(self: *const ImageSurface(T), x: i32, y: i32) [*]T {
+            return self.pixelPtrAtRow(y) + @max(0, x);
+        }
+
+        /// Lower-level helper method for calculating the pixel at `(0, y)` as
+        /// a many-item pointer.
+        ///
+        /// No safety guarantees are made here; they should always be made by
+        /// the caller.
+        fn pixelPtrAtRow(self: *const ImageSurface(T), y: i32) [*]T {
+            return @ptrFromInt(@intFromPtr(self.buf.ptr) + @max(0, @as(isize, self.pitch * y)));
+        }
+
+        /// Lower-level helper to limit a stride length to the possible surface
+        /// width.
+        fn limitLen(self: *const ImageSurface(T), len: usize, x: i32) usize {
+            return surfaceLimitLen(self, len, x);
         }
     };
 }
@@ -591,10 +724,9 @@ pub fn ImageSurface(comptime T: type) type {
 ///
 /// ## Accessing pixel data
 ///
-/// The buffer is stored in the standard location (e.g., from the `Pixel`
-/// interface, through something like `sfc.image_surface_alpha1.buf`) but as a
-/// `[]u8` as opposed to `[]T`. Data is stored in little-endian fashion,
-/// consistent with the layout of our packed pixel structs.
+/// Pixels are stored in the buffer (e.g.,`sfc.image_surface_alpha1.buf`) in
+/// 8-bit quantities in little-endian fashion, on a per-pixel basis within each
+/// byte.
 ///
 /// As an example, for a 8x2 Alpha1 surface, our first row would be stored in
 /// `buf[0]` and the second row would be stored in `buf[1]`, with the lowest
@@ -631,9 +763,7 @@ pub fn PackedImageSurface(comptime T: type) type {
             if (width < 1) return error.InvalidWidth;
             if (height < 1) return error.InvalidHeight;
 
-            const h_usize: usize = @max(0, height);
-            const w_usize: usize = @max(0, width);
-            const len = (h_usize * w_usize * @bitSizeOf(T) + 7) / 8;
+            const len = sizeForBuffer(width, height);
             const buf = try alloc.alloc(u8, len);
             return initBuffer(buf, width, height, initial_px_);
         }
@@ -649,6 +779,12 @@ pub fn PackedImageSurface(comptime T: type) type {
         ) PackedImageSurface(T) {
             if (width < 1) @panic("invalid width");
             if (height < 1) @panic("invalid height");
+            if (buf.len < sizeForBuffer(width, height)) {
+                std.debug.panic(
+                    "buffer too small for dimensions of surface (required: {d})",
+                    .{sizeForBuffer(width, height)},
+                );
+            }
 
             if (initial_px_) |initial_px| {
                 _paintPixel(buf, initial_px);
@@ -715,9 +851,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// Resizes the buffer to the dimensions set within the surface, if
         /// different.
         pub fn resizeBuffer(self: *PackedImageSurface(T), alloc: std.mem.Allocator) void {
-            const height: usize = @max(0, self.height);
-            const width: usize = @max(0, self.width);
-            const new_len: usize = (height * width * @bitSizeOf(T) + 7) / 8;
+            const new_len = sizeForBuffer(self.width, self.height);
             if (self.buf.len == new_len) return;
             if (alloc.resize(self.buf, new_len)) {
                 self.buf = self.buf.ptr[0..new_len];
@@ -744,10 +878,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         /// Returns the range of pixels starting at `(x, y)` and proceeding for
         /// `len`, as a pixel stride.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer, or
-        /// providing negative co-ordinates, is safety-checked undefined
-        /// behavior.
+        /// `len` is always limited to the width of the surface.
         pub fn getStride(self: *const PackedImageSurface(T), x: i32, y: i32, len: usize) pixel.Stride {
             if (x < 0 or y < 0 or x >= self.width or y >= self.height) {
                 return @unionInit(pixel.Stride, @tagName(T.format), .{
@@ -760,11 +891,11 @@ pub fn PackedImageSurface(comptime T: type) type {
             const px_start: usize = @max(0, @as(isize, self.width) * y + x);
             const px_offset = px_start % scale;
             const slice_start = px_start / scale;
-            const slice_len = ((len + px_offset) * @bitSizeOf(T) + 7) / 8;
+            const slice_len = ((self.limitLen(len, x) + px_offset) * @bitSizeOf(T) + 7) / 8;
             return @unionInit(pixel.Stride, @tagName(T.format), .{
                 .buf = self.buf[slice_start .. slice_start + slice_len],
                 .px_offset = px_offset,
-                .px_len = len,
+                .px_len = self.limitLen(len, x),
             });
         }
 
@@ -785,9 +916,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         ///
         /// Out-of-range start co-ordinates cause a no-op.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer is
-        /// safety-checked undefined behavior.
+        /// `len` is always limited to the width of the surface.
         pub fn paintStride(
             self: *PackedImageSurface(T),
             x: i32,
@@ -811,7 +940,7 @@ pub fn PackedImageSurface(comptime T: type) type {
             const y_usize: usize = @max(0, y);
             const x_usize: usize = @max(0, x);
             const start = w_usize * y_usize + x_usize;
-            const end = (start + len);
+            const end = (start + self.limitLen(len, x));
             const slice_start: usize = start / scale;
             const slice_end: usize = end / scale;
             if (slice_start > slice_end) {
@@ -848,9 +977,7 @@ pub fn PackedImageSurface(comptime T: type) type {
         ///
         /// Out-of-range start co-ordinates cause a no-op.
         ///
-        /// `len` is unbounded and will wrap if going past the x-boundary of
-        /// the surface. Going past the actual length of the buffer is
-        /// safety-checked undefined behavior.
+        /// `len` is always limited to the width of the surface.
         ///
         /// This function currently only works with integer operators.
         pub fn compositeStride(
@@ -874,9 +1001,14 @@ pub fn PackedImageSurface(comptime T: type) type {
                 src = compositor.runPixelT(pixel.RGBA, src, pixel.Alpha8, .{ .a = opacity }, .dst_in);
             }
 
-            for (start..start + len) |idx| {
+            for (start..start + self.limitLen(len, x)) |idx| {
                 self._set(idx, compositor.runPixelT(T, self._get(idx), pixel.RGBA, src, operator));
             }
+        }
+
+        /// Returns the size of the buffer required to hold the surface, in bytes.
+        fn sizeForBuffer(width: i32, height: i32) usize {
+            return @max(0, @divTrunc(@as(isize, width * height * @bitSizeOf(T) + 7), 8));
         }
 
         fn _get(self: *const PackedImageSurface(T), index: usize) T {
@@ -917,7 +1049,19 @@ pub fn PackedImageSurface(comptime T: type) type {
 
             @memset(buf, packed_px);
         }
+
+        /// Lower-level helper to limit a stride length to the possible surface
+        /// width.
+        fn limitLen(self: *const PackedImageSurface(T), len: usize, x: i32) usize {
+            return surfaceLimitLen(self, len, x);
+        }
     };
+}
+
+/// Generic length-limiting function, should be called within helpers in surfaces.
+fn surfaceLimitLen(self: anytype, len: usize, x: i32) usize {
+    const max_len: usize = @max(0, self.width - x);
+    return @min(len, max_len);
 }
 
 test "Surface interface" {
@@ -968,10 +1112,10 @@ test "Surface interface" {
         inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
             const surface_type: SurfaceType = @fromBackingInt(@intCast(f_value));
             const pixel_type = surface_type.toPixelType();
-            const buffer_type = surface_type.toBufferType();
             const pix = pixel_type.fromPixel(rgba.asPixel()).asPixel();
 
-            var buf: [1]buffer_type = undefined;
+            const len: usize = comptime @intCast(Surface.pitchForWidth(surface_type, 1) catch 1);
+            var buf: [len]u8 align(@alignOf(pixel_type)) = undefined;
             var sfc_if = Surface.initBuffer(surface_type, null, &buf, 1, 1);
 
             // getters
@@ -996,11 +1140,11 @@ test "ImageSurface, init, deinit" {
     const expected_buffer: [200]pixel.RGBA = @splat(.{ .r = 0, .g = 0, .b = 0, .a = 0 });
     try std.testing.expectEqual(20, sfc.height);
     try std.testing.expectEqual(10, sfc.width);
-    try std.testing.expectEqual(200, sfc.buf.len);
-    try std.testing.expectEqual(std.meta.Elem(@TypeOf(sfc.buf)), pixel.RGBA);
+    try std.testing.expectEqual(40, sfc.pitch);
+    try std.testing.expectEqual(@as(usize, @intCast(sfc.height * sfc.pitch)), sfc.buf.len);
     try std.testing.expectEqualSlices(
-        pixel.RGBA,
-        &expected_buffer,
+        u8,
+        @ptrCast(&expected_buffer),
         sfc.buf,
     );
 }
@@ -1009,13 +1153,15 @@ test "ImageSurface, getPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(std.testing.allocator, 20, 10, null);
     defer sfc.deinit(std.testing.allocator);
+    const pitch: usize = @intCast(sfc.pitch);
 
     {
         // OK
         const x: i32 = 7;
         const y: i32 = 5;
         const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
-        sfc.buf[y * 20 + x] = rgba;
+        const idx: usize = y * pitch + x * @sizeOf(pixel.RGBA);
+        @as(*pixel.RGBA, @ptrCast(@alignCast(&sfc.buf[idx]))).* = rgba;
         const expected_px: pixel.Pixel = .{ .rgba = rgba };
         try std.testing.expectEqual(expected_px, sfc.getPixel(x, y));
     }
@@ -1031,6 +1177,7 @@ test "ImageSurface, putPixel" {
     const sfc_T = ImageSurface(pixel.RGBA);
     var sfc = try sfc_T.init(std.testing.allocator, 20, 10, null);
     defer sfc.deinit(std.testing.allocator);
+    const pitch: usize = @intCast(sfc.pitch);
 
     const rgba: pixel.RGBA = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xDD };
     const pix_rgba = rgba.asPixel();
@@ -1040,28 +1187,30 @@ test "ImageSurface, putPixel" {
         const x: i32 = 7;
         const y: i32 = 5;
         sfc.putPixel(x, y, pix_rgba);
-        sfc.buf[y * 20 + x] = rgba;
-        try std.testing.expectEqual(rgba, sfc.buf[y * 20 + x]);
+        const idx: usize = y * pitch + x * @sizeOf(pixel.RGBA);
+        const got_rgba: pixel.RGBA = @as(*pixel.RGBA, @ptrCast(@alignCast(&sfc.buf[idx]))).*;
+        try std.testing.expectEqual(rgba, got_rgba);
     }
 
     {
         // Error, out of bounds
-        const orig = try std.testing.allocator.dupe(pixel.RGBA, sfc.buf);
+        const orig = try std.testing.allocator.dupe(u8, sfc.buf);
         defer std.testing.allocator.free(orig);
         sfc.putPixel(20, 9, pix_rgba);
-        try std.testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
+        try std.testing.expectEqualSlices(u8, orig, sfc.buf);
         sfc.putPixel(19, 10, pix_rgba);
-        try std.testing.expectEqualSlices(pixel.RGBA, orig, sfc.buf);
+        try std.testing.expectEqualSlices(u8, orig, sfc.buf);
     }
 
     {
-        // Different pixel type (copySrc is used)
+        // Different pixel type
         const rgb: pixel.RGB = .{ .r = 0xAA, .g = 0xBB, .b = 0xCC };
         const pix_rgb = rgb.asPixel();
         sfc.putPixel(1, 1, pix_rgb);
+        const idx: usize = 84; // (1, 1) with a row pitch of 80 and pixel size of 4
         try std.testing.expectEqual(
             pixel.RGBA{ .r = 0xAA, .g = 0xBB, .b = 0xCC, .a = 0xFF },
-            sfc.buf[21],
+            @as(*pixel.RGBA, @ptrCast(@alignCast(&sfc.buf[idx]))).*,
         );
     }
 }
@@ -1148,14 +1297,13 @@ test "PackedImageSurface, alpha4" {
         defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 1, .{ .alpha4 = .{ .a = 15 } });
-        const stride = sfc.getStride(0, 1, 4);
+        const stride = sfc.getStride(0, 1, 3);
 
-        try std.testing.expectEqual(3, stride.alpha4.buf.len);
+        try std.testing.expectEqual(2, stride.alpha4.buf.len);
         try std.testing.expectEqual(0xF0, stride.alpha4.buf[0]);
         try std.testing.expectEqual(0x00, stride.alpha4.buf[1]);
-        try std.testing.expectEqual(0x00, stride.alpha4.buf[2]);
         try std.testing.expectEqual(1, stride.alpha4.px_offset);
-        try std.testing.expectEqual(4, stride.alpha4.px_len);
+        try std.testing.expectEqual(3, stride.alpha4.px_len);
     }
 
     {
@@ -1164,7 +1312,9 @@ test "PackedImageSurface, alpha4" {
         var sfc = try PackedImageSurface(pixel.Alpha4).init(std.testing.allocator, 3, 3, null);
         defer sfc.deinit(std.testing.allocator);
 
-        sfc.paintStride(1, 0, 6, .{ .alpha4 = .{ .a = 15 } });
+        sfc.paintStride(1, 0, 2, .{ .alpha4 = .{ .a = 15 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha4 = .{ .a = 15 } });
+        sfc.paintStride(0, 2, 1, .{ .alpha4 = .{ .a = 15 } });
 
         try std.testing.expectEqual(5, sfc.buf.len);
         try std.testing.expectEqual(0xF0, sfc.buf[0]);
@@ -1183,7 +1333,8 @@ test "PackedImageSurface, alpha4" {
         try std.testing.expectEqual(pixel.Pixel{ .alpha4 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha4 = .{ .a = 0 } });
-        sfc.paintStride(0, 1, 6, .{ .alpha4 = .{ .a = 15 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha4 = .{ .a = 15 } });
+        sfc.paintStride(0, 2, 3, .{ .alpha4 = .{ .a = 15 } });
         try std.testing.expectEqual(0x00, sfc.buf[0]);
         try std.testing.expectEqual(0xF0, sfc.buf[1]);
         try std.testing.expectEqual(0xFF, sfc.buf[2]);
@@ -1282,14 +1433,13 @@ test "PackedImageSurface, alpha2" {
         defer sfc.deinit(std.testing.allocator);
 
         sfc.putPixel(0, 1, .{ .alpha2 = .{ .a = 2 } });
-        const stride = sfc.getStride(0, 1, 6);
+        const stride = sfc.getStride(0, 1, 3);
 
-        try std.testing.expectEqual(3, stride.alpha2.buf.len);
+        try std.testing.expectEqual(2, stride.alpha2.buf.len);
         try std.testing.expectEqual(0x80, stride.alpha2.buf[0]);
         try std.testing.expectEqual(0x00, stride.alpha2.buf[1]);
-        try std.testing.expectEqual(0x00, stride.alpha2.buf[2]);
         try std.testing.expectEqual(3, stride.alpha2.px_offset);
-        try std.testing.expectEqual(6, stride.alpha2.px_len);
+        try std.testing.expectEqual(3, stride.alpha2.px_len);
     }
 
     {
@@ -1298,7 +1448,9 @@ test "PackedImageSurface, alpha2" {
         var sfc = try PackedImageSurface(pixel.Alpha2).init(std.testing.allocator, 3, 3, null);
         defer sfc.deinit(std.testing.allocator);
 
-        sfc.paintStride(1, 0, 6, .{ .alpha2 = .{ .a = 3 } });
+        sfc.paintStride(1, 0, 2, .{ .alpha2 = .{ .a = 3 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha2 = .{ .a = 3 } });
+        sfc.paintStride(0, 2, 1, .{ .alpha2 = .{ .a = 3 } });
 
         try std.testing.expectEqual(3, sfc.buf.len);
         try std.testing.expectEqual(0xFC, sfc.buf[0]);
@@ -1315,7 +1467,8 @@ test "PackedImageSurface, alpha2" {
         try std.testing.expectEqual(pixel.Pixel{ .alpha2 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha2 = .{ .a = 0 } });
-        sfc.paintStride(0, 1, 6, .{ .alpha2 = .{ .a = 3 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha2 = .{ .a = 3 } });
+        sfc.paintStride(0, 2, 3, .{ .alpha2 = .{ .a = 3 } });
         try std.testing.expectEqual(0xC0, sfc.buf[0]);
         try std.testing.expectEqual(0xFF, sfc.buf[1]);
         try std.testing.expectEqual(0x03, sfc.buf[2]);
@@ -1440,7 +1593,9 @@ test "PackedImageSurface, alpha1" {
         var sfc = try PackedImageSurface(pixel.Alpha1).init(std.testing.allocator, 3, 3, null);
         defer sfc.deinit(std.testing.allocator);
 
-        sfc.paintStride(1, 0, 6, .{ .alpha1 = .{ .a = 1 } });
+        sfc.paintStride(1, 0, 2, .{ .alpha1 = .{ .a = 1 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha1 = .{ .a = 1 } });
+        sfc.paintStride(0, 2, 1, .{ .alpha1 = .{ .a = 1 } });
 
         try std.testing.expectEqual(2, sfc.buf.len);
         try std.testing.expectEqual(0b1111110, sfc.buf[0]);
@@ -1456,7 +1611,8 @@ test "PackedImageSurface, alpha1" {
         try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(2, 2));
 
         sfc.paintPixel(.{ .alpha1 = .{ .a = 0 } });
-        sfc.paintStride(0, 1, 6, .{ .alpha1 = .{ .a = 1 } });
+        sfc.paintStride(0, 1, 3, .{ .alpha1 = .{ .a = 1 } });
+        sfc.paintStride(0, 2, 3, .{ .alpha1 = .{ .a = 1 } });
         try std.testing.expectEqual(0b11111000, sfc.buf[0]);
         try std.testing.expectEqual(1, sfc.buf[1]);
         try std.testing.expectEqual(pixel.Pixel{ .alpha1 = .{ .a = 0 } }, sfc.getPixel(0, 0));
@@ -1781,5 +1937,66 @@ test "compositeStride, simple test w/OOB" {
                 }
             }
         }
+    }
+}
+
+test "image surfaces, pitch" {
+    const alloc = std.testing.allocator;
+    const width: i32 = 299;
+    const height: i32 = 300;
+    inline for (@typeInfo(SurfaceType).@"enum".field_values) |f_value| {
+        const surface_type: SurfaceType = @fromBackingInt(@intCast(f_value));
+        const expected = switch (surface_type) {
+            .image_surface_argb, .image_surface_xrgb, .image_surface_rgb, .image_surface_rgba => 1196,
+            .image_surface_rgb24, .image_surface_bgr24 => 900,
+            .image_surface_rgb565 => 600,
+            .image_surface_alpha8 => 300,
+            .image_surface_alpha4, .image_surface_alpha2, .image_surface_alpha1 => error.InvalidSurfaceType,
+        };
+        try std.testing.expectEqual(expected, Surface.pitchForWidth(surface_type, width));
+        var sfc = try Surface.init(surface_type, alloc, width, height);
+        defer sfc.deinit(alloc);
+        try std.testing.expectEqual(expected, sfc.getPitch());
+    }
+}
+
+test "stride limit tests" {
+    inline for (
+        .{
+            .image_surface_rgba,
+            .image_surface_alpha4,
+        },
+        .{
+            pixel.Pixel{ .rgba = .{ .r = 255, .g = 255, .b = 255, .a = 255 } },
+            pixel.Pixel{ .alpha4 = .{ .a = 15 } },
+        },
+        .{
+            pixel.Pixel{ .rgba = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
+            pixel.Pixel{ .alpha4 = .{ .a = 0 } },
+        },
+    ) |surface_type, on, off| {
+        const alloc = std.testing.allocator;
+        var sfc: Surface = try .init(surface_type, alloc, 3, 3);
+        defer sfc.deinit(alloc);
+
+        // getStride
+        const stride = sfc.getStride(1, 0, 3);
+        try std.testing.expectEqual(2, stride.pxLen());
+
+        // paintStride
+        sfc.paintStride(1, 0, 3, on);
+        try std.testing.expectEqualDeep(off, sfc.getPixel(0, 1));
+
+        // clearStride
+        sfc.paintPixel(on);
+        sfc.clearStride(0, 0, 6);
+        try std.testing.expectEqualDeep(off, sfc.getPixel(2, 0));
+        try std.testing.expectEqualDeep(on, sfc.getPixel(0, 1));
+
+        // compositeStride
+        sfc.paintPixel(off);
+        sfc.compositeStride(0, 0, 6, on, .src, 255);
+        try std.testing.expectEqualDeep(on, sfc.getPixel(2, 0));
+        try std.testing.expectEqualDeep(off, sfc.getPixel(0, 1));
     }
 }
